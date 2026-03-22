@@ -42,8 +42,15 @@ const Page = () => {
     const totalPages = Math.ceil(total / pageSize);
 
     const handleExport = () => {
+        const escapeCSVField = (field: string): string => {
+            if (field.includes(',') || field.includes('"') || field.includes('\n')) {
+                return '"' + field.replace(/"/g, '""') + '"';
+            }
+            return field;
+        };
+
         const csv = [
-            headers.join(","),
+            headers.map(escapeCSVField).join(","),
             ...transactions.map((t: any) =>
                 [
                     t.id,
@@ -52,7 +59,7 @@ const Page = () => {
                     t.amount,
                     new Date(t.date).toDateString(),
                     new Date(t.createdAt).toDateString(),
-                ].join(","),
+                ].map(escapeCSVField).join(","),
             ),
         ].join("\n");
 
@@ -63,6 +70,9 @@ const Page = () => {
         link.href = url;
         link.download = "transactions.csv";
         link.click();
+
+        URL.revokeObjectURL(url);
+        link.remove();
     };
 
     const toggleSort = () => {

@@ -1,4 +1,4 @@
-// app/[locale]/pricing/PricingSkeleton.tsx
+// app/[locale]/(marketing)/pricing/PricingSkeleton.tsx
 import {
     Card,
     CardContent,

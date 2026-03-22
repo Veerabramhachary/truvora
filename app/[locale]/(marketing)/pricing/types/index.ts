@@ -9,7 +9,7 @@ export interface Plan {
     intervalCount: number;
     features: string[];
     isActive: boolean;
-    stripePriceId?: string | null;
+    providerPlanId?: string | null;
     createdAt: Date;
     updatedAt: Date;
 }

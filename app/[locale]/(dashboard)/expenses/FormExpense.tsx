@@ -15,9 +15,9 @@ function Toggle() {
     return (
         <Tabs
             defaultValue="expenses"
-            className="w-full max-w-md mx-auto flex items-center"
+            className="w-full max-w-md mx-auto"
         >
-            <TabsList className="bg-gray-100 rounded-full p-1">
+            <TabsList className="bg-gray-100 dark:bg-gray-800 rounded-full p-1">
                 <TabsTrigger
                     value="expenses"
                     className="rounded-full px-6 py-1.5 transition-all
@@ -72,6 +72,7 @@ const FormExpense = ({ className, onClose }: { className?: string, onClose?: () 
                         size="icon"
                         onClick={onClose}
                         className="h-8 w-8"
+                        aria-label="close"
                     >
                         <X className="h-4 w-4" />
                     </Button>

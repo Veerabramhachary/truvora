@@ -29,6 +29,13 @@ export async function GET(req: NextRequest) {
         }
 
         const quantity = quantityParam ? parseInt(quantityParam, 10) : 1;
+        if (isNaN(quantity) || quantity < 1) {
+            return Response.json(
+                { allowed: false, error: "Invalid quantity" },
+                { status: 400 },
+            );
+        }
+
         const consume = consumeParam === "true";
 
         // 3. Get subscription gate to access limits (optional – we can directly call canUseFeature/tryConsumeFeature)

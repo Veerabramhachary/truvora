@@ -36,14 +36,11 @@ export async function GET() {
             .where(eq(expenses.userId, userId))
             .orderBy(desc(expenses.date));
 
-        console.log(`Fetched ${data.length} expenses for user ${userId}`);
-
         return new Response(JSON.stringify(data), {
             status: 200,
             headers: { "Content-Type": "application/json" },
         });
     } catch (err) {
-        console.error("Failed to fetch expenses:", err);
         return new Response(
             JSON.stringify({ error: "Failed to fetch expenses" }),
             {
@@ -56,7 +53,7 @@ export async function GET() {
 const expenseSchema = z.object({
     title: z.string().min(1),
     note: z.string().optional(),
-    amount: z.coerce.string(),
+    amount: z.string().regex(/^\d+(\.\d{1,2})?$/, "Invalid amount format"),
     date: z.coerce.date(),
     type: z.enum(["income", "expense"]),
     category: z.string().min(1),
@@ -94,6 +91,7 @@ export const POST = async (req: Request) => {
                 type: data.type,
                 categoryId: category.id,
                 userId: userId,
+                currency: data.currency,
             });
 
             await tx.insert(transactions).values({
@@ -114,15 +112,18 @@ export const POST = async (req: Request) => {
             success: true,
         });
     } catch (error) {
+        if(error instanceof z.ZodError) {
+            return NextResponse.json(
+                { success: false, error: error.errors},
+                { status: 400}
+            )
+        }
         return new Response(
             JSON.stringify({
                 success: false,
-                error:
-                    error instanceof Error
-                        ? error.message
-                        : "Something went wrong",
+                error: "Internal server error"
             }),
-            { status: 400 },
+            { status: 500 },
         );
     }
 };

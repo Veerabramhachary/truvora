@@ -11,6 +11,9 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { CheckCircle2 } from "lucide-react";
 import type { Plan } from "@/types";
+import { useParams } from "next/navigation";
+import { Link } from "@/i18n/navigation";
+import { useTranslations } from "next-intl";
 
 interface PlanCardProps {
     plan: Plan;
@@ -18,7 +21,10 @@ interface PlanCardProps {
 }
 
 export function PlanCard({ plan, interval }: PlanCardProps) {
-    const formattedPrice = new Intl.NumberFormat("en-US", {
+    const {locale} = useParams< {locale: string}>();
+    const t = useTranslations();
+
+    const formattedPrice = new Intl.NumberFormat(locale ?? "en-US", {
         style: "currency",
         currency: plan.currency,
         minimumFractionDigits: 2,
@@ -42,7 +48,7 @@ export function PlanCard({ plan, interval }: PlanCardProps) {
                 <Separator className="my-4" />
 
                 <ul className="space-y-3 flex-1">
-                    {plan.features.map((feature, index) => (
+                    {plan.features.map((feature:string, index) => (
                         <li key={index} className="flex items-start gap-2">
                             <CheckCircle2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                             <span className="text-muted-foreground">
@@ -54,8 +60,10 @@ export function PlanCard({ plan, interval }: PlanCardProps) {
             </CardContent>
 
             <CardFooter>
-                <Button className="w-full" size="lg">
-                    Get Started
+                <Button className="w-full" size="lg" asChild>
+                    <Link href={`/checkout/${plan.id}`}>
+                    {t('pricing.getStarted')}
+                </Link>
                 </Button>
             </CardFooter>
         </Card>

@@ -66,20 +66,16 @@ const SubsForm = ({className}: {className?: string}) => {
 
     const onSubmit: SubmitHandler<FormValues> = async (data) => {
         try {
-            const result = await mutateAsync(
+            await mutateAsync(
                 {
                     resource: "subscriptions",
                     values: data,
                 }
             );
-            console.log(result);
-            if(result.data.status === "201"){
-                toast.success("Subscription added successfully");
-                form.reset();
-            }
+            form.reset();
+            toast.success("Subscription added successfully");
         } catch (error) {
             toast.error("Error adding subscription");
-            console.error(error);
         }
     };
 
@@ -90,7 +86,7 @@ const SubsForm = ({className}: {className?: string}) => {
                 <div className="space-y-2">
                     <Label htmlFor="name">Subscription Name</Label>
                     <Input id="name" {...register("name")} placeholder="Netflix, Spotify..." />
-                    {errors.title && <p className="text-sm text-destructive">{errors.title.message}</p>}
+                    {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
                 </div>
 
                 {/* Price & Currency */}
@@ -98,6 +94,7 @@ const SubsForm = ({className}: {className?: string}) => {
                     <div className="space-y-2">
                         <Label htmlFor="price">Price</Label>
                         <Input id="price" type="number" step="0.01" {...register("price")} placeholder="0.00" />
+                        {errors.price && <p className="text-sm text-destructive">{errors.price.message}</p>}
                     </div>
                     <div className="space-y-2">
                         <Label>Currency</Label>
@@ -108,6 +105,7 @@ const SubsForm = ({className}: {className?: string}) => {
                                 <SelectItem value="EUR">EUR (€)</SelectItem>
                             </SelectContent>
                         </Select>
+                        {errors.currency && <p className="text-sm text-destructive">{errors.currency.message}</p>}
                     </div>
                 </div>
 
@@ -154,8 +152,8 @@ const SubsForm = ({className}: {className?: string}) => {
                             </PopoverContent>
                         </Popover>
                     </div>
+                    {errors.endDate && <p className="text-sm text-destructive">{errors.endDate.message}</p>}
                 </div>
-                {errors.endDate && <p className="text-sm text-destructive">{errors.endDate.message}</p>}
 
                 {/* Interval & Category */}
                 <div className="grid grid-cols-2 gap-4">
@@ -168,6 +166,7 @@ const SubsForm = ({className}: {className?: string}) => {
                                 <SelectItem value="year">Yearly</SelectItem>
                             </SelectContent>
                         </Select>
+                        {errors.interval && <p className="text-sm text-destructive">{errors.interval.message}</p>}
                     </div>
                     <div className="space-y-2">
                         <Label>Category</Label>
@@ -178,6 +177,7 @@ const SubsForm = ({className}: {className?: string}) => {
                                 <SelectItem value="utilities">Utilities</SelectItem>
                             </SelectContent>
                         </Select>
+                        {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
                     </div>
                 </div>
 

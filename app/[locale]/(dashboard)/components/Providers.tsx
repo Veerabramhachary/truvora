@@ -6,9 +6,10 @@ import dataProvider from "@refinedev/simple-rest";
 import { useClerkAuthProvider } from "../../../providers/clerkAuthProvider";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
+    const authProvider = useClerkAuthProvider()
     return (
         <Refine
-            authProvider={useClerkAuthProvider()}
+            authProvider={authProvider}
             routerProvider={routerProvider}
             dataProvider={dataProvider("/api")}
             resources={[
@@ -24,7 +25,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
                 },
                 {
                     name: "subscriptions",
-                    list: "/subscription",
+                    list: "/subscriptions",
                     create: "/subscriptions",
                     edit: "/subscriptions/:id",
                 },

@@ -21,7 +21,7 @@ export const GET = async (request: NextRequest) => {
 
         const { searchParams } = request.nextUrl;
         const query = querySchema.safeParse({
-            currency: searchParams.get("currency"),
+            currency: searchParams.get("currency") ?? undefined,
         });
 
         if (!query.success) {
@@ -183,6 +183,7 @@ export const GET = async (request: NextRequest) => {
                             sql`${latestEvents.rowNum} = 1`,
                             sql`${latestEvents.action} != 'deleted'`,
                             lte(subscriptions.startDate, startOfCurrentMonth),
+                            eq(subscriptions.currency, currency),
                         ),
                     );
 

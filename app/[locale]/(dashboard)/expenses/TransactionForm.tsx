@@ -49,7 +49,7 @@ export function TransactionForm({ type }: { type: "income" | "expense" }) {
             title: "",
             note: "",
             category: "",
-            amount: 0
+            amount: 0,
         },
     });
 
@@ -66,20 +66,16 @@ export function TransactionForm({ type }: { type: "income" | "expense" }) {
 
     const onSubmit: SubmitHandler<FormValues> = async (data) => {
         try {
-            const result = await mutateAsync(
-                {
-                    resource: "expenses",
-                    values: data,
-                }
+            await mutateAsync({
+                resource: "expenses",
+                values: data,
+            });
+            form.reset();
+            toast.success(
+                `${type.charAt(0).toUpperCase() + type.slice(1)} added successfully`,
             );
-            console.log(result);
-            if(result.data.status === "201"){
-                form.reset();
-                toast.success("Subscription added successfully");
-            }
         } catch (error) {
-            toast.error("Error adding subscription");
-            console.error(error);
+            toast.error(`Error adding ${type}`);
         }
     };
 
@@ -140,16 +136,12 @@ export function TransactionForm({ type }: { type: "income" | "expense" }) {
             {/* Note */}
             <div className="space-y-2">
                 <Label htmlFor="note">Note</Label>
-                    <Input
-                        id="note"
-                        type="text"
-                        {...register("note")}
-                    />
-                    {errors.note && (
-                        <p className="text-sm text-red-500">
-                            {errors.note.message}
-                        </p>
-                    )}
+                <Input id="note" type="text" {...register("note")} />
+                {errors.note && (
+                    <p className="text-sm text-red-500">
+                        {errors.note.message}
+                    </p>
+                )}
             </div>
 
             {/* Date */}
@@ -190,14 +182,29 @@ export function TransactionForm({ type }: { type: "income" | "expense" }) {
                     <SelectContent>
                         {type === "expense" ? (
                             <>
-                                <SelectItem value="expenses">Expenses</SelectItem>
-                                <SelectItem value="Rent">Rent</SelectItem>
-                                <SelectItem value="Rent / Mortgage">Rent / Mortgage</SelectItem>
-                                <SelectItem value="shopping">Shopping</SelectItem>
-                                <SelectItem value="Utilities">Utilities</SelectItem>
-                                <SelectItem value="Savings & Investments">Savings & Investments</SelectItem>
-                                <SelectItem value="Maintenance & Repairs">Maintenance & Repairs</SelectItem>
-                                <SelectItem value="Insurance Premiums">Insurance Premiums</SelectItem>
+                                <SelectItem value="rent">
+                                    Rent / Mortgage
+                                </SelectItem>
+                                +{" "}
+                                <SelectItem value="shopping">
+                                    Shopping
+                                </SelectItem>
+                                +{" "}
+                                <SelectItem value="utilities">
+                                    Utilities
+                                </SelectItem>
+                                +{" "}
+                                <SelectItem value="savings">
+                                    Savings & Investments
+                                </SelectItem>
+                                +{" "}
+                                <SelectItem value="maintenance">
+                                    Maintenance & Repairs
+                                </SelectItem>
+                                +{" "}
+                                <SelectItem value="insurance">
+                                    Insurance Premiums
+                                </SelectItem>
                             </>
                         ) : (
                             <>
@@ -205,7 +212,10 @@ export function TransactionForm({ type }: { type: "income" | "expense" }) {
                                 <SelectItem value="freelance">
                                     Freelance
                                 </SelectItem>
-                                <SelectItem value="Rent / Mortgage">Rent / Mortgage</SelectItem>
+                                +{" "}
+                                <SelectItem value="rental_income">
+                                    Rental Income
+                                </SelectItem>
                             </>
                         )}
                     </SelectContent>

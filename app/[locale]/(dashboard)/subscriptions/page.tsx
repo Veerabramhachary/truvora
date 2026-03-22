@@ -24,17 +24,19 @@ const Page = () => {
         setExporting(true);
         try {
             const response = await fetch("/api/export");
-            if (response.ok) {
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = "subscriptions.csv";
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(url);
+            if (!response.ok) {
+                throw new Error("Error exporting subscriptions");
             }
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "subscriptions.csv";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
         } catch (error) {
             console.error("Error exporting subscriptions:", error);
         } finally {
@@ -75,18 +77,32 @@ const Page = () => {
             >
                 <div className="flex gap-2">
                     <FeatureGate feature="subscriptions" quantity={1}>
-                        <Button variant="secondary" onClick={() => setOpen(!open)}>
+                        <Button
+                            variant="secondary"
+                            onClick={() => setOpen(!open)}
+                        >
                             Create
                         </Button>
                     </FeatureGate>
                     <FeatureGate feature="exports" quantity={1}>
-                        <Button variant="outline" size="sm" onClick={handleExport} disabled={exporting}>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleExport}
+                            disabled={exporting}
+                        >
                             {exporting ? "Exporting..." : "Export"}
                         </Button>
                     </FeatureGate>
                 </div>
             </Header>
-            <SubsForm className={open ? "border-none shadow-none w-full absolute top-0 bg-background p-3" : "hidden w-0"} />
+            <SubsForm
+                className={
+                    open
+                        ? "border-none shadow-none w-full absolute top-0 bg-background p-3"
+                        : "hidden w-0"
+                }
+            />
             {data.length === 0 ? (
                 <div className="text-center p-20 border-2 border-dashed rounded-lg">
                     <p className="text-muted-foreground">
@@ -137,10 +153,12 @@ const Page = () => {
                                             Started:
                                         </span>
                                         <span>
-                                            {format(
-                                                new Date(item.date),
-                                                "MMM d, yyyy",
-                                            )}
+                                            {isValid(new Date(item.startDate))
+                                                ? format(
+                                                      new Date(item.startDate),
+                                                      "MMM d, yyyy",) 
+                            
+                                            : "N/A"}
                                         </span>
                                     </div>
                                     <div className="flex justify-between font-medium">

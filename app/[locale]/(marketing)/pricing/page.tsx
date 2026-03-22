@@ -1,4 +1,4 @@
-// app/[locale]/pricing/page.tsx
+// app/[locale]/(marketing)/pricing/page.tsx
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
 import { PricingCards } from "./PricingCards";
@@ -6,10 +6,11 @@ import { PricingSkeleton } from "./PricingSkeleton";
 import { db } from "@/db";
 import { plans } from "@/db/schema/plans";
 import { and, eq } from "drizzle-orm";
+import { Plan } from "./types";
 
-async function getPlans(interval: "month" | "year", currency = "USD") {
+async function getPlans(interval: "month" | "year", currency = "USD"): Promise<{ data: Plan[]; error: boolean}> {
     try {
-        return await db
+        const data= await db
             .select()
             .from(plans)
             .where(
@@ -20,10 +21,20 @@ async function getPlans(interval: "month" | "year", currency = "USD") {
                 ),
             )
             .orderBy(plans.price);
-    } catch (error) {
-        console.error(`Failed to fetch ${interval} plans:`, error);
-        return [];
+        return { data, error: false };
+    } catch {
+        return { data: [], error: true};
     }
+}
+async function PricingCardsLoader() {
+    const [monthlyResult, yearlyResult] = await Promise.all([
+        getPlans('month'),
+        getPlans('year')
+    ]);
+    if (monthlyResult.error || yearlyResult.error) {
+        return <PricingCards monthlyPlans={[]} yearlyPlans={[]} />
+    }
+    return <PricingCards monthlyPlans={monthlyResult.data} yearlyPlans={yearlyResult.data} />
 }
 
 export default async function PricingPage({
@@ -33,10 +44,6 @@ export default async function PricingPage({
 }) {
     const t = await getTranslations({ locale, namespace: "Pricing" });
 
-    const [monthlyPlans, yearlyPlans] = await Promise.all([
-        getPlans("month"),
-        getPlans("year"),
-    ]);
 
     return (
         <section className="flex flex-col w-full min-h-screen items-center gap-10 py-10 bg-background">
@@ -50,10 +57,7 @@ export default async function PricingPage({
             </div>
 
             <Suspense fallback={<PricingSkeleton />}>
-                <PricingCards
-                    monthlyPlans={monthlyPlans}
-                    yearlyPlans={yearlyPlans}
-                />
+                <PricingCardsLoader />
             </Suspense>
         </section>
     );

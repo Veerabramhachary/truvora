@@ -55,7 +55,7 @@ const Page = () => {
                     <Button variant="secondary" size="sm" onClick={()=>setOpen(!open)}>
                         Create
                     </Button>
-                    <FeatureGate feature="exports" quantity={1} consume={true}>
+                    <FeatureGate feature="exports" quantity={1}>
                         <Button variant="outline" size="sm">
                         Export
                     </Button>
@@ -76,7 +76,7 @@ const Page = () => {
                             className="flex flex-col min-w-0"
                         >
                             <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
-                                <CardTitle className="text-base font-semibold truncate max-w-37.5">
+                                <CardTitle className="text-base font-semibold truncate max-w-[150px]">
                                     {item.title}
                                 </CardTitle>
                                 <Badge
@@ -96,7 +96,7 @@ const Page = () => {
                                 <div>
                                     <p className="text-2xl font-bold tracking-tight">
                                         {item.currency || "$"}{" "}
-                                        {item.amount.toLocaleString()}
+                                        {(item.amount ?? 0).toLocaleString()}
                                     </p>
                                     <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
                                         {item.categoryName}

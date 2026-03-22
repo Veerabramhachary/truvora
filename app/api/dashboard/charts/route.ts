@@ -2,7 +2,7 @@ import { db } from "@/db";
 import { expenses } from "@/db/schema/expenses";
 import { subscriptions } from "@/db/schema/schema";
 import { auth } from "@clerk/nextjs/server";
-import { and, count, eq, gte, lt, sql } from "drizzle-orm";
+import { and, count, eq, gte, gt, lt, or, sql, isNull } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import z from "zod";
 
@@ -13,7 +13,11 @@ const querySchema = z.object({
 export const GET = async (request: NextRequest) => {
     try {
         const { userId } = await auth();
-        if (!userId) return NextResponse.json({ message: "Unauthorized" });
+        if (!userId)
+            return NextResponse.json(
+                { message: "Unauthorized" },
+                { status: 401 },
+            );
 
         const { searchParams } = request.nextUrl;
         const query = querySchema.safeParse({
@@ -55,6 +59,13 @@ export const GET = async (request: NextRequest) => {
         );
         endOfPreviousMonth.setHours(0, 0, 0, 0);
 
+        const endOfCurrentMonth = new Date(
+            now.getFullYear(),
+            now.getMonth() + 1,
+            1,
+        );
+        endOfCurrentMonth.setHours(0, 0, 0, 0);
+
         // Fetch data concurrently using Promise.all
         const [
             activeSubsCurrent,
@@ -63,6 +74,7 @@ export const GET = async (request: NextRequest) => {
             expenseCurrent,
             expensePrevious,
             subsCurrent,
+            subsPrevious,
             activeSubsPrevious,
         ] = await Promise.all([
             // Active subscriptions count
@@ -90,7 +102,7 @@ export const GET = async (request: NextRequest) => {
                         eq(expenses.currency, currency),
                         eq(expenses.type, "income"),
                         gte(expenses.date, startOfCurrentMonth),
-                        lt(expenses.date, endOfPreviousMonth),
+                        lt(expenses.date, endOfCurrentMonth),
                     ),
                 )
                 .then((res) => Number(res[0]?.value ?? 0)),
@@ -124,24 +136,11 @@ export const GET = async (request: NextRequest) => {
                         eq(expenses.currency, currency),
                         eq(expenses.type, "expense"),
                         gte(expenses.date, startOfCurrentMonth),
-                        lt(expenses.date, endOfPreviousMonth),
+                        lt(expenses.date, endOfCurrentMonth),
                     ),
                 )
                 .then((res) => Number(res[0]?.value ?? 0)),
-            // subscription total spend (current month)
-            db
-                .select({
-                    value: sql<number>`COALESCE(SUM(${subscriptions.price}), 0)`,
-                })
-                .from(subscriptions)
-                .where(
-                    and(
-                        eq(subscriptions.userId, userId),
-                        eq(subscriptions.currency, currency),
-                        eq(subscriptions.active, true),
-                    ),
-                )
-                .then((res) => Number(res[0]?.value ?? 0)),
+
             // expense previous
             db
                 .select({
@@ -158,6 +157,7 @@ export const GET = async (request: NextRequest) => {
                     ),
                 )
                 .then((res) => Number(res[0]?.value ?? 0)),
+
             // subscription total spend (current month)
             db
                 .select({
@@ -173,9 +173,29 @@ export const GET = async (request: NextRequest) => {
                 )
                 .then((res) => Number(res[0]?.value ?? 0)),
 
-            //  Active subscriptions count in previous month
-            // This is an approximation: count subscriptions that were created before end of previous month and not deactivated before then.
-            // If you don't track deactivation dates, you can omit or use a simpler method.
+            // subscription total spend (previous month)
+            db
+                .select({
+                    value: sql<number>`COALESCE(SUM(${subscriptions.price}), 0)`,
+                })
+                .from(subscriptions)
+                .where(
+                    and(
+                        eq(subscriptions.userId, userId),
+                        eq(subscriptions.currency, currency),
+                        lt(subscriptions.startDate, startOfCurrentMonth),
+                        or(
+                            isNull(subscriptions.deactivatedAt),
+                            gt(
+                                subscriptions.deactivatedAt,
+                                startOfPreviousMonth,
+                            ),
+                        ),
+                    ),
+                )
+                .then((res) => Number(res[0]?.value ?? 0)),
+
+            // Active subscriptions count in previous month
             db
                 .select({ value: count() })
                 .from(subscriptions)
@@ -183,11 +203,17 @@ export const GET = async (request: NextRequest) => {
                     and(
                         eq(subscriptions.userId, userId),
                         eq(subscriptions.currency, currency),
-                        eq(subscriptions.active, true), // assumes they are still active now; this is not accurate for past
-                        // If you have a `deactivatedAt` or `endDate`, use that instead.
+                        lt(subscriptions.startDate, startOfCurrentMonth),
+                        or(
+                            isNull(subscriptions.deactivatedAt),
+                            gt(
+                                subscriptions.deactivatedAt,
+                                startOfPreviousMonth,
+                            ),
+                        ),
                     ),
                 )
-                .then((res) => res[0]?.value ?? 0), // This is actually the same as current; replace with proper logic.
+                .then((res) => res[0]?.value ?? 0),
         ]);
 
         const totalSpendCurrent = expenseCurrent + subsCurrent;
@@ -198,7 +224,8 @@ export const GET = async (request: NextRequest) => {
             : 0;
 
         const activeSubsGrowth = activeSubsPrevious
-            ? ((activeSubsCurrent - activeSubsPrevious) / activeSubsPrevious) * 100
+            ? ((activeSubsCurrent - activeSubsPrevious) / activeSubsPrevious) *
+              100
             : 0;
 
         // Return aggregated data

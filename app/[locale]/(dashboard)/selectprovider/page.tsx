@@ -5,7 +5,7 @@ const Page = () => {
     const router = useRouter()
     
   
-    const handleCheckout = async () => {
+    const handleCheckout = async (priceId: string) => {
        router.push(`/app/checkout?priceId=${priceId}`)
     };
   return (
