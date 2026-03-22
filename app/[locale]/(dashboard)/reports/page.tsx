@@ -1,6 +1,11 @@
-const page = () => {
+import { Suspense } from "react"
+import ReportContent from "./ReportContent"
+
+const Page = () => {
   return (
-    <div>page</div>
+    <Suspense>
+      <ReportContent />
+    </Suspense>
   )
 }
-export default page
+export default Page

@@ -230,8 +230,8 @@ async function handleSubscriptionUpsert(
     const data = {
         userId,
         planId: localPlanId,
-        stripeSubscriptionId: subscription.id,
-        stripePriceId: item.price.id,
+        provider: "stripe" as const,
+        providerSubscriptionId: subscription.id,
         status: mapSubscriptionStatus(subscription.status),
         currentPeriodStart: new Date(
             subWithPeriods.current_period_start * 1000,
@@ -265,7 +265,6 @@ async function handleSubscriptionDeleted(subscription: ExpandedSubscription) {
         .where(eq(app_subscriptions.providerSubscriptionId, subscription.id));
 }
 
-async function handleCheckoutSession (session: ExpandedSubscription){}
 
 // Helpers
 function mapStripeInvoiceStatus(
