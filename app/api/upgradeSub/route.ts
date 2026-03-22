@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { paymentInvoices } from "@/db/schema/appInvoices";
 import { app_subscriptions, plans } from "@/db/schema/plans";
+import { auth } from "@clerk/nextjs/server";
 import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -62,6 +63,7 @@ export async function upgradeSubscription(
             await tx.insert(paymentInvoices).values({
                 subscriptionId: sub.id,
                 invoiceNumber,
+                providerInvoiceId: invoiceNumber,
                 amountDue: prorationAmount.toFixed(2),
                 currency: newPlan.currency,
                 status: "open",
@@ -96,6 +98,12 @@ export async function upgradeSubscription(
 // API route handler
 export async function POST(request: NextRequest) {
     try {
+        const {userId} = await auth();
+        if (!userId) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
+        // Parse
         const body = await request.json();
         const { subscriptionId, newPlanId, prorationBehavior } = body;
 
@@ -104,6 +112,16 @@ export async function POST(request: NextRequest) {
                 { error: "Missing required fields: subscriptionId, newPlanId" },
                 { status: 400 }
             );
+        }
+        // Verify subscription ownership
+        const subscription = await db
+            .select()
+            .from(app_subscriptions)
+            .where(eq(app_subscriptions.id, String(subscriptionId)))
+            .limit(1);
+
+        if (!subscription) {
+            return NextResponse.json({ error: "Subscription not found" }, { status: 404 });
         }
 
         await upgradeSubscription(
