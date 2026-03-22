@@ -11,7 +11,6 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { useTable } from "@refinedev/core";
-import Image from "next/image";
 
 const Page = () => {
     const {
@@ -43,7 +42,11 @@ const Page = () => {
 
     const handleExport = () => {
         const escapeCSVField = (field: string): string => {
-            if (field.includes(',') || field.includes('"') || field.includes('\n')) {
+            if (
+                field.includes(",") ||
+                field.includes('"') ||
+                field.includes("\n")
+            ) {
                 return '"' + field.replace(/"/g, '""') + '"';
             }
             return field;
@@ -59,7 +62,9 @@ const Page = () => {
                     t.amount,
                     new Date(t.date).toDateString(),
                     new Date(t.createdAt).toDateString(),
-                ].map(escapeCSVField).join(","),
+                ]
+                    .map(escapeCSVField)
+                    .join(","),
             ),
         ].join("\n");
 
