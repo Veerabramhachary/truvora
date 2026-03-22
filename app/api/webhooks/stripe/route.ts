@@ -5,6 +5,7 @@ import { app_subscriptions, plans } from "@/db/schema/plans";
 import { users } from "@/db/schema/users";
 import { stripe } from "@/lib/stripe";
 import { eq } from "drizzle-orm";
+import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 
 type ExpandedInvoice = Stripe.Invoice & {
@@ -22,7 +23,7 @@ type SubscriptionWithPeriods = Stripe.Subscription & {
     cancel_at_period_end: boolean;
 };
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
     const buf = await req.text();
     const sig = req.headers.get("stripe-signature")!;
 
@@ -37,7 +38,10 @@ export async function POST(req: Request) {
     } catch (err: unknown) {
         const errorMessage =
             err instanceof Error ? err.message : "Unknown error";
-        return new Response(`Webhook Error: ${errorMessage}`, { status: 400 });
+        return NextResponse.json(
+            { error: `Webhook Error: ${errorMessage}` },
+            { status: 400 },
+        );
     }
 
     switch (event.type) {
@@ -63,7 +67,7 @@ export async function POST(req: Request) {
         default:
             console.warn(`Unhandled event type ${event.type}`);
     }
-    return new Response(null, { status: 200 });
+    return NextResponse.json({ received: true });
 }
 
 async function handleInvoicePaid(invoice: ExpandedInvoice) {
@@ -80,7 +84,7 @@ async function handleInvoicePaid(invoice: ExpandedInvoice) {
         const [sub] = await tx
             .select()
             .from(app_subscriptions)
-            .where(eq(app_subscriptions.stripeSubscriptionId, subscriptionId));
+            .where(eq(app_subscriptions.providerSubscriptionId, subscriptionId));
 
         if (!sub) {
             throw new Error(
@@ -97,7 +101,7 @@ async function handleInvoicePaid(invoice: ExpandedInvoice) {
             .insert(paymentInvoices)
             .values({
                 subscriptionId: sub.id,
-                stripeInvoiceId: invoice.id,
+                providerInvoiceId: invoice.id,
                 invoiceNumber: invoice.number ?? `INV-${Date.now()}`,
                 amountDue: (invoice.amount_due / 100).toFixed(2),
                 amountPaid: (invoice.amount_paid / 100).toFixed(2),
@@ -112,7 +116,7 @@ async function handleInvoicePaid(invoice: ExpandedInvoice) {
                 })),
             })
             .onConflictDoUpdate({
-                target: paymentInvoices.stripeInvoiceId,
+                target: paymentInvoices.providerInvoiceId,
                 set: {
                     status: "paid",
                     amountPaid: (invoice.amount_paid / 100).toFixed(2),
@@ -144,7 +148,7 @@ async function handleInvoicePaymentFailed(invoice: ExpandedInvoice) {
     const [subscription] = await db
         .select()
         .from(app_subscriptions)
-        .where(eq(app_subscriptions.stripeSubscriptionId, subscriptionId));
+        .where(eq(app_subscriptions.providerSubscriptionId, subscriptionId));
 
     if (!subscription) return;
 
@@ -154,7 +158,7 @@ async function handleInvoicePaymentFailed(invoice: ExpandedInvoice) {
         .insert(paymentInvoices)
         .values({
             subscriptionId: subscription.id,
-            stripeInvoiceId: invoice.id,
+            providerInvoiceId: invoice.id,
             invoiceNumber: invoice.number ?? `INV-${Date.now()}`,
             amountDue: (invoice.amount_due / 100).toFixed(2),
             amountPaid: (invoice.amount_paid / 100).toFixed(2),
@@ -172,7 +176,7 @@ async function handleInvoicePaymentFailed(invoice: ExpandedInvoice) {
             })),
         })
         .onConflictDoUpdate({
-            target: paymentInvoices.stripeInvoiceId,
+            target: paymentInvoices.providerInvoiceId,
             set: { status: status, updatedAt: new Date() },
         })
         .returning();
@@ -245,7 +249,7 @@ async function handleSubscriptionUpsert(
     };
 
     await db.insert(app_subscriptions).values(data).onConflictDoUpdate({
-        target: app_subscriptions.stripeSubscriptionId,
+        target: app_subscriptions.providerSubscriptionId,
         set: data,
     });
 }
@@ -258,7 +262,7 @@ async function handleSubscriptionDeleted(subscription: ExpandedSubscription) {
             canceledAt: new Date(),
             updatedAt: new Date(),
         })
-        .where(eq(app_subscriptions.stripeSubscriptionId, subscription.id));
+        .where(eq(app_subscriptions.providerSubscriptionId, subscription.id));
 }
 
 async function handleCheckoutSession (session: ExpandedSubscription){}
@@ -307,7 +311,7 @@ async function getLocalPlanFromStripePriceId(id: string) {
     const [plan] = await db
         .select()
         .from(plans)
-        .where(eq(plans.stripePriceId, id))
+        .where(eq(plans.providerPlanId, id))
         .limit(1);
     return plan?.id ?? null;
 }

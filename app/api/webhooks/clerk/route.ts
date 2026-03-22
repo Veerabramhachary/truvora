@@ -4,10 +4,10 @@ import { headers } from "next/headers";
 import { db } from "@/db";
 import { users } from "@/db/schema/users";
 import { eq } from "drizzle-orm";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { app_subscriptions } from "@/db/schema/plans";
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
     const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET;
 
     if (!WEBHOOK_SECRET) {
@@ -40,7 +40,7 @@ export async function POST(req: Request) {
         }) as WebhookEvent;
     } catch (error) {
         console.error("Error verifying webhook", error);
-        return new Response("Error: Verification error", { status: 400 });
+        return NextResponse.json({ error: "Error verifying webhook" }, { status: 400 });
     }
 
     const eventType = evt.type;
@@ -54,7 +54,10 @@ export async function POST(req: Request) {
                 )?.email_address || email_addresses[0]?.email_address;
 
             if (!primaryEmail) {
-                return new Response("User has no email", { status: 400 });
+                return NextResponse.json(
+                    { error: "No primary email found" },
+                    { status: 400 },
+                );
             }
 
             await db
@@ -112,8 +115,8 @@ export async function POST(req: Request) {
                 await db.delete(users).where(eq(users.id, id));
             }
         }
-    } catch (error) {
-        console.log("error: ", error);
+    } catch {
+        return NextResponse.json({ error: "Error processing event" }, { status: 400 });
     }
 
     return NextResponse.json({ success: true });

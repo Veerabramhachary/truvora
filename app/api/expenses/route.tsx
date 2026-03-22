@@ -11,13 +11,7 @@ export async function GET() {
         // Authenticate user
         const { userId } = await auth();
         if (!userId) {
-            return new Response(
-                JSON.stringify({ error: "Not authenticated" }),
-                {
-                    status: 401,
-                    headers: { "Content-Type": "application/json" },
-                },
-            );
+            return NextResponse.json({error:"Unauthorized"}, { status: 401 });
         }
         // Fetch expenses for the authenticated user
         const data = await db
@@ -36,18 +30,15 @@ export async function GET() {
             .where(eq(expenses.userId, userId))
             .orderBy(desc(expenses.date));
 
-        return new Response(JSON.stringify(data), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-        });
+        return NextResponse.json({
+            success: true,
+            data,
+        }, { status: 200 });
     } catch (err) {
-        return new Response(
-            JSON.stringify({ error: "Failed to fetch expenses" }),
-            {
-                status: 500,
-                headers: { "Content-Type": "application/json" },
-            },
-        );
+        return NextResponse.json({
+            success: false,
+            error: "Internal server error",
+        }, { status: 500 });
     }
 }
 const expenseSchema = z.object({

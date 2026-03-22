@@ -2,7 +2,9 @@ import { db } from "@/db";
 import { paymentInvoices } from "@/db/schema/appInvoices";
 import { app_subscriptions, plans } from "@/db/schema/plans";
 import { eq } from "drizzle-orm";
+import { NextRequest, NextResponse } from "next/server";
 
+// Helper function (can be exported or kept private)
 export async function upgradeSubscription(
     subscriptionId: number,
     newPlanId: number,
@@ -89,4 +91,33 @@ export async function upgradeSubscription(
             })
             .where(eq(app_subscriptions.id, sub.id));
     });
+}
+
+// API route handler
+export async function POST(request: NextRequest) {
+    try {
+        const body = await request.json();
+        const { subscriptionId, newPlanId, prorationBehavior } = body;
+
+        if (!subscriptionId || !newPlanId) {
+            return NextResponse.json(
+                { error: "Missing required fields: subscriptionId, newPlanId" },
+                { status: 400 }
+            );
+        }
+
+        await upgradeSubscription(
+            Number(subscriptionId),
+            Number(newPlanId),
+            prorationBehavior
+        );
+
+        return NextResponse.json({ success: true });
+    } catch (error) {
+        const message = error instanceof Error ? error.message : "Internal server error";
+        let status = 500;
+        if (message.includes("not found")) status = 404;
+        if (message.includes("not active")) status = 400;
+        return NextResponse.json({ error: message }, { status });
+    }
 }
