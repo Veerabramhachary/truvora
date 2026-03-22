@@ -1,83 +1,117 @@
 "use client";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Spinner } from "@/components/ui/spinner";
 import { useSignUp } from "@clerk/nextjs";
 import { Github } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
+
+function getLocaleFromCookie(): string {
+    if (typeof document === "undefined") return "en"; // fallback for SSR
+
+    const match = document.cookie.match(/(^| )NEXT_LOCALE=([^;]+)/);
+
+    return match ? match[2] : "en";
+}
 
 const Page = () => {
     const router = useRouter();
 
+    const [locale, setLocale] = useState("en");
+
     const [firstName, setFirstName] = useState("");
+
     const [email, setEmail] = useState("");
+
     const [password, setPassword] = useState("");
-    const [error, setError] = useState("");
 
     const { isLoaded, signUp } = useSignUp();
-    const [isLoading, setIsLoading] = useState<string | null>(null);
+
+    const [isLoading, setIsLoading] = useState(false);
+
+    const [oAuthLoading, setOAuthLoading] = useState<string | null>(null);
+
+    useEffect(() => {
+        setLocale(getLocaleFromCookie());
+    }, []);
 
     const handleSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
         e.preventDefault();
-        
-        if (!isLoaded) return;
-        
-        const result = await signUp.create({
-            firstName,
-            emailAddress: email,
-            password,
-        });
-        console.log(firstName)
+        if (!isLoaded || isLoading) return;
+        if (!email || !password) {
+            toast.error("Email and password are required");
+            return;
+        }
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            toast.error("Please enter a valid email address");
+            return;
+        }
+        setIsLoading(true);
         try {
-            if (result.status === "complete") {
+            const result = await signUp.create({
+                firstName,
+                emailAddress: email,
+                password,
+            });
+            if (result.status === "missing_requirements") {
+                // This is where you trigger the email verification
                 await signUp.prepareEmailAddressVerification({
                     strategy: "email_code",
                 });
-                router.push("/api/sign-In");
-            } else {
-                setError("Sign up incomplete. Please verify your email.");
+                toast.success("Verification email sent!");
+                router.push(
+                    `/auth/verify-email?email=${encodeURIComponent(email)}`,
+                );
+            } else if (result.status === "complete") {
+                // This would only happen if you don't require email verification
+                router.push(`/${locale}/dashboard`);
             }
         } catch (error: unknown) {
+            let message = "An error occurred during sign up.";
             if (error instanceof Error) {
-                toast.error(error.message);
-            } else {
-                toast.error("An unknown error occurred", {
-                    position: "top-left",
-                });
+                const clerkError = error as any;
+                message = clerkError.error?.[0]?.message || error.message;
             }
+            toast.error(message);
+        } finally {
+            setIsLoading(false);
         }
     };
 
     const handleOAuthSignUp = async (
         provider: "oauth_google" | "oauth_github",
     ) => {
-        if (!signUp) return;
+        if (!isLoaded || !signUp || oAuthLoading) return;
 
-        setIsLoading(provider);
-        if(isLoading) return <div className="flex justify-center items-center"><Spinner/></div>
+        setOAuthLoading(provider);
+
         try {
             await signUp.authenticateWithRedirect({
                 strategy: provider,
+
                 redirectUrl: "/sso-callback",
-                redirectUrlComplete: "/app/dashboard",
+
+                redirectUrlComplete: `/${locale}/dashboard`,
             });
         } catch (error: unknown) {
+            let message = "An error occurred during OAuth sign up.";
+
             if (error instanceof Error) {
-                toast.error(error.message);
-            } else {
-                toast.error("An unknown error occurred", {
-                    position: "top-left",
-                });
+                message = error.message;
             }
+
+            toast.error(message);
+        } finally {
+            setOAuthLoading(null);
         }
     };
 
     return (
-        <div className="w-full min-h-screen flex flex-col lg:flex-row items-center justify-center p-4 lg:p-10 bg-gray-50">
+        <div className="w-full min-h-screen flex flex-col lg:flex-row items-center justify-center p-4 lg:p-10 bg-background">
             {/* Text Section: Hide on small/medium screens to prevent compression, show only on large screens */}
             <div className="hidden lg:flex lg:w-1/2 flex-col justify-center px-10">
                 <div className="max-w-lg">
@@ -111,7 +145,7 @@ const Page = () => {
             </div>
 
             {/* Sign Up Form: Added 'bg-white' and 'mx-auto' for better mobile centering */}
-            <div className="w-full max-w-md bg-white border border-gray-100 shadow-2xl rounded-3xl px-6 py-10 md:px-9 md:py-16">
+            <div className="w-full max-w-md bg-background border border-border shadow-2xl rounded-3xl px-6 py-10 md:px-9 md:py-16">
                 <div className="w-full mb-8">
                     <h1 className="font-bold text-2xl">Sign Up</h1>
                     <p className="text-gray-400">
@@ -129,7 +163,7 @@ const Page = () => {
                                 Name
                             </label>
                             <Input
-                                className="w-full outline-0 border-2 border-gray-200 focus:border-blue-500 transition-colors py-6"
+                                className="w-full outline-0 border-2 border-border focus:border-blue-500 transition-colors py-6"
                                 name="name"
                                 value={firstName}
                                 onChange={(e) => setFirstName(e.target.value)}
@@ -145,7 +179,7 @@ const Page = () => {
                                 Email
                             </label>
                             <Input
-                                className="w-full outline-0 border-2 border-gray-200 focus:border-blue-500 transition-colors py-6"
+                                className="w-full outline-0 border-2 border-border focus:border-blue-500 transition-colors py-6"
                                 name="email"
                                 value={email}
                                 placeholder="Enter your Email"
@@ -162,8 +196,8 @@ const Page = () => {
                             </label>
                             <Input
                                 type="password"
-                                className="w-full outline-0 border-2 border-gray-200 focus:border-blue-500 transition-colors py-6"
-                                name={password}
+                                className="w-full outline-0 border-2 border-border focus:border-blue-500 transition-colors py-6"
+                                name="password"
                                 placeholder="Enter your Password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
@@ -174,7 +208,6 @@ const Page = () => {
                                 numbers & symbols
                             </p>
                         </div>
-
                         <div className="flex items-center gap-2 py-2">
                             <input
                                 type="checkbox"
@@ -192,14 +225,15 @@ const Page = () => {
                                 </span>
                             </label>
                         </div>
-
+                        <div id="clerk-captcha" />
                         <div className="flex flex-col gap-3 pt-2">
                             <Button
                                 type="submit"
+                                disabled={isLoading}
                                 className="w-full py-7 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all
-                                cursor-pointer"
+                                    cursor-pointer"
                             >
-                                Sign Up
+                                {isLoading ? "Signing Up" : "Sign Up"}
                             </Button>
 
                             <div className="relative py-4">
@@ -207,7 +241,7 @@ const Page = () => {
                                     <span className="w-full border-t border-gray-200"></span>
                                 </div>
                                 <div className="relative flex justify-center text-xs uppercase">
-                                    <span className="bg-white px-2 text-gray-500">
+                                    <span className="bg-background px-2 text-gray-500">
                                         Or continue with
                                     </span>
                                 </div>
@@ -219,7 +253,7 @@ const Page = () => {
                                         handleOAuthSignUp("oauth_google")
                                     }
                                     className="flex items-center justify-center gap-2 p-4 text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 shadow-sm font-semibold
-                                    cursor-pointer"
+                                        cursor-pointer"
                                 >
                                     Google
                                 </Button>
@@ -228,7 +262,7 @@ const Page = () => {
                                         handleOAuthSignUp("oauth_github")
                                     }
                                     className="flex items-center justify-center gap-2 p-4 text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 shadow-sm font-semibold
-                                    cursor-pointer"
+                                        cursor-pointer"
                                 >
                                     <Github size={20} /> Github
                                 </Button>
@@ -247,7 +281,6 @@ const Page = () => {
                     </div>
                 </form>
             </div>
-            {error && <p>error</p>}
         </div>
     );
 };

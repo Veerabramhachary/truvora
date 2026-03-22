@@ -1,0 +1,18 @@
+{
+    "nav": {
+        "dashboard": "Tableau de bord",
+        "transactions": "Transactions",
+        "settings": "Paramètres"
+    },
+    "Pricing": {
+        "title": "Choisissez votre forfait",
+        "subtitle": "Des tarifs abordables et adaptables pour atteindre vos objectifs",
+        "monthly": "Mensuel",
+        "yearly": "Annuel",
+        "noPlansAvailable": "Aucun forfait disponible pour le moment."
+    },
+    "auth": {
+        "login": "Se connecter",
+        "signup": "S'inscrire"
+    }
+}

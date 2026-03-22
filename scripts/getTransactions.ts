@@ -1,7 +1,7 @@
-import {db} from '../db/index'
+import { db } from "../db/index";
 import { eq } from "drizzle-orm";
 
-import { transactions, categories } from "../db/schema"; // adjust path
+import { transactions, categories } from "../db/schema/schema"; // adjust path
 
 export async function Get() {
     const result = await db

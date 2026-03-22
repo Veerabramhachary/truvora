@@ -1,0 +1,56 @@
+{
+    "nav": {
+        "dashboard": "Dashboard",
+        "transactions": "Transactions",
+        "settings": "Settings"
+    },
+
+    "Pricing": {
+        "title": "Choose Your Plan",
+        "subtitle": "Affordable and adaptable pricing to suit your goals",
+        "monthly": "Monthly",
+        "yearly": "Yearly",
+        "noPlansAvailable": "No plans available at the moment."
+    },
+
+    "auth": {
+        "signIn": "sign In",
+        "signup": "Sign up",
+        "email": "Email",
+        "password": "Password",
+        "forgotPassword": "Forgot Password?",
+        "rememberMe": "Remember Me",
+        "signinButton": "Sign In",
+        "signupButton": "Sign Up"
+    },
+
+    "button": {
+        "submit": "Submit",
+        "cancel": "Cancel",
+        "save": "Save",
+        "delete": "Delete",
+        "edit": "Edit",
+        "back": "back"
+    },
+
+    "dashboard": {
+        "welcome": "Welcome Back,",
+        "overview": "Overview",
+        "stats": "Statistics"
+    },
+
+    "errors": {
+        "requiredField": "This field is required",
+        "invalidEmail": "Please enter a valid email address",
+        "passwordMismatch": "Passwords do not match",
+        "loginError": "Invalid email or password",
+        "serverError": "Something went wrong. Please try again later"
+    },
+
+    "modals": {
+        "confirmDelete": "Are you sure you want to delete this?",
+        "confirmLogout": "Are you sure you want to log out?",
+        "yes": "Yes",
+        "no": "No"
+    }
+}

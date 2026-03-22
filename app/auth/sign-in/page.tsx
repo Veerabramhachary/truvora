@@ -6,51 +6,78 @@ import { useSignIn } from "@clerk/nextjs";
 import { Github } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
+// helper
+function getLocaleFromCookie(): string {
+    if (typeof document === "undefined") return "en"; // fallback for SSR
+    const match = document.cookie.match(/(^| )NEXT_LOCALE=([^;]+)/);
+    return match ? match[2] : "en";
+}
+
 const SignIn = () => {
+    const [locale, setLocale] = useState("en");
     const { isLoaded, signIn, setActive } = useSignIn();
     const router = useRouter();
-
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [isLoading, setIsLoading] = useState(false);
 
-    if (!isLoaded) return null;
+    useEffect(() => {
+        setLocale(getLocaleFromCookie());
+    }, []);
 
+    // Email/Password Sign-In
     const handleSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
         e.preventDefault();
+        if (isLoading || !isLoaded) return;
+
+        // Basic validation
+        if (!email || !password) {
+            toast.error("Email and password are required");
+            return;
+        }
+
+        setIsLoading(true);
         try {
-            console.log("clicked");
-            
             const result = await signIn.create({
                 identifier: email,
                 password,
             });
 
             if (result.status === "complete") {
+                toast.success("Login successful! Redirecting...");
                 await setActive({ session: result.createdSessionId });
-                router.push("/app/dashboard");
+                router.push(`${locale}/dashboard`);
+            } else {
+                // Handle MFA, email verification, etc.
+                toast.info("Additional verification required.");
+                // Optionally redirect to a verification page
+                // router.push(`/verify?signInId=${result.id}`);
             }
         } catch (error: unknown) {
+            let message = "An error occurred during sign in.";
             if (error instanceof Error) {
-                toast.error(error.message);
-            } else {
-                toast.error("An unknown error occurred", {
-                    position: "top-left",
-                });
+                // Try to extract Clerk's user-friendly message
+                const clerkError = error as any; // or use a type guard
+                message = clerkError.errors?.[0]?.message || error.message;
             }
+            toast.error(message);
+        } finally {
+            setIsLoading(false);
         }
     };
 
     const handleOAuthSignIn = async (
         provider: "oauth_google" | "oauth_github",
     ) => {
+        if (!isLoaded) return;
         try {
             await signIn.authenticateWithRedirect({
                 strategy: provider,
                 redirectUrl: "/sso-callback",
-                redirectUrlComplete: "/app/dashboard",
+                redirectUrlComplete: `/${locale}/dashboard`,
             });
         } catch (error: unknown) {
             if (error instanceof Error) {
@@ -64,11 +91,11 @@ const SignIn = () => {
     };
 
     return (
-        <div className="w-full min-h-screen flex flex-col lg:flex-row items-center justify-center p-4 lg:p-10 bg-gray-50">
-            {/* Text Section: Hide on small/medium screens to prevent compression, show only on large screens */}
+        <div className="w-full min-h-screen flex flex-col lg:flex-row items-center justify-center p-4 lg:p-10 bg-background ">
+            {/* Text Section (unchanged) */}
             <div className="hidden lg:flex lg:w-1/2 flex-col justify-center px-10">
                 <div className="max-w-lg">
-                    <h1 className="font-bold text-4xl mb-4 leading-tight">
+                    <h1 className="font-bold text-4xl mb-4 leading-tight text-foreground">
                         Welcome Back to Smarter Financial Control
                     </h1>
                     <p className="text-gray-500 font-light text-lg mb-8">
@@ -99,16 +126,16 @@ const SignIn = () => {
                 </div>
             </div>
 
-            {/* Sign Up Form: Added 'bg-white' and 'mx-auto' for better mobile centering */}
-            <div className="w-full max-w-md bg-white border border-gray-100 shadow-2xl rounded-3xl px-6 py-10 md:px-9 md:py-16">
+            {/* Sign In Form */}
+            <div className="w-full max-w-md border border-border shadow-2xl rounded-3xl px-6 py-10 md:px-9 md:py-16 bg-background">
                 <div className="w-full mb-8">
-                    <h1 className="font-bold text-2xl">Sign Up</h1>
+                    <h1 className="font-bold text-2xl">Sign In</h1>
                     <p className="text-gray-400">
-                        Create your secure account now
+                        Login Back to Smarter Financial Control
                     </p>
                 </div>
-                <form onSubmit={()=>handleSubmit} className="w-full">
-                    <div className="space-y-4">
+                <form onSubmit={handleSubmit} className="w-full ">
+                    <div className="space-y-4 ">
                         <div>
                             <label
                                 htmlFor="email"
@@ -117,7 +144,7 @@ const SignIn = () => {
                                 Email
                             </label>
                             <Input
-                                className="w-full outline-0 border-2 border-gray-200 focus:border-blue-500 transition-colors py-6"
+                                className="w-full outline-0 border-2 border-border focus:border-blue-500 transition-colors py-6"
                                 name="email"
                                 value={email}
                                 placeholder="Enter your Email"
@@ -135,7 +162,7 @@ const SignIn = () => {
                             </label>
                             <Input
                                 type="password"
-                                className="w-full outline-0 border-2 border-gray-200 focus:border-blue-500 transition-colors py-6"
+                                className="w-full outline-0 border-2 border-border focus:border-blue-500 transition-colors py-6"
                                 name="password"
                                 value={password}
                                 placeholder="Enter your Password"
@@ -148,15 +175,15 @@ const SignIn = () => {
                             </p>
                         </div>
 
-                        <div className="flex items-center gap-2 py-2"></div>
+                        <div id="clerk-captcha" />
 
                         <div className="flex flex-col gap-3 pt-2">
                             <Button
                                 type="submit"
-                                className="w-full py-7 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all
-                                cursor-pointer"
+                                disabled={isLoading}
+                                className="w-full py-7 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all cursor-pointer disabled:opacity-50"
                             >
-                                Sign In
+                                {isLoading ? "Signing In..." : "Sign In"}
                             </Button>
 
                             <div className="relative py-4">
@@ -164,7 +191,7 @@ const SignIn = () => {
                                     <span className="w-full border-t border-gray-200"></span>
                                 </div>
                                 <div className="relative flex justify-center text-xs uppercase">
-                                    <span className="bg-white px-2 text-gray-500">
+                                    <span className="bg-background px-2 text-gray-500">
                                         Or continue with
                                     </span>
                                 </div>
@@ -175,8 +202,7 @@ const SignIn = () => {
                                     onClick={() =>
                                         handleOAuthSignIn("oauth_google")
                                     }
-                                    className="flex items-center justify-center gap-2 p-4 text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 shadow-sm font-semibold
-                                    cursor-pointer"
+                                    className="flex items-center justify-center gap-2 p-4 text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 shadow-sm font-semibold cursor-pointer"
                                 >
                                     Google
                                 </Button>
@@ -184,8 +210,7 @@ const SignIn = () => {
                                     onClick={() =>
                                         handleOAuthSignIn("oauth_github")
                                     }
-                                    className="flex items-center justify-center gap-2 p-4 text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 shadow-sm font-semibold
-                                    cursor-pointer"
+                                    className="flex items-center justify-center gap-2 p-4 text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 shadow-sm font-semibold cursor-pointer"
                                 >
                                     <Github size={20} /> Github
                                 </Button>
@@ -193,7 +218,7 @@ const SignIn = () => {
                         </div>
 
                         <p className="text-center mt-6 text-gray-600">
-                            Dont you have an account?{" "}
+                            Don't have an account?{" "}
                             <Link
                                 href="/auth/sign-up"
                                 className="text-blue-600 font-bold hover:underline"
@@ -207,4 +232,5 @@ const SignIn = () => {
         </div>
     );
 };
+
 export default SignIn;
