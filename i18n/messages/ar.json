@@ -4,17 +4,16 @@
         "transactions": "المعاملات",
         "settings": "الإعدادات"
     },
-
-    "Pricing": {
+    "pricing": {
         "title": "اختر خطتك",
         "subtitle": "أسعار ميسورة وقابلة للتكيف لتناسب أهدافك",
         "monthly": "شهري",
         "yearly": "سنوي",
-        "noPlansAvailable": "لا توجد خطط متاحة في الوقت الحالي."
+        "noPlansAvailable": "لا توجد خطط متاحة في الوقت الحالي.",
+        "getStarted": "ابدأ الآن"
     },
-
     "auth": {
-        "login": "تسجيل الدخول",
+        "signIn": "تسجيل الدخول",
         "signup": "إنشاء حساب"
     }
 }

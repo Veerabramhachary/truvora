@@ -5,6 +5,7 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { Toaster } from "sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { QueryProviders } from "./providers/querystackProvider";
+import { Suspense } from "react";
 
 const inter = Inter({
     variable: "--font-inter",
@@ -44,8 +45,9 @@ export default function RootLayout({
                         enableSystem
                         disableTransitionOnChange
                     >
-                        <QueryProviders>
-                            {children}</QueryProviders>
+                        <Suspense fallback={null}>
+                            <QueryProviders>{children}</QueryProviders>
+                        </Suspense>
                     </ThemeProvider>
                     <Toaster />
                 </body>

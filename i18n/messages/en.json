@@ -5,12 +5,13 @@
         "settings": "Settings"
     },
 
-    "Pricing": {
+    "pricing": {
         "title": "Choose Your Plan",
         "subtitle": "Affordable and adaptable pricing to suit your goals",
         "monthly": "Monthly",
         "yearly": "Yearly",
-        "noPlansAvailable": "No plans available at the moment."
+        "noPlansAvailable": "No plans available at the moment.",
+        "getStarted": "Get Started"
     },
 
     "auth": {

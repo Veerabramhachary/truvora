@@ -1,5 +1,5 @@
 // i18n/config.ts
-export const locales = ['en', 'fr', 'es', 'de'] as const;
+export const locales = ['en', 'ar'] as const;
 export const defaultLocale = 'en' as const;
 
 export type Locale = (typeof locales)[number];
@@ -9,9 +9,7 @@ export const pathnames = {
   '/': '/',
   '/pricing': {
     en: '/pricing',
-    fr: '/tarifs',
-    es: '/precios',
-    de: '/preise'
+    ar: '/الأسعار',
   }
 } as const;
 
