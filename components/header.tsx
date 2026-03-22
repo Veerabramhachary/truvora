@@ -1,7 +1,14 @@
 import Image from "next/image";
 
+interface HeaderProps {
+    src: string;
+    alt: string;
+    title: string;
+    children?: React.ReactNode;
+}
 
-const Header = ({src,alt,title,children}) => {
+
+const Header = ({src,alt,title,children}: HeaderProps) => {
     return (
         <header className="w-full h-20 flex items-center gap-4">
             <div className="flex items-center gap-3">

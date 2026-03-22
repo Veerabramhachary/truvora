@@ -1,15 +1,10 @@
-"use client"
-import { useRouter } from "next/navigation";
-
-const Page = () => {
-    const router = useRouter()
-    
-  
-    const handleCheckout = async (priceId: string) => {
-       router.push(`/app/checkout?priceId=${priceId}`)
-    };
-  return (
-    <div>Page</div>
-  )
+import { Suspense } from "react";
+import SelectProviderContent from "./SelectProviderContent";
+export const dynamic = 'force-dynamic';
+export default function Page() {
+    return (
+        <Suspense fallback={<div>Loading provider selection...</div>}>
+            <SelectProviderContent />
+        </Suspense>
+    );
 }
-export default Page

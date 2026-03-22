@@ -10,7 +10,7 @@ import { Plan } from "./types";
 
 async function getPlans(interval: "month" | "year", currency = "USD"): Promise<{ data: Plan[]; error: boolean}> {
     try {
-        const data= await db
+        const rows = await db
             .select()
             .from(plans)
             .where(
@@ -21,6 +21,20 @@ async function getPlans(interval: "month" | "year", currency = "USD"): Promise<{
                 ),
             )
             .orderBy(plans.price);
+            const data: Plan[] = rows.map((row) => ({
+            id: row.id,
+            name: row.name,
+            description: row.description ?? "No description available",
+            currency: row.currency,
+            price: Number(row.price), // convert string to number
+            interval: row.interval as "month" | "year",
+            intervalCount: row.intervalCount,
+            features: row.features ?? [], // ensure array, default empty
+            isActive: row.isActive ?? false,
+            providerPlanId: row.providerPlanId ?? null,
+            createdAt: row.createdAt ?? new Date(),
+            updatedAt: row.updatedAt ?? new Date(),
+        }));
         return { data, error: false };
     } catch {
         return { data: [], error: true};

@@ -1,17 +1,29 @@
 "use client";
-import { useList } from "@refinedev/core";
+import { useCustom } from "@refinedev/core";
 import { useFormatter } from "next-intl";
 import { useSearchParams } from "next/navigation";
-import { Card, CardDescription, CardHeader, CardTitle, CardAction, CardContent } from "./ui/card";
+import {
+    Card,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+    CardAction,
+    CardContent,
+} from "./ui/card";
 import { Badge } from "./ui/badge";
 
 const SectionCards = () => {
     const searchParams = useSearchParams();
     const currency = searchParams.get("currency") || "USD";
 
-    const { query, result } = useList({
-        resource: "dashboard/stats",
-        filters: [{ field: "currency", operator: "eq", value: currency }],
+    const { query, result } = useCustom<{
+        totalSpend: number;
+        activeSubscriptions: number;
+        totalIncome: number;
+        growth: any;
+    }>({
+        url: "/api/dashoard/stats",
+        method: "get",
     });
     const { isLoading, isError } = query;
     const data = result?.data ?? {};
@@ -38,7 +50,12 @@ const SectionCards = () => {
         );
     }
 
-    const { totalSpend = 0, activeSubscriptions = 0, totalIncome = 0, growth = {} } = data;
+    const {
+        totalSpend = 0,
+        activeSubscriptions = 0,
+        totalIncome = 0,
+        growth = {},
+    } = data;
 
     const cards = [
         {
@@ -66,7 +83,9 @@ const SectionCards = () => {
         const isPositive = growthValue > 0;
         const sign = isPositive ? "+" : "";
         const formatted = `${sign}${growthValue.toFixed(1)}%`;
-        const badgeClass = isPositive ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800";
+        const badgeClass = isPositive
+            ? "bg-green-100 text-green-800"
+            : "bg-red-100 text-red-800";
         return <Badge className={badgeClass}>{formatted}</Badge>;
     };
 
@@ -77,15 +96,18 @@ const SectionCards = () => {
                     <CardHeader>
                         <CardDescription>{card.label}</CardDescription>
                         <CardTitle>
-                            {card.isMonetary
-                                ? format.number(card.value, {
-                                      style: "currency",
-                                      currency: currency,
-                                  })
-                                : format.number(card.value) // plain number with locale grouping
+                            {
+                                card.isMonetary
+                                    ? format.number(card.value, {
+                                          style: "currency",
+                                          currency: currency,
+                                      })
+                                    : format.number(card.value) // plain number with locale grouping
                             }
                         </CardTitle>
-                        <CardAction>{renderGrowthBadge(card.growth)}</CardAction>
+                        <CardAction>
+                            {renderGrowthBadge(card.growth)}
+                        </CardAction>
                     </CardHeader>
                     <CardContent>
                         <p className="text-sm text-muted-foreground">

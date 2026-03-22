@@ -1,6 +1,11 @@
-const page = () => {
+
+import { Suspense } from "react";
+import SettingsContent from "./SettingsContent";
+
+export default function Page() {
   return (
-    <div>page</div>
-  )
+    <Suspense fallback={<div>Loading settings...</div>}>
+      <SettingsContent />
+    </Suspense>
+  );
 }
-export default page
