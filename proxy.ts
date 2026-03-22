@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 // Public routes (marketing pages)
 const isPublicRoute = createRouteMatcher([
     "/",
-    "/(en|fr|es|de)",
+    "/(en|ar-er)",
     "/(en|fr|es|de)/pricing",
     "/auth/sign-in(.*)",
     "/auth/sign-up(.*)",
@@ -16,7 +16,7 @@ const isPublicRoute = createRouteMatcher([
 
 // Protected dashboard routes
 const isDashboardRoute = createRouteMatcher([
-  "/(en|fr|es|de)/(.*)"
+    "/(en|ar)/(.*)"
 ]);
 
 // Admin-only routes
