@@ -1,54 +1,103 @@
-"use client";
+"use client"
 
-import * as React from "react";
-import { BarChart2, FileText, Home, Settings } from "lucide-react";
+import * as React from "react"
+import {
 
-import { NavUser } from "@/components/nav-user";
+  BookOpen,
+  ChartNoAxesColumn,
+  HandCoins,
+  History,
+  HomeIcon,
+  Settings2,
+  
+} from "lucide-react"
+
+import { NavMain } from "@/components/nav-main"
+import { NavUser } from "@/components/nav-user"
 
 import {
-    Sidebar,
-    SidebarContent,
-    SidebarFooter,
-    SidebarHeader,
-    SidebarRail,
-} from "@/components/ui/sidebar";
-import Link from "next/link";
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarHeader,
+  SidebarRail,
+} from "@/components/ui/sidebar"
+import { useUser } from "@clerk/nextjs"
 
-const user = {
-    name: "shadcn",
-    email: "m@example.com",
-    avatar: "/avatars/shadcn.jpg",
-};
 
-// Simple nav items
-const navItems = [
-    { title: "Dashboard", url: "/app/dashboard", icon: Home },
-    { title: "Transactions", url: "/app/transactions", icon: FileText },
-    { title: "Reports", url: "/app/reports", icon: BarChart2 },
-    { title: "Settings", url: "/app/settings", icon: Settings },
-];
+//This is sample data.
+const data = {
+  navMain: [
+    {
+      title: "Dashoard",
+      url: "/dashboard",
+      icon: HomeIcon,
+    },
+    {
+      title: "Expenses",
+      url: "/expenses",
+      icon: HandCoins,
+    },
+    {
+      title: "Subscriptions",
+      url: "/subscriptions",
+      icon: BookOpen,
+    },
+    {
+      title: "Report/Insignts",
+      url: "/reports",
+      icon: ChartNoAxesColumn
+    },
+    {
+      title: "Transactions",
+      url: "/transactions",
+      icon: History
+    },
+    {
+      title: "Settings",
+      url: "/settings",
+      icon: Settings2,
+    },
+  ],
+}
+
+function SidebarSkeleton() {
+  return (
+    <div className="w-(--sidebar-width) h-screen bg-sidebar animate-pulse p-4 flex flex-col gap-4">
+      <div className="h-8 w-32 bg-sidebar-accent rounded" /> {/* Header placeholder */}
+      <div className="flex-1 space-y-4">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="h-10 w-full bg-sidebar-accent rounded" />
+        ))}
+      </div>
+      <div className="h-12 w-full bg-sidebar-accent rounded" /> {/* Footer placeholder */}
+    </div>
+  );
+}
+
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-    return (
-        <Sidebar collapsible="icon" {...props}>
-            <SidebarHeader></SidebarHeader>
 
-            <SidebarContent className="flex flex-col gap-1">
-                {navItems.map((item) => (
-                    <Link
-                        key={item.title}
-                        href={item.url}
-                        className="flex items-center gap-2 px-3 py-2 rounded hover:bg-gray-200"
-                    >
-                        <item.icon className="w-5 h-5" />
-                        <span>{item.title}</span>
-                    </Link>
-                ))}
-            </SidebarContent>
-            <SidebarFooter>
-                <NavUser user={user} />
-            </SidebarFooter>
-            <SidebarRail />
-        </Sidebar>
-    );
+  const {user, isLoaded} = useUser();
+  if(!isLoaded) return <SidebarSkeleton />;
+  
+  const userData = {
+    name: user?.firstName?? "User",
+    email: user?.primaryEmailAddress?.emailAddress?? "",
+    avatar: user?.imageUrl ?? "",
+  }
+  return (
+    <Sidebar collapsible="icon" {...props}>
+      <SidebarHeader>
+        Truvora
+      </SidebarHeader>
+      <SidebarContent>
+        <NavMain items={data.navMain} />
+      </SidebarContent>
+      <SidebarFooter>
+        <NavUser user={userData} />
+      </SidebarFooter>
+      <SidebarRail />
+    </Sidebar>
+  )
 }

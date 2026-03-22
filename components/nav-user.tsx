@@ -37,7 +37,7 @@ export function NavUser({
   user: {
     name: string
     email: string
-    avatar: string
+    avatar: string  
   }
 }) {
   const { isMobile } = useSidebar()
@@ -53,7 +53,7 @@ export function NavUser({
             >
               <Avatar className="h-8 w-8 rounded-lg">
                 <AvatarImage src={user.avatar} alt={user.name} />
-                <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                <AvatarFallback className="rounded-lg">{user.name[0]}</AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">{user.name}</span>
@@ -72,7 +72,7 @@ export function NavUser({
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                 <Avatar className="h-8 w-8 rounded-lg">
                   <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                  <AvatarFallback className="rounded-lg">{user.name[0]}</AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-medium">{user.name}</span>
@@ -84,28 +84,30 @@ export function NavUser({
             <DropdownMenuGroup>
               <DropdownMenuItem>
                 <Sparkles />
-                <Link href="/pro">Upgrade to Pro</Link>
+                <Link href="">Upgrade to Pro</Link>
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuItem>
                 <BadgeCheck />
-                <Link href="/account">Account</Link>
+                <Link href="">Account</Link>
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <CreditCard />
-                <Link href="/billing">Billing</Link>
+                <Link href= "">Billing</Link>
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <Bell />
-                <Link href="/notifications">Notifications</Link>
+                <Link href= "">
+                Notifications
+                </Link>
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem>
               <LogOut />
-              <Link href="/auth/logout">Log out</Link>
+              <Link href="/auth/signout">Sign out</Link>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

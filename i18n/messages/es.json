@@ -1,0 +1,13 @@
+{
+  "nav": {
+    "dashboard": "Panel",
+    "transactions": "Transacciones",
+    "settings": "Configuración"
+  },
+
+  "plans": {
+    "free": "Gratis",
+    "pro": "Pro",
+    "premium": "Premium"
+  }
+}

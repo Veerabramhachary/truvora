@@ -4,18 +4,22 @@ import { NextResponse } from "next/server";
 // Public routes (marketing pages)
 const isPublicRoute = createRouteMatcher([
     "/",
-    "/pricing",
+    "/(en|fr|es|de)",
+    "/(en|fr|es|de)/pricing",
     "/auth/sign-in(.*)",
     "/auth/sign-up(.*)",
+    "/auth/verify-email(.*)",
+    "/sso-callback(.*)",
+    "/api/webhooks/clerk(.*)",
+    "/api/plans(.*)",
 ]);
 
 // Protected dashboard routes
 const isDashboardRoute = createRouteMatcher([
-    "/app(.*)"
+  "/(en|fr|es|de)/(.*)"
 ]);
 
 // Admin-only routes
-
 
 // API routes
 const isApiRoute = createRouteMatcher(["/api/(.*)"]);
@@ -47,5 +51,8 @@ export async function proxy(req: any, evt: any) {
 }
 
 export const config = {
-    matcher: ['/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)', '/(api|trpc)(.*)'],
+    matcher: [
+        "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+        "/(api|trpc)(.*)",
+    ],
 };
