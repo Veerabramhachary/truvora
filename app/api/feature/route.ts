@@ -1,4 +1,4 @@
-import { type NextRequest } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import {
     tryConsumeFeature,
@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
         // 1. Authenticate user
         const { userId } = await auth();
         if (!userId) {
-            return Response.json(
+            return NextResponse.json(
                 { allowed: false, error: "Unauthorized" },
                 { status: 401 },
             );
@@ -22,16 +22,16 @@ export async function GET(req: NextRequest) {
         const consumeParam = req.nextUrl.searchParams.get("consume");
 
         if (!feature) {
-            return Response.json(
-                { allowed: false, error: "Missing feature" },
+            return NextResponse.json(
+                { allowed: false, error: "Missing feature parameter" },
                 { status: 400 },
             );
         }
 
         const quantity = quantityParam ? parseInt(quantityParam, 10) : 1;
         if (isNaN(quantity) || quantity < 1) {
-            return Response.json(
-                { allowed: false, error: "Invalid quantity" },
+            return NextResponse.json(
+                { allowed: false, error: "Invalid quantity parameter" },
                 { status: 400 },
             );
         }
@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
         return Response.json({ allowed });
     } catch (error) {
         console.error("Feature check error:", error);
-        return Response.json(
+        return NextResponse.json(
             { allowed: false, error: "Internal server error" },
             { status: 500 },
         );
