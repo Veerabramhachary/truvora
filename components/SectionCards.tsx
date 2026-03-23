@@ -22,7 +22,7 @@ const SectionCards = () => {
         totalIncome: number;
         growth: any;
     }>({
-        url: "/api/dashoard/stats",
+        url: "/api/dashboard/stats",
         method: "get",
     });
     const { isLoading, isError } = query;
