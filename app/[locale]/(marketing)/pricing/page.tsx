@@ -56,7 +56,7 @@ export default async function PricingPage({
 }: {
     params: { locale: string };
 }) {
-    const t = await getTranslations({ locale, namespace: "Pricing" });
+    const t = await getTranslations({ locale, namespace: "pricing" });
 
 
     return (

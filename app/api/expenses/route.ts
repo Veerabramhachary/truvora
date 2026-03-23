@@ -30,10 +30,7 @@ export async function GET() {
             .where(eq(expenses.userId, userId))
             .orderBy(desc(expenses.date));
 
-        return NextResponse.json({
-            success: true,
-            data,
-        }, { status: 200 });
+        return NextResponse.json(data, { status: 200 });
     } catch (err) {
         return NextResponse.json({
             success: false,

@@ -24,9 +24,8 @@ const ExpenseContent = () => {
     });
 
     const { isLoading, isError } = query;
-    const rawData = result?.data?.data;
-    const data = Array.isArray(rawData) ? rawData : [];
-    console.log("Expenses response:", result?.data);
+    const data = result?.data ?? [];
+    
     // Prevents Layout Shift and provides better UX
     if (isLoading) {
         return (
@@ -80,9 +79,9 @@ const ExpenseContent = () => {
                 </div>
             ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                    {data.map((item) => (
+                    {data.map((item, index) => (
                         <Card
-                            key={item.expenseId || item.id}
+                            key={index}
                             className="flex flex-col min-w-0"
                         >
                             <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">

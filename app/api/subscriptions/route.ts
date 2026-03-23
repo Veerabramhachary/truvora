@@ -12,13 +12,7 @@ export async function GET() {
         const { userId } = await auth();
         if (!userId) {
             console.error("User not authenticated");
-            return new Response(
-                JSON.stringify({ error: "Not authenticated" }),
-                {
-                    status: 401,
-                    headers: { "Content-Type": "application/json" },
-                },
-            );
+            return NextResponse.json({error: "Unauthorized"}, {status: 401});
         }
 
         // Fetch expenses for the authenticated user
@@ -40,12 +34,9 @@ export async function GET() {
             .where(eq(subscriptions.userId, userId))
             .orderBy(desc(subscriptions.startDate));
 
-        console.log(`Fetched ${data.length} subscriptions for user ${userId}`);
+    
 
-        return new Response(JSON.stringify(data), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-        });
+        return NextResponse.json(data, { status: 200 });
     } catch (err) {
         console.error("Failed to fetch subscriptions:", err);
         return new Response(
