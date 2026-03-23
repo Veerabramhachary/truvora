@@ -24,8 +24,9 @@ const ExpenseContent = () => {
     });
 
     const { isLoading, isError } = query;
-    const data = result?.data ?? [];
-
+    const rawData = result?.data?.data;
+    const data = Array.isArray(rawData) ? rawData : [];
+    console.log("Expenses response:", result?.data);
     // Prevents Layout Shift and provides better UX
     if (isLoading) {
         return (

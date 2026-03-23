@@ -111,8 +111,8 @@ const SubscContent = () => {
                 </div>
             ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                    {data.map((item) => (
-                        <Card key={item.id} className="flex flex-col">
+                    {data.map((item, index) => (
+                        <Card key={index} className="flex flex-col">
                             <CardHeader className="relative">
                                 <div className="absolute top-4 right-4">
                                     <Badge
