@@ -14,7 +14,7 @@ interface PricingCardsProps {
 
 export function PricingCards({ monthlyPlans, yearlyPlans }: PricingCardsProps) {
     const [interval, setInterval] = useState<"month" | "year">("month");
-    const t = useTranslations("Pricing");
+    const t = useTranslations("pricing");
 
     const currentPlans = interval === "month" ? monthlyPlans : yearlyPlans;
 
