@@ -40,7 +40,7 @@ export async function GET() {
 }
 const expenseSchema = z.object({
     title: z.string().min(1),
-    note: z.string().optional(),
+    note: z.string().optional(),    
     amount: z.string().regex(/^\d+(\.\d{1,2})?$/, "Invalid amount format"),
     date: z.coerce.date(),
     type: z.enum(["income", "expense"]),

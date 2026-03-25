@@ -24,7 +24,7 @@ const spaceGrotesk = Space_Grotesk({
 
 export const metadata: Metadata = {
     title: "Truvora",
-    description: "Expenses/income and subscriptions tracker.",
+    description: "Expenses/Income and subscriptions tracker.",
 };
 
 export default function RootLayout({
