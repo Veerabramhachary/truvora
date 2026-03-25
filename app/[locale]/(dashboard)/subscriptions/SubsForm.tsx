@@ -15,6 +15,7 @@ import z from "zod";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useCreate } from "@refinedev/core";
+import CategorySelector from "@/components/category-selector";
 
 const formSchema = z.object({
     name: z.string().min(2, "name is required"),
@@ -62,6 +63,7 @@ const SubsForm = ({className}: {className?: string}) => {
 
     const startDate = useWatch({ control, name: "startDate" });
     const endDate = useWatch({ control, name: "endDate" });
+    const categoryValue = useWatch({ control, name: "category" });
 
 
     const onSubmit: SubmitHandler<FormValues> = async (data) => {
@@ -170,13 +172,7 @@ const SubsForm = ({className}: {className?: string}) => {
                     </div>
                     <div className="space-y-2">
                         <Label>Category</Label>
-                        <Select onValueChange={(v) => setValue("category", v)}>
-                            <SelectTrigger><SelectValue placeholder="Category" /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="entertainment">Entertainment</SelectItem>
-                                <SelectItem value="utilities">Utilities</SelectItem>
-                            </SelectContent>
-                        </Select>
+                        <CategorySelector value= {categoryValue}type="subscription" onValueChange={(v) => setValue("category", v)} />
                         {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
                     </div>
                 </div>

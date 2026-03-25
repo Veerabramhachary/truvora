@@ -25,6 +25,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { useCreate } from "@refinedev/core";
 import { toast } from "sonner";
+import CategorySelector from "@/components/category-selector";
 
 const formSchema = z.object({
     title: z.string().min(2, "Title is required"),
@@ -63,6 +64,7 @@ export function TransactionForm({ type }: { type: "income" | "expense" }) {
 
     // Use useWatch instead of watch to please the React Compiler
     const dateValue = useWatch({ control, name: "date" });
+    const categoryValue = useWatch({ control, name: "category" });
 
     const onSubmit: SubmitHandler<FormValues> = async (data) => {
         try {
@@ -175,51 +177,7 @@ export function TransactionForm({ type }: { type: "income" | "expense" }) {
             {/* Category */}
             <div className="space-y-2">
                 <Label>Category</Label>
-                <Select onValueChange={(v) => setValue("category", v)}>
-                    <SelectTrigger>
-                        <SelectValue placeholder="Select category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {type === "expense" ? (
-                            <>
-                                <SelectItem value="rent">
-                                    Rent / Mortgage
-                                </SelectItem>
-                                +{" "}
-                                <SelectItem value="shopping">
-                                    Shopping
-                                </SelectItem>
-                                +{" "}
-                                <SelectItem value="utilities">
-                                    Utilities
-                                </SelectItem>
-                                +{" "}
-                                <SelectItem value="savings">
-                                    Savings & Investments
-                                </SelectItem>
-                                +{" "}
-                                <SelectItem value="maintenance">
-                                    Maintenance & Repairs
-                                </SelectItem>
-                                +{" "}
-                                <SelectItem value="insurance">
-                                    Insurance Premiums
-                                </SelectItem>
-                            </>
-                        ) : (
-                            <>
-                                <SelectItem value="salary">Salary</SelectItem>
-                                <SelectItem value="freelance">
-                                    Freelance
-                                </SelectItem>
-                                +{" "}
-                                <SelectItem value="rental_income">
-                                    Rental Income
-                                </SelectItem>
-                            </>
-                        )}
-                    </SelectContent>
-                </Select>
+                <CategorySelector type={type} value={categoryValue} onValueChange={(v) => setValue("category", v)}/>
                 {errors.category && (
                     <p className="text-sm text-red-500">
                         {errors.category.message}
