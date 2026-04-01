@@ -1,6 +1,5 @@
 import {
     decimal,
-    jsonb,
     pgEnum,
     pgTable,
     text,
@@ -8,6 +7,7 @@ import {
     uuid,
 } from "drizzle-orm/pg-core";
 import { app_subscriptions } from "./plans";
+import { encryptedJson } from "./custom-types";
 
 export const invoiceStatusEnum = pgEnum("invoice_status", [
     "draft",
@@ -19,9 +19,7 @@ export const invoiceStatusEnum = pgEnum("invoice_status", [
 
 export const paymentInvoices = pgTable("payment_invoices", {
     id: uuid("id").primaryKey().defaultRandom(),
-    subscriptionId: uuid("subscription_id").references(
-        () => app_subscriptions.id,
-    ),
+    subscriptionId: uuid("subscription_id").references(() => app_subscriptions.id),
     providerInvoiceId: text("provider_invoice_id").unique().notNull(),
     invoiceNumber: text("invoice_number").unique().notNull(),
     amountDue: decimal("amount_due", { precision: 10, scale: 2 }).notNull(),
@@ -30,14 +28,13 @@ export const paymentInvoices = pgTable("payment_invoices", {
     status: invoiceStatusEnum("status").default("draft"),
     dueDate: timestamp("due_date"),
     paidAt: timestamp("paid_at"),
-    lines: jsonb("lines").$type<
+    lines: encryptedJson<
         Array<{
             description: string;
             amount: number;
             period?: { start: Date; end: Date };
-        }>
-    >(),
-    metadata: jsonb("metadata"),
-    createdAt: timestamp("create_at").defaultNow(),
+        }>>()("lines"),
+    metadata: encryptedJson<Record<string, any>>()("metadata"),
+    createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
 });

@@ -1,7 +1,7 @@
 import { db } from "@/db";
 import { transactions, subscriptions } from "@/db/schema/schema";
 import { auth } from "@clerk/nextjs/server";
-import { and, count, eq, gte, lt, sql, lte, desc } from "drizzle-orm";
+import { and, count, eq, gte, lt, sql, lte } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import z from "zod";
 
@@ -211,11 +211,12 @@ export const GET = async (request: NextRequest) => {
             growth: {
                 income: Number(incomeGrowth.toFixed(1)),
                 activeSubscriptions: Number(activeSubsGrowth.toFixed(1)),
-                // totalSpend growth can be added later
+                totalSpend: Number(
+                    (totalSpendCurrent / incomeCurrent).toFixed(1),
+                ),
             },
         });
-    } catch (error) {
-        console.error("Stats API Error:", error);
+    } catch {
         return NextResponse.json(
             { message: "Internal server error" },
             { status: 500 },

@@ -1,7 +1,8 @@
-import { decimal, jsonb, pgEnum, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { decimal, pgEnum, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { pgTable } from "drizzle-orm/pg-core";
 import { app_subscriptions } from "./plans";
 import { paymentInvoices } from "./appInvoices";
+import { encryptedJson, encryptedText } from "./custom-types";
 
 export const appTransactionTypeEnum = pgEnum('transaction_type', [
     'payment',
@@ -26,10 +27,10 @@ export const paymentTransactions = pgTable('payment_transactions', {
     currency: text('currency').notNull(),
     status: appTransactionStatusEnum('status').default('pending'),
     paymentMethod: text('payment_method'),
-    idemptencyKey: text('idemptency_key').unique(),
+    idempotencyKey: text('idemptency_key').unique(),
     providerTransactionId: text('provider_transaction_id'),
-    errorMessage: text('error_message'),
-    metadata: jsonb('metadata'),
-    createdAt: timestamp('create_at').defaultNow(),
+    errorMessage: encryptedText('error_message'),
+    metadata: encryptedJson<Record<string, any>>()('metadata'),
+    createdAt: timestamp('created_at').defaultNow(),
     updatedAt: timestamp('updated_at').defaultNow()
 })

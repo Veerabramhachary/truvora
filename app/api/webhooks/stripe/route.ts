@@ -132,7 +132,7 @@ async function handleInvoicePaid(invoice: ExpandedInvoice) {
             currency: invoice.currency,
             status: "succeeded",
             providerTransactionId: chargeId,
-            idemptencyKey: invoice.id, // Adjust if needed (e.g., idempotency_key)
+            idempotencyKey: invoice.id, // Adjust if needed (e.g., idempotency_key)
         });
     });
 }
@@ -196,7 +196,7 @@ async function handleInvoicePaymentFailed(invoice: ExpandedInvoice) {
             currency: invoice.currency,
             status: "failed",
             providerTransactionId: chargeId,
-            idemptencyKey: invoice.id, // Adjust as needed
+            idempotencyKey: invoice.id, // Adjust as needed
         });
     }
 }

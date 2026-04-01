@@ -4,7 +4,7 @@ import Link from "next/link"
 const Navbar = () => {
     const locale = useLocale();
     return (
-        <nav className="fixed top-0 left-0 right-0 z-50 glass-nav">
+        <nav className="fixed top-0 left-0 right-0 z-50 glass-nav bg-transparent">
             <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <div className="w-6 h-6 rounded bg-indigo-600 flex items-center justify-center">
@@ -18,8 +18,9 @@ const Navbar = () => {
                     <Link href={"#pricing"} className="hover:text-slate-900 transition-colors text-slate-500">Pricing</Link>
                 </div>
                 <div className="flex items-center gap-4">
+                    {/* auth don't have any loacale  */}
                     <Link href={"/auth/login"} className="hidden md:block text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
-                        LogIn
+                        Login
                     </Link>
                     <Link href={`/${locale}/dashboard`} className="text-sm font-medium bg-slate-900 text-white px-4 py-2 rounded-full hover:bg-slate-600 transition-all shadow-sm">
                         Get Started

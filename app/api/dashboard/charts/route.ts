@@ -2,248 +2,112 @@ import { db } from "@/db";
 import { expenses } from "@/db/schema/expenses";
 import { subscriptions } from "@/db/schema/schema";
 import { auth } from "@clerk/nextjs/server";
-import { and, count, eq, gte, gt, lt, or, sql, isNull } from "drizzle-orm";
+import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import z from "zod";
 
 const querySchema = z.object({
+    startDate: z.iso.datetime(),
+    endDate: z.iso.datetime(),
     currency: z.string().default("USD"),
 });
 
 export const GET = async (request: NextRequest) => {
-    try {
-        const { userId } = await auth();
-        if (!userId)
-            return NextResponse.json(
-                { message: "Unauthorized" },
-                { status: 401 },
-            );
+    const { userId } = await auth();
+    if (!userId) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-        const { searchParams } = request.nextUrl;
-        const query = querySchema.safeParse({
-            currency: searchParams.get("currency"),
-        });
+    const { searchParams } = request.nextUrl;
+    const query = querySchema.safeParse({
+        startDate: searchParams.get("startDate"),
+        endDate: searchParams.get("endDate"),
+        currency: searchParams.get("currency") ?? undefined,
+    });
 
-        if (!query.success) {
-            return NextResponse.json(
-                {
-                    error: "Invalid query parameters",
-                    details: query.error.flatten(),
-                },
-                { status: 400 },
-            );
-        }
-
-        const { currency } = query.data;
-
-        const now = new Date();
-        // Set date to first day of the current month
-        const startOfCurrentMonth = new Date(
-            now.getFullYear(),
-            now.getMonth(),
-            1,
-        );
-        startOfCurrentMonth.setHours(0, 0, 0, 0);
-
-        const startOfPreviousMonth = new Date(
-            now.getFullYear(),
-            now.getMonth() - 1,
-            1,
-        );
-        startOfPreviousMonth.setHours(0, 0, 0, 0);
-
-        const endOfPreviousMonth = new Date(
-            now.getFullYear(),
-            now.getMonth(),
-            1,
-        );
-        endOfPreviousMonth.setHours(0, 0, 0, 0);
-
-        const endOfCurrentMonth = new Date(
-            now.getFullYear(),
-            now.getMonth() + 1,
-            1,
-        );
-        endOfCurrentMonth.setHours(0, 0, 0, 0);
-
-        // Fetch data concurrently using Promise.all
-        const [
-            activeSubsCurrent,
-            incomeCurrent,
-            incomePrevious,
-            expenseCurrent,
-            expensePrevious,
-            subsCurrent,
-            subsPrevious,
-            activeSubsPrevious,
-        ] = await Promise.all([
-            // Active subscriptions count
-            db
-                .select({ value: count() })
-                .from(subscriptions)
-                .where(
-                    and(
-                        eq(subscriptions.userId, userId),
-                        eq(subscriptions.currency, currency),
-                        eq(subscriptions.active, true),
-                    ),
-                )
-                .then((res) => res[0]?.value ?? 0),
-
-            // Income Spending this month
-            db
-                .select({
-                    value: sql<number>`COALESCE(SUM(${expenses.amount}), 0)`,
-                })
-                .from(expenses)
-                .where(
-                    and(
-                        eq(expenses.userId, userId),
-                        eq(expenses.currency, currency),
-                        eq(expenses.type, "income"),
-                        gte(expenses.date, startOfCurrentMonth),
-                        lt(expenses.date, endOfCurrentMonth),
-                    ),
-                )
-                .then((res) => Number(res[0]?.value ?? 0)),
-
-            // Total Income of previous month
-            db
-                .select({
-                    value: sql<number>`COALESCE(SUM(${expenses.amount}), 0)`,
-                })
-                .from(expenses)
-                .where(
-                    and(
-                        eq(expenses.userId, userId),
-                        eq(expenses.currency, currency),
-                        eq(expenses.type, "income"),
-                        gte(expenses.date, startOfPreviousMonth),
-                        lt(expenses.date, startOfCurrentMonth),
-                    ),
-                )
-                .then((res) => Number(res[0]?.value ?? 0)),
-
-            // Expenses current month
-            db
-                .select({
-                    value: sql<number>`COALESCE(SUM(${expenses.amount}), 0)`,
-                })
-                .from(expenses)
-                .where(
-                    and(
-                        eq(expenses.userId, userId),
-                        eq(expenses.currency, currency),
-                        eq(expenses.type, "expense"),
-                        gte(expenses.date, startOfCurrentMonth),
-                        lt(expenses.date, endOfCurrentMonth),
-                    ),
-                )
-                .then((res) => Number(res[0]?.value ?? 0)),
-
-            // expense previous
-            db
-                .select({
-                    value: sql<number>`COALESCE(SUM(${expenses.amount}), 0)`,
-                })
-                .from(expenses)
-                .where(
-                    and(
-                        eq(expenses.userId, userId),
-                        eq(expenses.currency, currency),
-                        eq(expenses.type, "expense"),
-                        gte(expenses.date, startOfPreviousMonth),
-                        lt(expenses.date, startOfCurrentMonth),
-                    ),
-                )
-                .then((res) => Number(res[0]?.value ?? 0)),
-
-            // subscription total spend (current month)
-            db
-                .select({
-                    value: sql<number>`COALESCE(SUM(${subscriptions.price}), 0)`,
-                })
-                .from(subscriptions)
-                .where(
-                    and(
-                        eq(subscriptions.userId, userId),
-                        eq(subscriptions.currency, currency),
-                        eq(subscriptions.active, true),
-                    ),
-                )
-                .then((res) => Number(res[0]?.value ?? 0)),
-
-            // subscription total spend (previous month)
-            db
-                .select({
-                    value: sql<number>`COALESCE(SUM(${subscriptions.price}), 0)`,
-                })
-                .from(subscriptions)
-                .where(
-                    and(
-                        eq(subscriptions.userId, userId),
-                        eq(subscriptions.currency, currency),
-                        lt(subscriptions.startDate, startOfCurrentMonth),
-                        or(
-                            isNull(subscriptions.deactivatedAt),
-                            gt(
-                                subscriptions.deactivatedAt,
-                                startOfPreviousMonth,
-                            ),
-                        ),
-                    ),
-                )
-                .then((res) => Number(res[0]?.value ?? 0)),
-
-            // Active subscriptions count in previous month
-            db
-                .select({ value: count() })
-                .from(subscriptions)
-                .where(
-                    and(
-                        eq(subscriptions.userId, userId),
-                        eq(subscriptions.currency, currency),
-                        lt(subscriptions.startDate, startOfCurrentMonth),
-                        or(
-                            isNull(subscriptions.deactivatedAt),
-                            gt(
-                                subscriptions.deactivatedAt,
-                                startOfPreviousMonth,
-                            ),
-                        ),
-                    ),
-                )
-                .then((res) => res[0]?.value ?? 0),
-        ]);
-
-        const totalSpendCurrent = expenseCurrent + subsCurrent;
-        const totalSpendPrevious = expensePrevious + subsPrevious;
-
-        const incomeGrowth = incomePrevious
-            ? ((incomeCurrent - incomePrevious) / incomePrevious) * 100
-            : 0;
-
-        const activeSubsGrowth = activeSubsPrevious
-            ? ((activeSubsCurrent - activeSubsPrevious) / activeSubsPrevious) *
-              100
-            : 0;
-
-        // Return aggregated data
-        return NextResponse.json({
-            totalSpend: totalSpendCurrent,
-            activeSubscriptions: activeSubsCurrent,
-            totalIncome: incomeCurrent,
-            growth: {
-                income: Number(incomeGrowth.toFixed(1)),
-                activeSubscriptions: Number(activeSubsGrowth.toFixed(1)),
-                // totalSpend: ... (if you add previous month expense query)
-            },
-        });
-    } catch (error) {
-        console.error("API Error:", error);
+    if (!query.success) {
         return NextResponse.json(
-            { message: "Internal server error" },
-            { status: 500 },
+            { error: "Invalid parameters", details: query.error.flatten() },
+            { status: 400 },
         );
     }
+
+    const { startDate, endDate, currency } = query.data;
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    // Query expenses (both income and expense? – we only need expense type)
+    const expenseData = await db
+        .select({
+            date: expenses.date,
+            amount: sql<number>`COALESCE(SUM(${expenses.amount}), 0) AS FLOAT`,
+        })
+        .from(expenses)
+        .where(
+            and(
+                eq(expenses.userId, userId),
+                eq(expenses.currency, currency),
+                eq(expenses.type, "expense"),
+                gte(expenses.date, start),
+                lte(expenses.date, end),
+            ),
+        )
+        .groupBy(expenses.date)
+
+    
+    const subscriptionData = await db
+        .select({
+            date: subscriptions.startDate,
+            amount: sql<number>`COALESCE(SUM(${subscriptions.price}), 0)::FLOAT`,
+        })
+        .from(subscriptions)
+        .where(
+            and(
+                eq(subscriptions.userId, userId),
+                eq(subscriptions.currency, currency),
+                eq(subscriptions.active, true),
+                lte(subscriptions.startDate, end)
+            ),
+        )
+        .groupBy(subscriptions.startDate)
+
+    // Combine into a map of date -> { expense, subscription }
+    const resultMap = new Map<
+        string,
+        { expense: number; subscription: number }
+    >();
+    expenseData.forEach((row) => {
+        const dateKey = row.date.toISOString().split("T")[0];
+        resultMap.set(dateKey, {
+            expense: row.amount,
+            subscription: resultMap.get(dateKey)?.subscription ?? 0,
+        });
+    });
+    subscriptionData.forEach((row) => {
+        const dateKey = row.date.toISOString().split("T")[0];
+        const existing = resultMap.get(dateKey) ?? {
+            expense: 0,
+            subscription: 0,
+        };
+        resultMap.set(dateKey, {
+            ...existing,
+            subscription: existing.subscription + row.amount,
+        });
+    });
+
+    // Fill missing dates in the range and produce a sorted array
+    const dates = [];
+    const current = new Date(start);
+    while (current <= end) {
+        const dateKey = current.toISOString().split("T")[0];
+        const data = resultMap.get(dateKey) ?? { expense: 0, subscription: 0 };
+        dates.push({
+            date: dateKey,
+            expense: data.expense,
+            subscription: data.subscription,
+        });
+        current.setDate(current.getDate() + 1);
+    }
+
+    return NextResponse.json(dates);
 };
