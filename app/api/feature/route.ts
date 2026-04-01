@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import {
     tryConsumeFeature,
     canUseFeature,
+    getFeatureLimit,
 } from "@/lib/feature-access";
 
 export async function GET(req: NextRequest) {
@@ -50,6 +51,11 @@ export async function GET(req: NextRequest) {
                 quantity,
                 false,
             );
+        }
+
+        if (feature === "charts") {
+            const limit = await getFeatureLimit(userId, "charts");
+            return NextResponse.json({ allowed: limit !== null, limit });
         }
 
         return Response.json({ allowed });

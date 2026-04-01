@@ -11,6 +11,7 @@ import {
     foreignKey,
     
 } from "drizzle-orm/pg-core";
+import { encryptedText } from "./custom-types";
 
 export const transactionTypeEnum = pgEnum("transaction_type", [
     "expense",
@@ -54,7 +55,7 @@ export const transactions = pgTable("transactions", {
     categoryId: uuid("category_id").references(() => categories.id),
     amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
     date: timestamp("date").notNull(),
-    description: text("description"),
+    description: encryptedText("description"),
     type: transactionTypeEnum("type").notNull(),
     subscriptionId: uuid("subscription_id").references(() => subscriptions.id),
     action: transactionActionEnum("action").notNull(),
@@ -68,7 +69,7 @@ export const subscriptions = pgTable("subscriptions", {
     userId: text("user_id").notNull(),
     categoryId: uuid("category_id").references(() => categories.id),
     name: text("name").notNull(),
-    note: text("note"),
+    note: encryptedText("note"),
     price: numeric("price", { precision: 10, scale: 2 }).notNull(),
     currency: text("currency").notNull().default("USD"),
     interval: text("interval").notNull(),

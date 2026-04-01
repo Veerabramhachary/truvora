@@ -15,10 +15,22 @@ export function getPeriod(
     date: Date = new Date(),
 ): string | null {
     if (interval === "none") return null;
-    if (interval === "month")
-        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-    if (interval === "year") return `${date.getFullYear()}`;
+    if (interval === "month") {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        return `${year}-${month}`
+    }
+    if (interval === "year") {
+        const year = date.getFullYear();
+        return `${year}`;
+    }
     return null;
+}
+
+export async function getFeatureLimit(userId: string, featureKey: keyof FeatureLimits): Promise<FeatureLimits[typeof featureKey] | null> {
+    const gate = await getSubscriptionGate();
+    if (!gate) return null;
+    return gate.checkFeatures(featureKey);
 }
 
 const getCurrentCountForStaticCap = async (
@@ -175,6 +187,7 @@ export async function canUseFeature(
         return true;
     }
 
+
     // Fallback: if it's a number (e.g., subscriptions limit), treat as cap?
     if (typeof limitDef === "number") {
         const current = await getCurrentCountForStaticCap(
@@ -259,17 +272,20 @@ export async function tryConsumeFeature(
             // Use a transaction to increment only if within limit
             return await db.transaction(async (tx) => {
                 // Lock the row for update (or use optimistic locking)
-                const existing = await tx.execute(sql`
-                SELECT count FROM ${featureUsage}
-                WHERE ${featureUsage.userId} = ${userId}
-                AND ${featureUsage.feature} = ${featureKey as string}
-                AND ${featureUsage.period} = ${period}
-                FOR UPDATE
-            `);
+                const existing = await tx
+                    .select({ count: featureUsage.count })
+                    .from(featureUsage)
+                    .where(
+                        and(
+                            eq(featureUsage.userId, userId),
+                            eq(featureUsage.feature, featureKey as string),
+                            eq(featureUsage.period, period),
+                        ),
+                    );
 
                 const current =
-                    (existing.rows[0] as { count: number } | undefined)
-                        ?.count ?? 0;
+                    (existing[0] as { count: number } | undefined)?.count ?? 0;
+
                 if (current + quantity > limit) {
                     return false;
                 }

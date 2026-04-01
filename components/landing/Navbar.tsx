@@ -4,7 +4,7 @@ import Link from "next/link"
 const Navbar = () => {
     const locale = useLocale();
     return (
-        <nav className="fixed top-0 left-0 right-0 z-50 glass-nav">
+        <nav className="fixed top-0 left-0 right-0 z-50 glass-nav bg-transparent">
             <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <div className="w-6 h-6 rounded bg-indigo-600 flex items-center justify-center">
