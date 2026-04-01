@@ -3,13 +3,15 @@ import { SubscriptionsDue } from "./subscriptions";
 import { Resend } from "resend";
 import { EmailTemplate } from "@/components/email-template";
 
-const resend = new Resend(process.env.RESEND_API_KEY!);
+
 
 async function sendGroupNotification(
     email: string,
     userName: string,
     subs: any[],
 ) {
+    const resend = new Resend(process.env.RESEND_API_KEY!);
+    
     await resend.emails.send({
         from: "Truvora <onboarding@resend.dev>",
         to: email,
