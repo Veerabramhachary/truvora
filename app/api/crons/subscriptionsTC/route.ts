@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
         const userIds = Object.keys(GroupedSubscriptions);
         const emailPromises = userIds.map(async (userId) => {
             const userSubs = GroupedSubscriptions[userId];
+            if(!userSubs || userSubs.length === 0) return Promise.resolve(null);
             const recipientEmail = userSubs[0].email;
 
             if (!recipientEmail) {
@@ -42,6 +43,15 @@ export async function GET(request: NextRequest) {
         });
 
         await Promise.all(emailPromises);
+        const results = await Promise.allSettled(emailPromises);
+        const failures = results.filter(
+            (result) => result.status === "rejected",
+        );
+        if (failures.length > 0) {
+            console.error(`Cron job failed for ${failures.length}`, failures.map((f) => f.reason));
+        }
+
+
 
         return NextResponse.json({ success: true }, { status: 200 });
     } catch (error) {

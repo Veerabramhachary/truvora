@@ -281,7 +281,8 @@ export async function tryConsumeFeature(
                             eq(featureUsage.feature, featureKey as string),
                             eq(featureUsage.period, period),
                         ),
-                    );
+                    )
+                    .for('update');
 
                 const current =
                     (existing[0] as { count: number } | undefined)?.count ?? 0;

@@ -19,7 +19,7 @@ const Sections = () => {
             {/* hero sections */}
             <section className="relative pt-32 pb-20 md:pt-48 md:pb-32 overflow-hidden bg-white">
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-200 h-100 bg-indigo-500/10 blur-[100px] rounded-full pointer-events-none -z-10"></div>
-                <div className="max-w-6x1 mx-auto px-6 text-center">
+                <div className="max-w-6xl mx-auto px-6 text-center">
                     <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-100 text-xs font-medium mb-8 animate-fade-in-up text-black">
                         <span className="relative flex h-2 w-2">
                             <span className="animate-ping absolute inline-flex h-full rounded-full bg-indigo-400 opacity-70"></span>
@@ -28,7 +28,7 @@ const Sections = () => {
                         Introducing Truvora 1.0
                     </div>
 
-                    <h1 className="text-4xl md:text-6xl font-semibold tracking-tight text-slate-900 mb-6 max-w-4xl mx-auto animate-fade-in-uo delay-100 leading-tight">
+                    <h1 className="text-4xl md:text-6xl font-semibold tracking-tight text-slate-900 mb-6 max-w-4xl mx-auto animate-fade-in-out delay-100 leading-tight">
                         Take Control of Subscriptions.{" "}
                         <span className="text-indigo-600">Privately</span>
                     </h1>
@@ -63,7 +63,7 @@ const Sections = () => {
                 className="py-24 bg-white border-y border-slate-100"
             >
                 <div className="max-w-6xl mx-auto px-6">
-                    <div className="text-center md-16">
+                    <div className="text-center mb-16">
                         <h2 className="text-2xl md:text-3xl font-semiold tracking-tight text-slate-900 mb-4">
                             Simplicity at its core
                         </h2>
@@ -323,13 +323,13 @@ const Sections = () => {
 
                     <div className="flex gap-6 text-sm text-slate-500">
                         <Link
-                            href="#"
+                            href="/privacy-policy"
                             className="hover:text-slate-900 transition-colors"
                         >
                             Privacy
                         </Link>
                         <Link
-                            href="/"
+                            href="/terms"
                             className="hover:text-slate-900 transition-colors"
                         >
                             Terms

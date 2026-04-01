@@ -1,4 +1,3 @@
-// app/api/dashboard/chart-time-series/route.ts
 import { db } from "@/db";
 import { expenses } from "@/db/schema/expenses";
 import { subscriptions } from "@/db/schema/schema";
@@ -59,7 +58,7 @@ export const GET = async (request: NextRequest) => {
     const subscriptionData = await db
         .select({
             date: subscriptions.startDate,
-            amount: sql<number>`COALESCE(SUM(${subscriptions.price}), 0) AS FLOAT`,
+            amount: sql<number>`COALESCE(SUM(${subscriptions.price}), 0)::FLOAT`,
         })
         .from(subscriptions)
         .where(

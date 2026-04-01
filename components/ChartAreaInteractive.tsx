@@ -88,7 +88,7 @@ export function ChartAreaInteractive() {
 
     const chartTier = featureResult?.data?.limit ?? null;
     const { isLoading, isError } = query;
-    const data = Array.isArray(timeSeriesResult?.data) ? timeSeriesResult : [];
+    const data = Array.isArray(timeSeriesResult?.data) ? timeSeriesResult.data : [];
 
     if (isLoading) {
         return (
@@ -110,7 +110,7 @@ export function ChartAreaInteractive() {
         );
     }
 
-    const transformedData = (timeSeriesResult?.data?.data ?? []).map((item) => ({
+    const transformedData = (timeSeriesResult?.data ?? []).map((item) => ({
         date: item.date,
         expense: item.expense,
         subscription: item.subscription,
@@ -179,22 +179,37 @@ export function ChartAreaInteractive() {
             >
                 <ChartContainer
                     config={chartConfig}
-                    className="aspect-auto h-50 w-full"
+                    className="aspect-auto h-52 w-full"
                 >
                     <AreaChart data={transformedData}>
                         <defs>
-                            <linearGradient id="fillExpense" x1="0" y1="0" x2="0" y2="1">
-                                <stop
-                                    offset="5%"
-                                    stopColor="var(--color-expense)"
-                                    stopOpacity={0.8}
-                                />
-                                <stop
-                                    offset="95%"
-                                    stopColor="var(--color-expense)"
-                                    stopOpacity={0.1}
-                                />
-                            </linearGradient>
+                            {chartTier === "basic" ? (
+                                <linearGradient id="fillTotal" x1="0" y1="0" x2="0" y2="1">
+                                    <stop
+                                        offset="5%"
+                                        stopColor="var(--color-total)"
+                                        stopOpacity={0.8}
+                                    />
+                                    <stop
+                                        offset="95%"
+                                        stopColor="var(--color-total)"
+                                        stopOpacity={0.1}
+                                    />
+                                </linearGradient>
+                            ) : (
+                                <linearGradient id="fillExpense" x1="0" y1="0" x2="0" y2="1">
+                                    <stop
+                                        offset="5%"
+                                        stopColor="var(--color-expense)"
+                                        stopOpacity={0.8}
+                                    />
+                                    <stop
+                                        offset="95%"
+                                        stopColor="var(--color-expense)"
+                                        stopOpacity={0.1}
+                                    />
+                                </linearGradient>
+                            )}
                             {chartTier === "comparative" && (
                                 <linearGradient
                                     id="fillSubscription"
@@ -250,8 +265,8 @@ export function ChartAreaInteractive() {
                         <Area
                             dataKey={chartTier === "basic" ? "total" : "expense"}
                             type="natural"
-                            fill="url(#fillExpense)"
-                            stroke="var(--color-expense)"
+                            fill={chartTier === "basic" ? "url(#fillTotal)" : "url(#fillExpense)"}
+                            stroke={chartTier === "basic" ? "var(--color-total)" : "var(--color-expense)"}
                             stackId="a"
                         />
                         {chartTier === "comparative" && (<Area
