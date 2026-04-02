@@ -41,7 +41,7 @@ const Sections = () => {
 
                     <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-fade-in-up delay-300">
                         <Link
-                            href="/auth/login"
+                            href="/auth/sign-in"
                             className="w-full sm:w-auto text-sm font-medium bg-indigo-600 text-white px-6 py-3 rounded-full hover:bg-indigo-700 transition-all shadow-sm flex items-center justify-center gap-2"
                         >
                             Get Started Free
