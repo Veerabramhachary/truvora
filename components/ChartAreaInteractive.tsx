@@ -72,7 +72,7 @@ export function ChartAreaInteractive() {
     });
 
     const { query, result: timeSeriesResult } = useCustom<TimeSeriesResponse>({
-        url: "/api/dashboard/chart",
+        url: "/api/dashboard/charts",
         method: "get",
         config: {
             query: {
@@ -99,7 +99,7 @@ export function ChartAreaInteractive() {
             </div>
         );
     }
-    if (isError || !Array.isArray(data)) {
+    if (isError || (timeSeriesResult?.data && !Array.isArray(timeSeriesResult?.data))) {
         return (
             <div
                 role="alert"
@@ -110,7 +110,7 @@ export function ChartAreaInteractive() {
         );
     }
 
-    const transformedData = (timeSeriesResult?.data ?? []).map((item) => ({
+    const transformedData = data.map((item) => ({
         date: item.date,
         expense: item.expense,
         subscription: item.subscription,
