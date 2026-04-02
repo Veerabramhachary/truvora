@@ -4,8 +4,8 @@ import { NextResponse } from "next/server";
 // Public routes (marketing pages)
 const isPublicRoute = createRouteMatcher([
     "/",
-    "/(en|ar-er)",
-    "/(en|fr|es|de)/pricing",
+    "/(en|ar)",
+    "/(en|ar)/pricing",
     "/auth/sign-in(.*)",
     "/auth/sign-up(.*)",
     "/auth/verify-email(.*)",

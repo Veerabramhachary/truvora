@@ -7,8 +7,8 @@ import { NextRequest, NextResponse } from "next/server";
 import z from "zod";
 
 const querySchema = z.object({
-    startDate: z.iso.datetime(),
-    endDate: z.iso.datetime(),
+    startDate: z.string().datetime(),
+    endDate: z.string().datetime(),
     currency: z.string().default("USD"),
 });
 

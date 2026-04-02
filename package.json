@@ -9,10 +9,10 @@
         "build": "next build",
         "start": "next start",
         "lint": "eslint",
-        "insert-seed": "npx tsx scripts/seed.ts",
-        "insert-db": "npx tsx scripts/expense.ts",
-        "insert-sub": "npx tsx scripts/subscription.ts",
-        "insert-plans": "npx tsx scripts/plans.ts"
+        "insert-seed": "tsx scripts/seed.ts",
+        "insert-db": "tsx scripts/expense.ts",
+        "insert-sub": "tsx scripts/subscription.ts",
+        "insert-plans": "tsx scripts/plans.ts"
     },
     "dependencies": {
         "@clerk/nextjs": "^6.39.0",

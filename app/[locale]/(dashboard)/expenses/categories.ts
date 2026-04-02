@@ -1,6 +1,6 @@
 export const expenseCategories = [
     {
-        label: "Housing & Utities",
+        label: "Housing&Utilities",
         items: [
             { value: "rent/mortgage", label: "Rent/ Mortgage" },
             { value: "electricity", label: "Electricity" },
@@ -11,11 +11,11 @@ export const expenseCategories = [
         ],
     },
     {
-        label: "Food & Dining",
+        label: "Food&Dining",
         items: [
-            { value: "groceies", label: "Groceies" },
+            { value: "groceries", label: "Groceries" },
             { value: "restaurants", label: "Restaurants" },
-            { value: "coffee&snaks", label: "Coffee & Snaks" },
+            { value: "coffee & snacks", label: "Coffee & Snacks" },
             { value: "food_delivery", label: "Food Delivery" },
             { value: "alcohol&beverages", label: "Alcohol & Beverages" },
         ],
@@ -27,12 +27,12 @@ export const expenseCategories = [
             { value: "public_transport", label: "Public Transport" },
             { value: "cab/rideShare", label: "Cab / RideShare" },
             { value: "vehicle_emi", label: "Vehicle EMI" },
-            { value: "parking&tolls", label: "Parking & Tolls" },
+            { value: "parking & tolls", label: "Parking & Tolls" },
             { value: "car_maintenance", label: "Car Maintenance" },
         ],
     },
     {
-        label: "Health & Wellness",
+        label: "Health&Wellness",
         items: [
             { value: "doctor_consultation", label: "Doctor / Consultation" },
             { value: "medicines", label: "Medicines" },
@@ -51,7 +51,7 @@ export const expenseCategories = [
         ],
     },
     {
-        label: "Personal & Lifestyle",
+        label: "Personal&Lifestyle",
         items: [
             { value: "clothing_apparel", label: "Clothing & Apparel" },
             { value: "haircut_grooming", label: "Haircut & Grooming" },
@@ -62,7 +62,7 @@ export const expenseCategories = [
         ],
     },
     {
-        label: "Finance & Debt",
+        label: "Finance&Debt",
         items: [
             { value: "loan_emi", label: "Loan EMI" },
             { value: "credit_card_payment", label: "Credit Card Payment" },
@@ -73,7 +73,7 @@ export const expenseCategories = [
 ];
 export const incomeCategories = [
     {
-        label: "Primary Income",
+        label: "Primary_Income",
         items: [
             { value: "salary_wages", label: "Salary / Wages" },
             { value: "bonus", label: "Bonus" },
@@ -82,7 +82,7 @@ export const incomeCategories = [
         ],
     },
     {
-        label: "Side & Freelance",
+        label: "Side&Freelance",
         items: [
             { value: "freelance_projects", label: "Freelance Projects" },
             { value: "consulting", label: "Consulting" },
@@ -91,7 +91,7 @@ export const incomeCategories = [
         ],
     },
     {
-        label: "Investments & Returns",
+        label: "Investments&Returns",
         items: [
             { value: "stock_dividends", label: "Stock Dividends" },
             { value: "mutual_fund_returns", label: "Mutual Fund Returns" },
@@ -104,7 +104,7 @@ export const incomeCategories = [
         ],
     },
     {
-        label: "Rental & Property",
+        label: "Rental&Property",
         items: [
             { value: "residential_rental", label: "Residential Rental" },
             { value: "commercial_rental", label: "Commercial Rental" },
@@ -112,7 +112,7 @@ export const incomeCategories = [
         ],
     },
     {
-        label: "Passive & Digital",
+        label: "Passive&Digital",
         items: [
             { value: "youtube_creator", label: "YouTube / Creator" },
             { value: "affiliate_marketing", label: "Affiliate Marketing" },
@@ -122,7 +122,7 @@ export const incomeCategories = [
         ],
     },
     {
-        label: "Other Income",
+        label: "Other_Income",
         items: [
             { value: "gifts_received", label: "Gifts Received" },
             { value: "tax_refunds", label: "Tax Refunds" },
@@ -134,7 +134,7 @@ export const incomeCategories = [
 ];
 export const subscriptionsCategories = [
     {
-        label: "Streaming & Media",
+        label: "Streaming&Media",
         items: [
             { value: "video_streaming", label: "Video (Netflix, Prime, Disney+)" },
             { value: "music_streaming", label: "Music (Spotify, Apple Music)" },
@@ -144,7 +144,7 @@ export const subscriptionsCategories = [
         ]
     },
     {
-        label: "Productivity & SaaS",
+        label: "Productivity&SaaS",
         items: [
             { value: "office_tools", label: "Microsoft 365 / Google Workspace" },
             { value: "project_management", label: "Project Management (Notion, Asana)" },
@@ -155,7 +155,7 @@ export const subscriptionsCategories = [
         ]
     },
     {
-        label: "Cloud & Storage",
+        label: "Cloud&Storage",
         items: [
             { value: "google_drive", label: "Google One / Drive" },
             { value: "icloud", label: "iCloud" },
@@ -164,7 +164,7 @@ export const subscriptionsCategories = [
         ]
     },
     {
-        label: "E-commerce & Shopping",
+        label: "E-commerce&Shopping",
         items: [
             { value: "amazon_prime", label: "Amazon Prime" },
             { value: "zomato_swiggy", label: "Zomato Pro / Swiggy One" },
@@ -172,7 +172,7 @@ export const subscriptionsCategories = [
         ]
     },
     {
-        label: "Health & Fitness Apps",
+        label: "Health&Fitness Apps",
         items: [
             { value: "gym_membership", label: "Gym Membership" },
             { value: "yoga_meditation", label: "Yoga / Meditation App" },
@@ -180,7 +180,7 @@ export const subscriptionsCategories = [
         ]
     },
     {
-        label: "Telecom & Devices",
+        label: "Telecom&Devices",
         items: [
             { value: "mobile_plan", label: "Mobile / Data Plan" },
             { value: "device_insurance", label: "Device Insurance" },
