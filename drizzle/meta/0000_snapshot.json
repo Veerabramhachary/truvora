@@ -1,5 +1,5 @@
 {
-  "id": "125037bf-ab0b-4a0a-9c3d-52ec89da3ae8",
+  "id": "338efc27-6eb9-43ec-af38-d94c9ae36a4f",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -74,18 +74,18 @@
         },
         "lines": {
           "name": "lines",
-          "type": "jsonb",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
         "metadata": {
           "name": "metadata",
-          "type": "jsonb",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "create_at": {
-          "name": "create_at",
+        "created_at": {
+          "name": "created_at",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": false,
@@ -161,7 +161,7 @@
         },
         "type": {
           "name": "type",
-          "type": "transaction_type",
+          "type": "payment_transaction_type",
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": true
@@ -212,12 +212,12 @@
         },
         "metadata": {
           "name": "metadata",
-          "type": "jsonb",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "create_at": {
-          "name": "create_at",
+        "created_at": {
+          "name": "created_at",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": false,
@@ -309,6 +309,13 @@
           "primaryKey": false,
           "notNull": true
         },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'USD'"
+        },
         "date": {
           "name": "date",
           "type": "timestamp",
@@ -361,6 +368,82 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.feature_usage": {
+      "name": "feature_usage",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "feature": {
+          "name": "feature",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period": {
+          "name": "period",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "count": {
+          "name": "count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "feature_usage_user_id_users_id_fk": {
+          "name": "feature_usage_user_id_users_id_fk",
+          "tableFrom": "feature_usage",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "feature_usage_user_id_feature_period_unique": {
+          "name": "feature_usage_user_id_feature_period_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "user_id",
+            "feature",
+            "period"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -509,7 +592,15 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "app_subscriptions_provider_subscription_id_unique": {
+          "name": "app_subscriptions_provider_subscription_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "provider_subscription_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -667,9 +758,9 @@
           "primaryKey": false,
           "notNull": false
         },
-        "parent_id": {
-          "name": "parent_id",
-          "type": "uuid",
+        "parent_name": {
+          "name": "parent_name",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         }
@@ -697,17 +788,25 @@
           "tableFrom": "categories",
           "tableTo": "categories",
           "columnsFrom": [
-            "parent_id"
+            "parent_name"
           ],
           "columnsTo": [
-            "id"
+            "name"
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "categories_name_unique": {
+          "name": "categories_name_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "name"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -784,6 +883,12 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true
+        },
+        "deactivated_at": {
+          "name": "deactivated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
         },
         "next_date": {
           "name": "next_date",
@@ -890,6 +995,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "subscription_id": {
+          "name": "subscription_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "action": {
           "name": "action",
           "type": "trasaction_action",
@@ -927,6 +1038,19 @@
           "tableTo": "categories",
           "columnsFrom": [
             "category_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "transactions_subscription_id_subscriptions_id_fk": {
+          "name": "transactions_subscription_id_subscriptions_id_fk",
+          "tableFrom": "transactions",
+          "tableTo": "subscriptions",
+          "columnsFrom": [
+            "subscription_id"
           ],
           "columnsTo": [
             "id"
@@ -1029,13 +1153,14 @@
         "refunded"
       ]
     },
-    "public.transaction_type": {
-      "name": "transaction_type",
+    "public.payment_transaction_type": {
+      "name": "payment_transaction_type",
       "schema": "public",
       "values": [
-        "expense",
-        "income",
-        "subscription"
+        "payment",
+        "refund",
+        "adjustment",
+        "chargeback"
       ]
     },
     "public.expense_type": {
@@ -1073,7 +1198,8 @@
       "values": [
         "stripe",
         "paypal",
-        "braintree"
+        "braintree",
+        "none"
       ]
     },
     "public.trasaction_action": {
@@ -1083,6 +1209,15 @@
         "created",
         "updated",
         "deleted"
+      ]
+    },
+    "public.transaction_type": {
+      "name": "transaction_type",
+      "schema": "public",
+      "values": [
+        "expense",
+        "income",
+        "subscription"
       ]
     }
   },

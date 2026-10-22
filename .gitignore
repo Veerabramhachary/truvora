@@ -35,9 +35,10 @@ Thumbs.db
 *.tsbuildinfo
 
 # Drizzle ORM
-# Keep migrations tracked
-drizzle/*.sql
-drizzle/meta/
+# Migrations and their snapshots ARE tracked: they are the only record of the
+# database schema and are required to provision a new environment.
+# drizzle/*.sql
+# drizzle/meta/
 
 # Database
 *.sqlite

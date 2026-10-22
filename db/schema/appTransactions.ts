@@ -4,7 +4,11 @@ import { app_subscriptions } from "./plans";
 import { paymentInvoices } from "./appInvoices";
 import { encryptedJson, encryptedText } from "./custom-types";
 
-export const appTransactionTypeEnum = pgEnum('transaction_type', [
+// NOTE: the Postgres type name must not collide with the `transaction_type`
+// enum declared in `./schema` (expense | income | subscription). Both are
+// schema-global, so reusing the name silently overwrote one of the two value
+// sets and made `payment_transactions.type` reject every payment row.
+export const appTransactionTypeEnum = pgEnum('payment_transaction_type', [
     'payment',
     'refund',
     'adjustment',
@@ -30,7 +34,7 @@ export const paymentTransactions = pgTable('payment_transactions', {
     idempotencyKey: text('idemptency_key').unique(),
     providerTransactionId: text('provider_transaction_id'),
     errorMessage: encryptedText('error_message'),
-    metadata: encryptedJson<Record<string, any>>()('metadata'),
+    metadata: encryptedJson<Record<string, unknown>>()('metadata'),
     createdAt: timestamp('created_at').defaultNow(),
     updatedAt: timestamp('updated_at').defaultNow()
 })

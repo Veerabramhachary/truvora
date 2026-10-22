@@ -1,4 +1,5 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import type { NextFetchEvent, NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 // Public routes (marketing pages)
@@ -11,7 +12,11 @@ const isPublicRoute = createRouteMatcher([
     "/auth/verify-email(.*)",
     "/sso-callback(.*)",
     "/api/webhooks/clerk(.*)",
+    "/api/webhooks/stripe(.*)",
     "/api/plans(.*)",
+    // Cron routes authenticate with the CRON_SECRET bearer token instead of a
+    // Clerk session, so they must be reachable without a signed-in user.
+    "/api/crons/(.*)",
 ]);
 
 // Protected dashboard routes
@@ -24,7 +29,7 @@ const isDashboardRoute = createRouteMatcher([
 // API routes
 const isApiRoute = createRouteMatcher(["/api/(.*)"]);
 
-export async function proxy(req: any, evt: any) {
+export async function proxy(req: NextRequest, evt: NextFetchEvent) {
     return clerkMiddleware(async (auth, request) => {
         const { userId, redirectToSignIn } = await auth();
 
@@ -42,7 +47,7 @@ export async function proxy(req: any, evt: any) {
         }
 
         // 3️⃣ Protect Dashboard & All other private routes
-        if (!userId) {
+        if (isDashboardRoute(request) || !userId) {
             return redirectToSignIn();
         }
 

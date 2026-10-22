@@ -1,36 +1,100 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Truvora
 
-## Getting Started
+Privacy-first personal finance tracker: expenses, income, recurring
+subscriptions and spending insights, with the sensitive fields encrypted at
+rest.
 
-First, run the development server:
+## Stack
+
+| Layer | Choice |
+| --- | --- |
+| Framework | Next.js 16 (App Router, Turbopack) + React 19 |
+| Auth | Clerk |
+| Billing | Stripe |
+| Database | Postgres (Neon) via Drizzle ORM |
+| i18n | next-intl (`en`, `ar`) |
+| UI | shadcn/ui + Tailwind CSS v4, Radix, Lucide |
+| Data fetching | Refine (simple-rest) + TanStack Query |
+
+## Prerequisites
+
+- Node.js 20 or newer
+- A Postgres database (Neon works well)
+- A Clerk application
+- A Stripe account with products and prices
+- A Resend account (renewal reminders)
+
+## Getting started
 
 ```bash
+npm install
+cp .env.example .env.local   # then fill in the values
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The app is served at <http://localhost:3000>. The `/ar` locale is available for
+Arabic.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Environment variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+See [`.env.example`](.env.example) for the full list. The ones that will bite
+you if you skip them:
 
-## Learn More
+- `DATABASE_URL` — required by everything.
+- `ENCRYPTION_PASSPHRASE` and `ENCRYPTION_SALT` — required before any row with
+  a `description`, `note` or `metadata` column can be read or written. **There
+  is no key rotation path**: changing either value makes existing ciphertext
+  permanently unreadable.
+- `CLERK_WEBHOOK_SECRET` and `STRIPE_WEBHOOK_SECRET` — required by the two
+  webhook routes, which are the only way a new user or a new subscription
+  reaches the database.
 
-To learn more about Next.js, take a look at the following resources:
+## Database
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm run db:generate   # create a migration from the schema
+npm run db:migrate    # apply pending migrations
+npm run db:push       # reconcile an existing database with the schema
+npm run db:studio     # browse the data
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The migration history was rebuilt from scratch — see
+[`drizzle/README.md`](drizzle/README.md) for why, and for how to reconcile an
+existing database.
 
-## Deploy on Vercel
+### Seed scripts
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+These attach sample data to the Clerk user id in `DEV_ID`:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run insert-plans   # subscription plans
+npm run insert-seed    # categories
+npm run insert-db      # sample expenses
+npm run insert-sub     # sample subscriptions
+```
+
+## Project layout
+
+```
+app/
+  [locale]/           routes with a locale prefix (en, ar)
+    (dashboard)/      authenticated app
+    (marketing)/      public pricing
+  api/                route handlers
+  auth/               Clerk sign-in / sign-up / sign-out
+proxy.ts              Clerk auth middleware (Next 16 `proxy` convention)
+db/schema/            Drizzle schema
+i18n/                 next-intl config and messages
+lib/                  feature gating, Stripe client, subscription helpers
+scripts/              one-off seed scripts
+```
+
+## Conventions
+
+- Route protection lives in `proxy.ts` (Clerk). Public routes are allow-listed
+  at the top of that file; API routes return `401` rather than redirecting.
+- Money is stored in `numeric` columns and therefore comes back from Drizzle
+  as a **string**. Convert with `Number()` before doing arithmetic or
+  formatting.
+- `description`, `note` and `metadata` columns are encrypted with AES-256-GCM.
+  They cannot be filtered, sorted or searched in SQL.

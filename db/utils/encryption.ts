@@ -7,7 +7,6 @@ import {
 } from "node:crypto";
 
 // Use a fixed salt for key derivation (store in env or config). Better: generate per record salt?
-const KEY_SALT = process.env.ENCRYPTION_SALT!; // Must be hex string, at least 16 bytes
 const ALGORITHM = "aes-256-gcm"; // Authenticated encryption
 const IV_LENGTH = 12; // Recommended for GCM
 const AUTH_TAG_LENGTH = 16;
@@ -18,8 +17,27 @@ function deriveKey(passphrase: string, salt: string): Buffer {
     return scryptSync(passphrase, salt, 32, { N: 2 ** 14, r: 8, p: 1 });
 }
 
-// Get the key once at module load (or derive per operation if salt changes)
-const ENCRYPTION_KEY = deriveKey(process.env.ENCRYPTION_PASSPHRASE!, KEY_SALT);
+// The key is derived lazily and cached. Deriving it at module load made every
+// importer (including `drizzle-kit`, which loads the schema to generate
+// migrations) fail with an opaque crypto error when the env var was missing,
+// and burned ~100ms of blocking CPU on every cold start.
+let cachedKey: Buffer | null = null;
+
+function getEncryptionKey(): Buffer {
+    if (cachedKey) return cachedKey;
+
+    const passphrase = process.env.ENCRYPTION_PASSPHRASE;
+    const salt = process.env.ENCRYPTION_SALT;
+
+    if (!passphrase || !salt) {
+        throw new Error(
+            "Encryption is not configured: ENCRYPTION_PASSPHRASE and ENCRYPTION_SALT must be set",
+        );
+    }
+
+    cachedKey = deriveKey(passphrase, salt);
+    return cachedKey;
+}
 
 export interface EncryptedData {
     iv: string; // hex
@@ -28,9 +46,12 @@ export interface EncryptedData {
 }
 
 export function encrypt(text: string): string {
+    // Resolved outside the try so a missing configuration surfaces with its
+    // own message instead of being masked as "Encryption error".
+    const key = getEncryptionKey();
     try {
         const iv = randomBytes(IV_LENGTH);
-        const cipher = createCipheriv(ALGORITHM, ENCRYPTION_KEY, iv, {
+        const cipher = createCipheriv(ALGORITHM, key, iv, {
             authTagLength: AUTH_TAG_LENGTH,
         });
         const encrypted = Buffer.concat([
@@ -48,6 +69,7 @@ export function encrypt(text: string): string {
 }
 
 export function decrypt(encryptedString: string): string {
+    const key = getEncryptionKey();
     try {
         const [ivHex, ciphertextHex, authTagHex] = encryptedString.split(":");
         if (!ivHex || !ciphertextHex || !authTagHex) {
@@ -56,7 +78,7 @@ export function decrypt(encryptedString: string): string {
         const iv = Buffer.from(ivHex, "hex");
         const ciphertext = Buffer.from(ciphertextHex, "hex");
         const authTag = Buffer.from(authTagHex, "hex");
-        const decipher = createDecipheriv(ALGORITHM, ENCRYPTION_KEY, iv, {
+        const decipher = createDecipheriv(ALGORITHM, key, iv, {
             authTagLength: AUTH_TAG_LENGTH,
         });
         decipher.setAuthTag(authTag);

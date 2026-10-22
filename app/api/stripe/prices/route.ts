@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
-import Stripe from "stripe";
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+import { stripe } from "@/lib/stripe";
 
 export async function GET() {
     try {
@@ -9,9 +7,12 @@ export async function GET() {
             active: true,
             expand: ["data.product"],
         });
-        NextResponse.json(prices.data)
-    }catch (error) {
-        const message = error instanceof Error ? error.message : "Internal server error";
-        return NextResponse.json({error: message}, { status: 500})
+        return NextResponse.json(prices.data);
+    } catch (error) {
+        console.error("Failed to list Stripe prices:", error);
+        return NextResponse.json(
+            { error: "Internal server error" },
+            { status: 500 },
+        );
     }
 }
