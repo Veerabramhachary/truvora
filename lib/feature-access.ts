@@ -277,49 +277,34 @@ export async function tryConsumeFeature(
             const period = getPeriod(interval);
             if (!period) return true;
 
-            // Use a transaction to increment only if within limit
-            return await db.transaction(async (tx) => {
-                // Lock the row for update (or use optimistic locking)
-                const existing = await tx
-                    .select({ count: featureUsage.count })
-                    .from(featureUsage)
-                    .where(
-                        and(
-                            eq(featureUsage.userId, userId),
-                            eq(featureUsage.feature, featureKey as string),
-                            eq(featureUsage.period, period),
-                        ),
-                    )
-                    .for('update');
+            if (quantity > limit) return false;
 
-                const current =
-                    (existing[0] as { count: number } | undefined)?.count ?? 0;
+            // Let Postgres serialize the insert/update for the unique usage
+            // key. A SELECT FOR UPDATE cannot lock a row before the first use,
+            // which allowed concurrent first exports to bypass the limit.
+            const consumed = await db
+                .insert(featureUsage)
+                .values({
+                    userId,
+                    feature: featureKey as string,
+                    period,
+                    count: quantity,
+                })
+                .onConflictDoUpdate({
+                    target: [
+                        featureUsage.userId,
+                        featureUsage.feature,
+                        featureUsage.period,
+                    ],
+                    set: {
+                        count: sql`${featureUsage.count} + ${quantity}`,
+                        updatedAt: new Date(),
+                    },
+                    setWhere: sql`${featureUsage.count} + ${quantity} <= ${limit}`,
+                })
+                .returning({ id: featureUsage.id });
 
-                if (current + quantity > limit) {
-                    return false;
-                }
-
-                await tx
-                    .insert(featureUsage)
-                    .values({
-                        userId,
-                        feature: featureKey as string,
-                        period,
-                        count: quantity,
-                    })
-                    .onConflictDoUpdate({
-                        target: [
-                            featureUsage.userId,
-                            featureUsage.feature,
-                            featureUsage.period,
-                        ],
-                        set: {
-                            count: sql`${featureUsage.count} + ${quantity}`,
-                            updatedAt: new Date(),
-                        },
-                    });
-                return true;
-            });
+            return consumed.length > 0;
         } else {
             const current = await getCurrentCountForStaticCap(
                 userId,

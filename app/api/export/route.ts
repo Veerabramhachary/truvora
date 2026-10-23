@@ -4,15 +4,12 @@ import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { expenses } from "@/db/schema/expenses";
 import { categories, subscriptions, transactions } from "@/db/schema/schema";
+import { tryConsumeFeature } from "@/lib/feature-access";
 
 /**
  * CSV export for the Exports feature gate.
  *
- * Two things to note:
- *  - The gate is enforced client-side by <FeatureGate>. Billing isn't live yet,
- *    so the server only requires a session; wire the real check in here once
- *    plans are purchasable.
- *  - Every exported field is a value we wrote (no `note`/`description`), so
+ * Every exported field is a value we wrote (no `note`/`description`), so
  *    the AES-encrypted columns can never reach the response body.
  */
 
@@ -163,6 +160,16 @@ export async function GET(req: Request) {
                 formatDate(row.createdAt),
                 row.categoryName ?? "",
             ]);
+        }
+
+        // The UI gate is only a convenience. Enforce and record each export
+        // here so direct API requests cannot bypass the plan limit.
+        const allowed = await tryConsumeFeature(userId, "exports");
+        if (!allowed) {
+            return NextResponse.json(
+                { error: "Export limit reached for your plan" },
+                { status: 403 },
+            );
         }
 
         const stamp = new Date().toISOString().slice(0, 10);
