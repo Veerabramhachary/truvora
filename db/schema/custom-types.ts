@@ -1,15 +1,21 @@
 import { customType } from "drizzle-orm/pg-core";
-import { encrypt, decrypt, isEncryptedData } from "../utils/encryption";
+import {
+    decrypt,
+    ENCRYPTED_DATA_PREFIX,
+    encrypt,
+    isEncryptedData,
+} from "../utils/encryption";
 
 function decryptText(value: string): string {
-    if (isEncryptedData(value)) return decrypt(value);
+    // New writes are explicitly tagged. Anything tagged but malformed must be
+    // rejected rather than rendered as plaintext.
+    if (value.startsWith(ENCRYPTED_DATA_PREFIX)) return decrypt(value);
 
-    // Notes created before encrypted columns were introduced are plaintext.
-    // Preserve them on read so one legacy row cannot make an entire list fail.
-    // A colon indicates an intended encrypted payload; reject malformed data
-    // instead of silently rendering a damaged ciphertext as text.
-    if (!value.includes(":")) return value;
-    throw new Error("Invalid encrypted data format");
+    // Pre-versioned ciphertext remains readable during the transition. Other
+    // untagged rows are legacy plaintext, including text such as "Lunch:
+    // client"; plaintext must not be inferred from punctuation.
+    if (isEncryptedData(value)) return decrypt(value);
+    return value;
 }
 
 export const encryptedText = customType<{ data: string | null }>({
