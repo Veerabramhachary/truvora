@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/select";
 import { useState, useMemo } from "react";
 import { useCustom } from "@refinedev/core";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export const description = "An interactive area chart";
 
@@ -61,7 +62,8 @@ export function ChartAreaInteractive() {
         return { startDate, endDate };
     }, [timeRange]);
 
-    const { result: featureResult } = useCustom<ChartTierResponse>({
+    const { result: featureResult, query: tierQuery } =
+        useCustom<ChartTierResponse>({
         url: "/api/feature",
         method: "get",
         config: {
@@ -90,14 +92,8 @@ export function ChartAreaInteractive() {
     const { isLoading, isError } = query;
     const data = Array.isArray(timeSeriesResult?.data) ? timeSeriesResult.data : [];
 
-    if (isLoading) {
-        return (
-            <div className="flex h-64 w-full items-center justify-center p-10">
-                <p className="animate-pulse text-muted-foreground">
-                    Loading stats...
-                </p>
-            </div>
-        );
+    if (isLoading || tierQuery.isLoading) {
+        return <ChartSkeleton />;
     }
     if (isError || (timeSeriesResult?.data && !Array.isArray(timeSeriesResult?.data))) {
         return (
@@ -105,7 +101,43 @@ export function ChartAreaInteractive() {
                 role="alert"
                 className="p-10 text-destructive text-center font-medium"
             >
-                {isError ? "Failed to load dashboard." : "Received invalid data format."}
+                {isError ? "Failed to load spending history." : "Received invalid data format."}
+            </div>
+        );
+    }
+
+    /*
+      The chart query is gated on the feature response, so these two states have
+      to be handled explicitly rather than falling through to a zeroed chart.
+      Previously a brand-new account rendered an error here — no plan meant no
+      tier meant the query never ran, and "no data" was indistinguishable from a
+      failure.
+    */
+    if (chartTier === null) {
+        return (
+            <div className="flex h-64 flex-col items-center justify-center gap-2 p-10 text-center">
+                <p className="font-medium text-foreground">
+                    Charts aren&apos;t included in your plan
+                </p>
+                <p className="text-sm text-muted-foreground">
+                    Upgrade to see your spending over time.
+                </p>
+            </div>
+        );
+    }
+
+    const hasSpend = data.some(
+        (d) => (d.expense || 0) > 0 || (d.subscription || 0) > 0,
+    );
+    if (!hasSpend) {
+        return (
+            <div className="flex h-64 flex-col items-center justify-center gap-2 p-10 text-center">
+                <p className="font-medium text-foreground">
+                    Nothing to chart yet
+                </p>
+                <p className="text-sm text-muted-foreground">
+                    Add an expense or try a wider date range.
+                </p>
             </div>
         );
     }
@@ -279,6 +311,30 @@ export function ChartAreaInteractive() {
                         <ChartLegend content={<ChartLegendContent />} />
                     </AreaChart>
                 </ChartContainer>
+            </CardContent>
+        </Card>
+    );
+}
+
+/**
+ * Matches the real card's footprint — header row plus the 208px plot area —
+ * so nothing shifts when the data lands.
+ */
+function ChartSkeleton() {
+    return (
+        <Card className="pt-0">
+            <CardHeader className="flex items-center gap-2 space-y-0 border-b py-4 sm:flex-row">
+                <div className="grid flex-1 gap-2">
+                    <Skeleton className="h-5 w-44" />
+                    <Skeleton className="h-4 w-64 max-w-full" />
+                </div>
+                <Skeleton className="ml-auto hidden h-9 w-40 rounded-lg sm:block" />
+            </CardHeader>
+            <CardContent
+                className="px-2 pt-4 sm:px-6 sm:pt-6"
+                style={{ minHeight: "300px" }}
+            >
+                <Skeleton className="h-52 w-full rounded-xl" />
             </CardContent>
         </Card>
     );
