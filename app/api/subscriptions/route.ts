@@ -1,8 +1,8 @@
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db";
-import { desc, eq, sql } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 import { categories, subscriptions, transactions } from "@/db/schema/schema";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getSubscriptionGate } from "@/lib/subscription";
 import z from "zod";
 import {
@@ -11,19 +11,59 @@ import {
     subscriptionSchema,
 } from "./schema";
 
-export async function GET() {
+/**
+ * `@refinedev/simple-rest` sends `_start`/`_end`/`_sort`/`_order` and reads the
+ * row count out of `X-Total-Count`. Without them Refine believes there are zero
+ * rows, so the subscriptions screen broke as soon as it paginated.
+ */
+const SORTABLE = {
+    id: subscriptions.id,
+    title: subscriptions.name,
+    amount: subscriptions.price,
+    date: subscriptions.startDate,
+    active: subscriptions.active,
+} as const;
+
+export async function GET(req: NextRequest) {
     try {
         // Authenticate user
         const { userId } = await auth();
         if (!userId) {
-            console.error("User not authenticated");
-            return NextResponse.json({error: "Unauthorized"}, {status: 401});
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        // Fetch expenses for the authenticated user
+        const params = req.nextUrl.searchParams;
+
+        // Clamp so a crafted query can't request the whole table at once.
+        const requestedStart = Number(params.get("_start") ?? "0");
+        const requestedEnd = Number(params.get("_end") ?? "10");
+        const start = Number.isFinite(requestedStart)
+            ? Math.max(0, Math.trunc(requestedStart))
+            : 0;
+        const end =
+            Number.isFinite(requestedEnd) && requestedEnd > start
+                ? Math.min(Math.trunc(requestedEnd), start + 100)
+                : start + 10;
+
+        const sortKey = params.get("_sort") ?? "startDate";
+        const column =
+            SORTABLE[sortKey as keyof typeof SORTABLE] ?? subscriptions.startDate;
+        const order =
+            (params.get("_order") ?? "desc").toLowerCase() === "asc"
+                ? asc
+                : desc;
+
+        const forUser = eq(subscriptions.userId, userId);
+
+        const countRow = await db
+            .select({ total: sql<number>`count(*)` })
+            .from(subscriptions)
+            .where(forUser);
+        const total = Number(countRow[0]?.total ?? 0);
+
         const data = await db
             .select({
-                subscriptionId: subscriptions.id,
+                id: subscriptions.id,
                 title: subscriptions.name,
                 active: subscriptions.active,
                 amount: subscriptions.price,
@@ -39,20 +79,20 @@ export async function GET() {
             })
             .from(subscriptions)
             .leftJoin(categories, eq(subscriptions.categoryId, categories.id))
-            .where(eq(subscriptions.userId, userId))
-            .orderBy(desc(subscriptions.startDate));
+            .where(forUser)
+            .orderBy(order(column))
+            .limit(end - start)
+            .offset(start);
 
-    
-
-        return NextResponse.json(data, { status: 200 });
+        return NextResponse.json(data, {
+            status: 200,
+            headers: { "X-Total-Count": String(total) },
+        });
     } catch (err) {
         console.error("Failed to fetch subscriptions:", err);
-        return new Response(
-            JSON.stringify({ error: "Failed to fetch subscriptions" }),
-            {
-                status: 500,
-                headers: { "Content-Type": "application/json" },
-            },
+        return NextResponse.json(
+            { error: "Failed to fetch subscriptions" },
+            { status: 500 },
         );
     }
 }

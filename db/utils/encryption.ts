@@ -10,6 +10,7 @@ import {
 const ALGORITHM = "aes-256-gcm"; // Authenticated encryption
 const IV_LENGTH = 12; // Recommended for GCM
 const AUTH_TAG_LENGTH = 16;
+export const ENCRYPTED_DATA_PREFIX = "enc:v1:";
 
 // Derive a 32-byte key from a passphrase using scrypt
 function deriveKey(passphrase: string, salt: string): Buffer {
@@ -45,6 +46,28 @@ export interface EncryptedData {
     authTag: string; // hex
 }
 
+/**
+ * The format written by `encrypt`.  Keeping this check separate lets column
+ * readers distinguish legacy plaintext rows from ciphertext before trying to
+ * decrypt them.  An empty ciphertext is valid: it represents an encrypted
+ * empty string.
+ */
+export function isEncryptedData(value: string): boolean {
+    const payload = value.startsWith(ENCRYPTED_DATA_PREFIX)
+        ? value.slice(ENCRYPTED_DATA_PREFIX.length)
+        : value;
+    const parts = payload.split(":");
+    if (parts.length !== 3) return false;
+
+    const [ivHex, ciphertextHex, authTagHex] = parts;
+    return (
+        /^[0-9a-f]{24}$/i.test(ivHex) &&
+        /^[0-9a-f]*$/i.test(ciphertextHex) &&
+        ciphertextHex.length % 2 === 0 &&
+        /^[0-9a-f]{32}$/i.test(authTagHex)
+    );
+}
+
 export function encrypt(text: string): string {
     // Resolved outside the try so a missing configuration surfaces with its
     // own message instead of being masked as "Encryption error".
@@ -60,7 +83,7 @@ export function encrypt(text: string): string {
         ]);
         const authTag = cipher.getAuthTag();
         // Combine iv:ciphertext:authTag as hex
-        return `${iv.toString("hex")}:${encrypted.toString("hex")}:${authTag.toString("hex")}`;
+        return `${ENCRYPTED_DATA_PREFIX}${iv.toString("hex")}:${encrypted.toString("hex")}:${authTag.toString("hex")}`;
     } catch (error) {
         // Log error (use your logger) and rethrow a generic error
         console.error("Encryption failed:", error);
@@ -71,10 +94,13 @@ export function encrypt(text: string): string {
 export function decrypt(encryptedString: string): string {
     const key = getEncryptionKey();
     try {
-        const [ivHex, ciphertextHex, authTagHex] = encryptedString.split(":");
-        if (!ivHex || !ciphertextHex || !authTagHex) {
+        if (!isEncryptedData(encryptedString)) {
             throw new Error("Invalid encrypted data format");
         }
+        const payload = encryptedString.startsWith(ENCRYPTED_DATA_PREFIX)
+            ? encryptedString.slice(ENCRYPTED_DATA_PREFIX.length)
+            : encryptedString;
+        const [ivHex, ciphertextHex, authTagHex] = payload.split(":");
         const iv = Buffer.from(ivHex, "hex");
         const ciphertext = Buffer.from(ciphertextHex, "hex");
         const authTag = Buffer.from(authTagHex, "hex");

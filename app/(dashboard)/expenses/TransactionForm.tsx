@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/popover";
 import { Label } from "@/components/ui/label";
 import { useCreate, useUpdate, type BaseRecord, type HttpError } from "@refinedev/core";
+import { useRefreshAll } from "@/lib/use-refresh";
 import { toast } from "sonner";
 import CategorySelector from "@/components/category-selector";
 import { apiErrorMessage } from "@/lib/api-error";
@@ -67,6 +68,7 @@ export function TransactionForm({
         useCreate<BaseRecord, HttpError, FormValues>();
     const { mutateAsync: updateAsync } =
         useUpdate<BaseRecord, HttpError, FormValues>();
+    const refreshAll = useRefreshAll();
 
     const form = useForm<FormValues>({
         resolver: zodResolver(formSchema) as Resolver<FormValues>,
@@ -119,6 +121,9 @@ export function TransactionForm({
                     values: data,
                 });
             }
+            // The dashboard reads through useCustom, which Refine doesn't
+            // auto-invalidate for this resource.
+            refreshAll();
             form.reset();
             toast.success(
                 isEdit

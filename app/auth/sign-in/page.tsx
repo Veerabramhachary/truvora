@@ -2,11 +2,11 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useSignIn } from "@clerk/nextjs";
+import { useSignIn, useUser } from "@clerk/nextjs";
 import { Github, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { clerkErrorMessage } from "@/lib/api-error";
 
@@ -14,6 +14,8 @@ type FieldErrors = { email?: string; password?: string };
 
 const SignIn = () => {
     const { isLoaded, signIn, setActive } = useSignIn();
+    // `useSignIn` doesn't expose `isSignedIn` in Clerk v6 — `useUser` does.
+    const { isLoaded: userLoaded, isSignedIn } = useUser();
     const router = useRouter();
 
     const [email, setEmail] = useState("");
@@ -24,6 +26,31 @@ const SignIn = () => {
     // everything Clerk rejects after submit (wrong password, locked account…).
     const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
     const [formError, setFormError] = useState<string | null>(null);
+
+    // Already signed in? Send them straight to the dashboard. Without this the
+    // form renders, they submit, and Clerk either rejects the credentials or
+    // the middleware bounces them — either way they never get where they were
+    // trying to go.
+    useEffect(() => {
+        if (userLoaded && isSignedIn) {
+            router.replace("/dashboard");
+        }
+    }, [userLoaded, isSignedIn, router]);
+
+    // Nothing but a spinner while that runs, so the form doesn't flash first.
+    if (userLoaded && isSignedIn) {
+        return (
+            <div className="flex min-h-screen items-center justify-center bg-background">
+                <Loader2
+                    className="h-8 w-8 animate-spin text-primary"
+                    aria-hidden="true"
+                />
+                <span className="sr-only">
+                    Already signed in — opening your dashboard…
+                </span>
+            </div>
+        );
+    }
 
     const validate = (): FieldErrors => {
         const next: FieldErrors = {};

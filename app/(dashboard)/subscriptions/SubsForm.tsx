@@ -15,6 +15,7 @@ import z from "zod";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useCreate, useUpdate, type BaseRecord, type HttpError } from "@refinedev/core";
+import { useRefreshAll } from "@/lib/use-refresh";
 import CategorySelector from "@/components/category-selector";
 import { apiErrorMessage } from "@/lib/api-error";
 import { CurrencySelect } from "@/components/currency-select";
@@ -78,6 +79,7 @@ const SubsForm = ({ className, editing, onSaved }: SubsFormProps) => {
         useCreate<BaseRecord, HttpError, FormValues>();
     const { mutateAsync: updateAsync } =
         useUpdate<BaseRecord, HttpError, FormValues>();
+    const refreshAll = useRefreshAll();
 
     const editingEnd = editing ? new Date(editing.endDate) : null;
     // Ongoing subscriptions are stored with a far-future `end_date`; anything
@@ -143,6 +145,9 @@ const SubsForm = ({ className, editing, onSaved }: SubsFormProps) => {
                     values: data,
                 });
             }
+            // The dashboard reads through useCustom, which Refine doesn't
+            // auto-invalidate for this resource.
+            refreshAll();
             form.reset();
             toast.success(
                 isEdit ? "Changes saved" : "Subscription added successfully",

@@ -13,6 +13,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { FeatureGate } from "@/lib/feature-gate";
 import { useDelete, useList } from "@refinedev/core";
+import { useRefreshAll } from "@/lib/use-refresh";
 import { format, isValid } from "date-fns";
 import FormExpense from "./FormExpense";
 import type { ExpenseRecord } from "./TransactionForm";
@@ -29,6 +30,7 @@ const ExpenseContent = () => {
         null,
     );
     const { mutateAsync: deleteAsync } = useDelete();
+    const refreshAll = useRefreshAll();
 
     const { query, result } = useList({
         resource: "expenses",
@@ -230,6 +232,8 @@ const ExpenseContent = () => {
                     setPendingDelete(null);
                     closeForm();
                     query.refetch();
+                    // Deleting an expense also changes the dashboard totals.
+                    refreshAll();
                 }}
             />
         </section>

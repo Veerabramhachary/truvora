@@ -85,7 +85,7 @@ export function NavUser({
                   focus and Enter land on the anchor instead of on a div that
                   wraps one. */}
               <DropdownMenuItem asChild>
-                <Link href="/pricing">
+                <Link href="/billing">
                   <Sparkles />
                   Upgrade to Pro
                 </Link>
@@ -100,7 +100,7 @@ export function NavUser({
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <Link href="/pricing">
+                <Link href="/billing">
                   <CreditCard />
                   Billing
                 </Link>

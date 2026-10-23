@@ -12,6 +12,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { FeatureGate } from "@/lib/feature-gate";
 import { useDelete, useList } from "@refinedev/core";
+import { useRefreshAll } from "@/lib/use-refresh";
 import { format, isValid } from "date-fns";
 import { useState } from "react";
 import SubsForm, { type SubscriptionRecord } from "./SubsForm";
@@ -26,6 +27,7 @@ const SubscContent = () => {
     const [pendingDelete, setPendingDelete] =
         useState<SubscriptionRecord | null>(null);
     const { mutateAsync: deleteAsync } = useDelete();
+    const refreshAll = useRefreshAll();
 
     const closeForm = () => {
         setOpen(false);
@@ -245,6 +247,8 @@ const SubscContent = () => {
                     setPendingDelete(null);
                     closeForm();
                     query.refetch();
+                    // Removing a subscription changes the dashboard totals.
+                    refreshAll();
                 }}
             />
         </section>
