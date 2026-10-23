@@ -1,7 +1,7 @@
 import { db } from "@/db";
 import { expenses } from "@/db/schema/expenses";
 import { categories, transactions } from "@/db/schema/schema";
-import { eq, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 
 export const Post = async () => {
     const rawData = [
@@ -82,7 +82,10 @@ export const Post = async () => {
             );
         }
 
-        // Remove categoryName and add categoryId
+        // Remove categoryName and add categoryId. The rest-spread is how
+        // `categoryName` gets dropped on purpose, so the unused binding is
+        // expected rather than an oversight.
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { categoryName, ...rest } = item;
         return { ...rest, categoryId };
     });

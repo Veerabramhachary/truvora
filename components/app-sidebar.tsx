@@ -29,7 +29,7 @@ import { useUser } from "@clerk/nextjs"
 const data = {
   navMain: [
     {
-      title: "Dashoard",
+      title: "Dashboard",
       url: "/dashboard",
       icon: HomeIcon,
     },
@@ -44,7 +44,7 @@ const data = {
       icon: BookOpen,
     },
     {
-      title: "Report/Insignts",
+      title: "Reports & Insights",
       url: "/reports",
       icon: ChartNoAxesColumn
     },

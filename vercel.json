@@ -3,31 +3,17 @@
         {
             "path": "/api/crons/subscriptionsTC",
             "schedule": "0 0 * * *"
-        },
-        {
-            "path": "/api/crons/daily-reports",
-            "schedule": "0 0 * * *"
-        },
-        {
-            "path": "/api/crons/cleanup",
-            "schedule": "0 0 * * *"
         }
     ],
     "headers": [
         {
-            "source": "/api/cron/(.*)",
+            "source": "/api/crons/(.*)",
             "headers": [
                 {
                     "key": "Cache-Control",
                     "value": "no-store"
                 }
             ]
-        }
-    ],
-    "routes": [
-        {
-            "src": "/cron/subscriptions",
-            "dest": "/api/cron/subscriptions"
         }
     ]
 }

@@ -5,43 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1773145340484,
-      "tag": "0000_right_argent",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1773340897285,
-      "tag": "0001_tan_lake",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1773388502203,
-      "tag": "0002_clammy_nicolaos",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1773399113926,
-      "tag": "0003_cute_susan_delgado",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1773735714122,
-      "tag": "0004_ambitious_deathbird",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1773770989569,
-      "tag": "0005_glossy_captain_america",
+      "when": 1792675410869,
+      "tag": "0000_baseline",
       "breakpoints": true
     }
   ]

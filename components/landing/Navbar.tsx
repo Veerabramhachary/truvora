@@ -1,8 +1,6 @@
-import { useLocale } from "next-intl";
 import Link from "next/link"
 
 const Navbar = () => {
-    const locale = useLocale();
     return (
         <nav className="fixed top-0 left-0 right-0 z-50 glass-nav bg-transparent">
             <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
@@ -22,7 +20,7 @@ const Navbar = () => {
                     <Link href={"/auth/sign-in"} className="hidden md:block text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
                         Login
                     </Link>
-                    <Link href={`/${locale}/dashboard`} className="text-sm font-medium bg-slate-900 text-white px-4 py-2 rounded-full hover:bg-slate-600 transition-all shadow-sm">
+                    <Link href={"/dashboard"} className="text-sm font-medium bg-slate-900 text-white px-4 py-2 rounded-full hover:bg-slate-600 transition-all shadow-sm">
                         Get Started
                     </Link>
                 </div>

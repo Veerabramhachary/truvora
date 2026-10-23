@@ -2,7 +2,7 @@ import {
     expenseCategories,
     incomeCategories,
     subscriptionsCategories,
-} from "@/app/[locale]/(dashboard)/expenses/categories";
+} from "@/lib/categories";
 import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Button } from "./ui/button";
@@ -53,7 +53,7 @@ const CategorySelector = ({
         })),
     );
 
-    const selectedItem = allItems.find((item) => item.value === value);
+    const selectedItem = allItems.find((item) => item.label === value);
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
@@ -78,19 +78,23 @@ const CategorySelector = ({
                                 <CommandItem
                                     key={item.value}
                                     value={item.value}
-                                    onSelect={(currentValue) => {
+                                    // cmdk lowercases the value it hands back from onSelect,
+                                    // and the API looks the category up by its stored name
+                                    // (the label). Read from `item` instead of the callback
+                                    // argument so mixed-case labels survive.
+                                    onSelect={() => {
                                         onValueChange(
-                                            currentValue === value
+                                            item.label === value
                                                 ? ""
-                                                : currentValue,
+                                                : item.label,
                                         );
                                         setOpen(false);
                                     }}
                                 >
                                     <Check
                                         className={cn(
-                                            "mr-2 h-4 w-4",
-                                            value === item.value
+                                            "ms-2 h-4 w-4 shrink-0",
+                                            value === item.label
                                                 ? "opacity-100"
                                                 : "opacity-0",
                                         )}

@@ -1,6 +1,5 @@
 "use client";
 import { useCustom } from "@refinedev/core";
-import { useFormatter } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import {
     Card,
@@ -20,7 +19,11 @@ const SectionCards = () => {
         totalSpend: number;
         activeSubscriptions: number;
         totalIncome: number;
-        growth: any;
+        growth: {
+            totalSpend?: number;
+            activeSubscriptions?: number;
+            income?: number;
+        };
     }>({
         url: "/api/dashboard/stats",
         method: "get",
@@ -28,7 +31,8 @@ const SectionCards = () => {
     const { isLoading, isError } = query;
     const data = result?.data ?? {};
 
-    const format = useFormatter();
+    const format = (value: number, opts?: Intl.NumberFormatOptions) =>
+        new Intl.NumberFormat(undefined, opts).format(value);
 
     if (isLoading) {
         return (
@@ -98,11 +102,11 @@ const SectionCards = () => {
                         <CardTitle>
                             {
                                 card.isMonetary
-                                    ? format.number(card.value, {
+                                    ? format(card.value, {
                                         style: "currency",
                                         currency: currency,
                                     })
-                                    : format.number(card.value) // plain number with locale grouping
+                                    : format(card.value) // plain number with locale grouping
                             }
                         </CardTitle>
                         <CardAction>

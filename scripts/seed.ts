@@ -1,7 +1,7 @@
 import { db } from "@/db";
 import { categories } from "../db/schema/schema";
 import { sql } from "drizzle-orm";
-import { expenseCategories, incomeCategories, subscriptionsCategories } from "@/app/[locale]/(dashboard)/expenses/categories";
+import { expenseCategories, incomeCategories, subscriptionsCategories } from "@/lib/categories";
 
 // Import the arrays from your categories file
 // Adjust the path to where your categories.ts file is actually located

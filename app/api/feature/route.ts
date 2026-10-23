@@ -5,6 +5,28 @@ import {
     canUseFeature,
     getFeatureLimit,
 } from "@/lib/feature-access";
+import type { FeatureLimits } from "@/lib/subscription";
+
+/*
+  `feature` arrives as an arbitrary query string but the gate helpers take
+  `keyof FeatureLimits`. Casting it (`as any`) let any string through — this
+  list is the actual allow-list, so an unknown name gets a 400 instead of
+  silently resolving to a limit nobody defined.
+*/
+const FEATURE_KEYS = [
+    "exports",
+    "subscriptions",
+    "charts",
+    "earlyAccess",
+    "autoRenewal",
+    "reminders",
+    "notifications",
+    "webhooks",
+] as const satisfies ReadonlyArray<keyof FeatureLimits>;
+
+function isFeatureKey(value: string): value is keyof FeatureLimits {
+    return (FEATURE_KEYS as readonly string[]).includes(value);
+}
 
 export async function GET(req: NextRequest) {
     try {
@@ -28,6 +50,12 @@ export async function GET(req: NextRequest) {
                 { status: 400 },
             );
         }
+        if (!isFeatureKey(feature)) {
+            return NextResponse.json(
+                { allowed: false, error: "Unknown feature parameter" },
+                { status: 400 },
+            );
+        }
 
         const quantity = quantityParam ? parseInt(quantityParam, 10) : 1;
         if (isNaN(quantity) || quantity < 1) {
@@ -43,14 +71,9 @@ export async function GET(req: NextRequest) {
         // The helper functions already get the gate internally. We'll just call them.
         let allowed: boolean;
         if (consume) {
-            allowed = await tryConsumeFeature(userId, feature as any, quantity);
+            allowed = await tryConsumeFeature(userId, feature, quantity);
         } else {
-            allowed = await canUseFeature(
-                userId,
-                feature as any,
-                quantity,
-                false,
-            );
+            allowed = await canUseFeature(userId, feature, quantity, false);
         }
 
         if (feature === "charts") {

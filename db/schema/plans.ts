@@ -90,7 +90,7 @@ export const app_subscriptions = pgTable("app_subscriptions", {
     paymentMethodId: uuid("payment_method_id"),
 
     provider: paymentProviderEnum("provider").notNull(),
-    providerSubscriptionId: text("provider_subscription_id"),
+    providerSubscriptionId: text("provider_subscription_id").unique(),
     metadata: jsonb("metadata"),
 
     createdAt: timestamp("created_at").defaultNow(),

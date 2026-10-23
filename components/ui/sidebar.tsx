@@ -606,10 +606,13 @@ function SidebarMenuSkeleton({
 }: React.ComponentProps<"div"> & {
   showIcon?: boolean
 }) {
-  // Random width between 50 to 90%.
-  const width = React.useMemo(() => {
-    return `${Math.floor(Math.random() * 40) + 50}%`
-  }, [])
+  // Random-looking width between 50 and 90%, but derived from `useId` rather
+  // than `Math.random()`: an impure call during render can't be memoised, and
+  // the React Compiler rejects it outright.
+  const id = React.useId()
+  let hash = 0
+  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) | 0
+  const width = `${(Math.abs(hash) % 40) + 50}%`
 
   return (
     <div

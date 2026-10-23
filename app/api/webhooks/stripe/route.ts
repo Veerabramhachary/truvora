@@ -3,7 +3,7 @@ import { paymentInvoices } from "@/db/schema/appInvoices";
 import { paymentTransactions } from "@/db/schema/appTransactions";
 import { app_subscriptions, plans } from "@/db/schema/plans";
 import { users } from "@/db/schema/users";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     let event: Stripe.Event;
 
     try {
-        event = stripe.webhooks.constructEvent(
+        event = getStripe().webhooks.constructEvent(
             buf,
             sig,
             process.env.STRIPE_WEBHOOK_SECRET!,
@@ -64,10 +64,51 @@ export async function POST(req: NextRequest) {
                 event.data.object as ExpandedSubscription,
             );
             break;
+        case "checkout.session.completed":
+            await handleCheckoutCompleted(
+                event.data.object as Stripe.Checkout.Session,
+            );
+            break;
         default:
             console.warn(`Unhandled event type ${event.type}`);
     }
     return NextResponse.json({ received: true });
+}
+
+/**
+ * Links the Stripe customer created during checkout back onto the local user.
+ *
+ * `client_reference_id` is set by `/api/stripe/checkout` to the Clerk user id.
+ */
+async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
+    const userId = session.client_reference_id ?? session.metadata?.userId;
+    const customerId =
+        typeof session.customer === "string"
+            ? session.customer
+            : session.customer?.id;
+
+    if (!userId || !customerId) {
+        console.warn(
+            `Checkout session ${session.id} is missing a user id or customer id`,
+        );
+        return;
+    }
+
+    await linkStripeCustomer(userId, customerId);
+}
+
+async function linkStripeCustomer(userId: string, customerId: string) {
+    const updated = await db
+        .update(users)
+        .set({ stripeCustomerId: customerId, updatedAt: new Date() })
+        .where(eq(users.id, userId))
+        .returning({ id: users.id });
+
+    if (updated.length === 0) {
+        console.warn(
+            `No local user ${userId} to attach Stripe customer ${customerId} to`,
+        );
+    }
 }
 
 async function handleInvoicePaid(invoice: ExpandedInvoice) {
@@ -75,8 +116,6 @@ async function handleInvoicePaid(invoice: ExpandedInvoice) {
         typeof invoice.subscription === "string"
             ? invoice.subscription
             : invoice.subscription?.id;
-
-    if (!subscriptionId) return;
 
     if (!subscriptionId) return;
 
@@ -124,16 +163,22 @@ async function handleInvoicePaid(invoice: ExpandedInvoice) {
             })
             .returning();
 
-        await tx.insert(paymentTransactions).values({
-            subscriptionsId: sub.id, // Adjust if needed (e.g., subscriptionsId)
-            invoiceId: localInvoice.id,
-            type: "payment",
-            amount: (invoice.amount_paid / 100).toFixed(2),
-            currency: invoice.currency,
-            status: "succeeded",
-            providerTransactionId: chargeId,
-            idempotencyKey: invoice.id, // Adjust if needed (e.g., idempotency_key)
-        });
+        await tx
+            .insert(paymentTransactions)
+            .values({
+                subscriptionsId: sub.id,
+                invoiceId: localInvoice.id,
+                type: "payment",
+                amount: (invoice.amount_paid / 100).toFixed(2),
+                currency: invoice.currency,
+                status: "succeeded",
+                providerTransactionId: chargeId,
+                // The key must be unique per outcome: `invoice.paid` and
+                // `invoice.payment_failed` share `invoice.id`, so a single key
+                // made the second insert violate the unique constraint.
+                idempotencyKey: `${invoice.id}:paid`,
+            })
+            .onConflictDoNothing();
     });
 }
 
@@ -187,17 +232,20 @@ async function handleInvoicePaymentFailed(invoice: ExpandedInvoice) {
             : invoice.charge?.id;
 
     if (chargeId) {
-        // ⚠️ VERIFY YOUR DATABASE COLUMN NAMES (same as above)
-        await db.insert(paymentTransactions).values({
-            subscriptionsId: subscription.id, // Adjust as needed
-            invoiceId: localInvoice.id,
-            type: "payment",
-            amount: (invoice.amount_due / 100).toFixed(2),
-            currency: invoice.currency,
-            status: "failed",
-            providerTransactionId: chargeId,
-            idempotencyKey: invoice.id, // Adjust as needed
-        });
+        await db
+            .insert(paymentTransactions)
+            .values({
+                subscriptionsId: subscription.id,
+                invoiceId: localInvoice.id,
+                type: "payment",
+                amount: (invoice.amount_due / 100).toFixed(2),
+                currency: invoice.currency,
+                status: "failed",
+                providerTransactionId: chargeId,
+                // Distinct from the `invoice.paid` key for the same invoice.
+                idempotencyKey: `${invoice.id}:failed`,
+            })
+            .onConflictDoNothing();
     }
 }
 
@@ -214,13 +262,15 @@ async function handleSubscriptionUpsert(
     const item = subscription.items.data[0];
     if (!item) return;
 
-    // Check that plan exists (it may be null if the plan was deleted in Stripe)
-    if (!item.plan) {
-        console.error(`Subscription ${subscription.id} has no plan associated`);
-        return;
+    const localPlanId = await getLocalPlanFromStripePriceId(item.price.id);
+
+    // The checkout flow stamps the Clerk user id onto the subscription. Use it
+    // to link the Stripe customer when we don't have a mapping yet.
+    const metadataUserId = subscription.metadata?.userId;
+    if (metadataUserId) {
+        await linkStripeCustomer(metadataUserId, customerId);
     }
 
-    const localPlanId = await getLocalPlanFromStripePriceId(item.price.id);
     const userId = await getLocalUserIdFromStripeCustomerId(customerId);
 
     if (!localPlanId || !userId) return;
@@ -239,19 +289,22 @@ async function handleSubscriptionUpsert(
         currentPeriodEnd: new Date(subWithPeriods.current_period_end * 1000),
         cancelAtPeriodEnd: subWithPeriods.cancel_at_period_end,
         planSnapshot: {
-            name: item.plan.nickname || "Plan",
-            price: (item.plan.amount || 0) / 100,
-            currency: item.plan.currency,
-            interval: item.plan.interval,
-            intervalCount: item.plan.interval_count || 1,
+            name: item.price.nickname || item.plan?.nickname || "Plan",
+            price: (item.price.unit_amount || 0) / 100,
+            currency: item.price.currency,
+            interval: item.price.recurring?.interval ?? "month",
+            intervalCount: item.price.recurring?.interval_count || 1,
         },
         updatedAt: new Date(),
     };
 
-    await db.insert(app_subscriptions).values(data).onConflictDoUpdate({
-        target: app_subscriptions.providerSubscriptionId,
-        set: data,
-    });
+    await db
+        .insert(app_subscriptions)
+        .values(data)
+        .onConflictDoUpdate({
+            target: app_subscriptions.providerSubscriptionId,
+            set: data,
+        });
 }
 
 async function handleSubscriptionDeleted(subscription: ExpandedSubscription) {
