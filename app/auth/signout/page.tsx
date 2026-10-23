@@ -9,12 +9,13 @@ export default function Signout() {
     const router = useRouter();
     useEffect(() => {
         const logout = async () => {
-            await signOut();
-            router.push("/"); // Redirect after sign out
+            // Let Clerk perform the navigation after clearing the session.
+            // A client router push here can race with Clerk's own state update.
+            await signOut({ redirectUrl: "/" });
         };
 
         logout();
-    }, [signOut, router]);
+    }, [signOut]);
 
     return (
         <div className="flex items-center justify-center min-h-screen">

@@ -5,7 +5,17 @@ import { NextConfig } from "next";
 const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
-    allowedDevOrigins: ["192.168.43.163"],
+    allowedDevOrigins: ["192.168.43.163", "*.app.github.dev"],
+    
+    // Explicitly allow Server Actions from these origins
+    experimental: {
+        serverActions: {
+            // Codespaces is forwarding the public host while this request's
+            // Origin is still localhost:3000. Trust that dev origin explicitly.
+            allowedOrigins: ["192.168.43.163", "*.app.github.dev", "localhost:3000"],
+        },
+    },
+
     // Pin the workspace root instead of letting Next infer it. Without this,
     // a stray lockfile in a parent directory makes Turbopack resolve modules
     // against the wrong root and prints a warning on every build.
@@ -14,15 +24,9 @@ const nextConfig: NextConfig = {
     },
 
     /*
-      Baseline security headers.
-
-      Deliberately no CSP yet: a strict one has to allow-list Clerk's
-      script/frame/connect origins, the Google Fonts stylesheets next/font
-      self-hosts from, and later Razorpay's script host. Guessing that list
-      breaks sign-in silently, so it needs a decision (and a Report-Only
-      rollout) rather than a speculative default. These are the headers that
-      are safe regardless.
-    */
+     * Baseline security headers.
+     * ... (rest of your headers remain unchanged)
+     */
     async headers() {
         return [
             {

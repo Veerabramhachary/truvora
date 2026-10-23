@@ -60,3 +60,5 @@ tmp/
 
 # Turbo (if using turborepo)
 .turbo/
+# clerk configuration (can include secrets)
+/.clerk/
