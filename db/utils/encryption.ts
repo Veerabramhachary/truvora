@@ -45,6 +45,25 @@ export interface EncryptedData {
     authTag: string; // hex
 }
 
+/**
+ * The format written by `encrypt`.  Keeping this check separate lets column
+ * readers distinguish legacy plaintext rows from ciphertext before trying to
+ * decrypt them.  An empty ciphertext is valid: it represents an encrypted
+ * empty string.
+ */
+export function isEncryptedData(value: string): boolean {
+    const parts = value.split(":");
+    if (parts.length !== 3) return false;
+
+    const [ivHex, ciphertextHex, authTagHex] = parts;
+    return (
+        /^[0-9a-f]{24}$/i.test(ivHex) &&
+        /^[0-9a-f]*$/i.test(ciphertextHex) &&
+        ciphertextHex.length % 2 === 0 &&
+        /^[0-9a-f]{32}$/i.test(authTagHex)
+    );
+}
+
 export function encrypt(text: string): string {
     // Resolved outside the try so a missing configuration surfaces with its
     // own message instead of being masked as "Encryption error".
@@ -71,10 +90,10 @@ export function encrypt(text: string): string {
 export function decrypt(encryptedString: string): string {
     const key = getEncryptionKey();
     try {
-        const [ivHex, ciphertextHex, authTagHex] = encryptedString.split(":");
-        if (!ivHex || !ciphertextHex || !authTagHex) {
+        if (!isEncryptedData(encryptedString)) {
             throw new Error("Invalid encrypted data format");
         }
+        const [ivHex, ciphertextHex, authTagHex] = encryptedString.split(":");
         const iv = Buffer.from(ivHex, "hex");
         const ciphertext = Buffer.from(ciphertextHex, "hex");
         const authTag = Buffer.from(authTagHex, "hex");

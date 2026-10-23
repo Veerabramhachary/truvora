@@ -3,7 +3,11 @@ import { categories } from "../db/schema/schema";
 import { plans } from "../db/schema/plans";
 import { asc, eq } from "drizzle-orm";
 import { sql } from "drizzle-orm";
-import { expenseCategories, incomeCategories, subscriptionsCategories } from "@/lib/categories";
+import {
+    expenseCategories,
+    incomeCategories,
+    subscriptionsCategories,
+} from "@/lib/categories";
 
 /*
   Plans used to be absent entirely, which broke the whole feature-gate chain:
@@ -57,9 +61,9 @@ const PLAN_TIERS = [
             charts: "comparative" as const,
         },
         features: [
-            "Unlimited subscriptions",
+            "Up to 1,000 tracked subscriptions",
             "Expenses vs subscriptions breakdown",
-            "Unlimited CSV exports",
+            "Up to 10,000 CVS exports a month",
         ],
     },
 ] as const;
@@ -102,7 +106,9 @@ export const seedPlans = async () => {
             .where(eq(plans.isActive, true))
             .orderBy(asc(plans.price))
             .limit(1);
-        console.log(`✅ Plans ready. New users start on: ${cheapest[0]?.name ?? "none"}`);
+        console.log(
+            `✅ Plans ready. New users start on: ${cheapest[0]?.name ?? "none"}`,
+        );
     } catch (error) {
         console.error("❌ Error seeding plans:", error);
     }
@@ -110,7 +116,6 @@ export const seedPlans = async () => {
 
 // Import the arrays from your categories file
 // Adjust the path to where your categories.ts file is actually located
-
 
 export const seedDynamicCategories = async () => {
     try {
@@ -120,7 +125,7 @@ export const seedDynamicCategories = async () => {
         const allCategoryGroups = [
             ...expenseCategories,
             ...incomeCategories,
-            ...subscriptionsCategories
+            ...subscriptionsCategories,
         ];
 
         await db.transaction(async (tx) => {
@@ -135,24 +140,24 @@ export const seedDynamicCategories = async () => {
                     .insert(categories)
                     .values({
                         name: parentName,
-                        icon: "📁",       // Default icon (since categories.ts doesn't have them)
+                        icon: "📁", // Default icon (since categories.ts doesn't have them)
                         color: "#6366f1", // Default color
-                        userId: null,     // Global category
+                        userId: null, // Global category
                         parentName: null,
                     })
                     .onConflictDoUpdate({
                         target: categories.name, // Requires UNIQUE constraint on 'name'
-                        set: { 
-                            name: sql`excluded.name`
+                        set: {
+                            name: sql`excluded.name`,
                             // Not overwriting icon/color here so manual DB edits aren't wiped out
                         },
                     });
 
                 // 2. Prepare Child Categories
                 const childValues = group.items.map((item) => ({
-                    name: item.label,     // Using the human-readable label
-                    icon: "📄",           // Default child icon
-                    color: "#9ca3af",     // Default child color
+                    name: item.label, // Using the human-readable label
+                    icon: "📄", // Default child icon
+                    color: "#9ca3af", // Default child color
                     userId: null,
                     parentName: parentName, // Link to the parent we just created
                 }));
@@ -169,12 +174,16 @@ export const seedDynamicCategories = async () => {
                                 // Not overwriting icon/color automatically
                             },
                         });
-                    console.log(`  -> Inserted/Updated ${childValues.length} items for ${parentName}`);
+                    console.log(
+                        `  -> Inserted/Updated ${childValues.length} items for ${parentName}`,
+                    );
                 }
             }
         });
 
-        console.log("✅ Transaction completed! Categories successfully seeded to Neon DB.");
+        console.log(
+            "✅ Transaction completed! Categories successfully seeded to Neon DB.",
+        );
     } catch (error) {
         console.error("❌ Error during category update:", error);
     }

@@ -62,7 +62,12 @@ export async function GET(req: NextRequest) {
 
         const data = await db
             .select({
-                expenseId: expenses.id,
+                // Refine's simple-rest provider requires every list item to
+                // expose its primary key as `id`. Returning this as
+                // `expenseId` left the UI without stable record identifiers,
+                // which prevented the list from rendering reliably and made
+                // edit/delete requests target `undefined`.
+                id: expenses.id,
                 title: expenses.title,
                 type: expenses.type,
                 amount: expenses.amount,
@@ -70,6 +75,7 @@ export async function GET(req: NextRequest) {
                 description: expenses.note,
                 categoryId: expenses.categoryId,
                 categoryName: categories.name,
+                currency: expenses.currency,
             })
             .from(expenses)
             .leftJoin(categories, eq(expenses.categoryId, categories.id))

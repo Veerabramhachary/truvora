@@ -1,5 +1,16 @@
 import { customType } from "drizzle-orm/pg-core";
-import { encrypt, decrypt } from "../utils/encryption";
+import { encrypt, decrypt, isEncryptedData } from "../utils/encryption";
+
+function decryptText(value: string): string {
+    if (isEncryptedData(value)) return decrypt(value);
+
+    // Notes created before encrypted columns were introduced are plaintext.
+    // Preserve them on read so one legacy row cannot make an entire list fail.
+    // A colon indicates an intended encrypted payload; reject malformed data
+    // instead of silently rendering a damaged ciphertext as text.
+    if (!value.includes(":")) return value;
+    throw new Error("Invalid encrypted data format");
+}
 
 export const encryptedText = customType<{ data: string | null }>({
     dataType() {
@@ -14,7 +25,7 @@ export const encryptedText = customType<{ data: string | null }>({
         if (typeof value !== "string") {
             throw new Error("Expected string from database");
         }
-        return decrypt(value);
+        return decryptText(value);
     },
 });
 

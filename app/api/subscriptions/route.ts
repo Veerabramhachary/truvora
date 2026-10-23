@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
 
         const data = await db
             .select({
-                subscriptionId: subscriptions.id,
+                id: subscriptions.id,
                 title: subscriptions.name,
                 active: subscriptions.active,
                 amount: subscriptions.price,

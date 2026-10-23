@@ -94,8 +94,6 @@ export async function POST(req: NextRequest) {
                         },
                     });
 
-                if (eventType !== "user.created") return;
-
                 const existingSubscription = await tx
                     .select({ id: app_subscriptions.id })
                     .from(app_subscriptions)
