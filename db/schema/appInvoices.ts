@@ -34,7 +34,7 @@ export const paymentInvoices = pgTable("payment_invoices", {
             amount: number;
             period?: { start: Date; end: Date };
         }>>()("lines"),
-    metadata: encryptedJson<Record<string, any>>()("metadata"),
+    metadata: encryptedJson<Record<string, unknown>>()("metadata"),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
 });

@@ -2,7 +2,6 @@
 
 import {
   BadgeCheck,
-  Bell,
   ChevronsUpDown,
   CreditCard,
   LogOut,
@@ -82,32 +81,37 @@ export function NavUser({
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <Sparkles />
-                <Link href="">Upgrade to Pro</Link>
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <BadgeCheck />
-                <Link href="">Account</Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <CreditCard />
-                <Link href= "">Billing</Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Bell />
-                <Link href= "">
-                Notifications
+              {/* `asChild` makes the <Link> itself the menuitem, so keyboard
+                  focus and Enter land on the anchor instead of on a div that
+                  wraps one. */}
+              <DropdownMenuItem asChild>
+                <Link href="/pricing">
+                  <Sparkles />
+                  Upgrade to Pro
                 </Link>
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <LogOut />
-              <Link href="/auth/signout">Sign out</Link>
+            <DropdownMenuGroup>
+              <DropdownMenuItem asChild>
+                <Link href="/profile">
+                  <BadgeCheck />
+                  Account
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/pricing">
+                  <CreditCard />
+                  Billing
+                </Link>
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/auth/signout">
+                <LogOut />
+                Sign out
+              </Link>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

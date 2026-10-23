@@ -3,7 +3,7 @@ import { paymentInvoices } from "@/db/schema/appInvoices";
 import { paymentTransactions } from "@/db/schema/appTransactions";
 import { app_subscriptions, plans } from "@/db/schema/plans";
 import { users } from "@/db/schema/users";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     let event: Stripe.Event;
 
     try {
-        event = stripe.webhooks.constructEvent(
+        event = getStripe().webhooks.constructEvent(
             buf,
             sig,
             process.env.STRIPE_WEBHOOK_SECRET!,

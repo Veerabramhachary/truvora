@@ -1,5 +1,5 @@
 // email-template.tsx
-interface SubscriptionItem {
+export interface SubscriptionItem {
     name: string;
     daysLeft: number;
     price?: string; // Optional: add if you have price data

@@ -12,7 +12,6 @@ rest.
 | Auth | Clerk |
 | Billing | Stripe |
 | Database | Postgres (Neon) via Drizzle ORM |
-| i18n | next-intl (`en`, `ar`) |
 | UI | shadcn/ui + Tailwind CSS v4, Radix, Lucide |
 | Data fetching | Refine (simple-rest) + TanStack Query |
 
@@ -32,8 +31,7 @@ cp .env.example .env.local   # then fill in the values
 npm run dev
 ```
 
-The app is served at <http://localhost:3000>. The `/ar` locale is available for
-Arabic.
+The app is served at <http://localhost:3000>.
 
 ### Environment variables
 
@@ -77,15 +75,13 @@ npm run insert-sub     # sample subscriptions
 
 ```
 app/
-  [locale]/           routes with a locale prefix (en, ar)
-    (dashboard)/      authenticated app
-    (marketing)/      public pricing
+  (dashboard)/      authenticated app (dashboard, expenses, subscriptions, …)
+  (marketing)/      public pricing
   api/                route handlers
   auth/               Clerk sign-in / sign-up / sign-out
 proxy.ts              Clerk auth middleware (Next 16 `proxy` convention)
 db/schema/            Drizzle schema
-i18n/                 next-intl config and messages
-lib/                  feature gating, Stripe client, subscription helpers
+lib/                  feature gating, subscription helpers
 scripts/              one-off seed scripts
 ```
 

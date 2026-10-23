@@ -48,11 +48,11 @@ const Sections = () => {
                             <ArrowRight width={18} strokeWidth={1.5} />
                         </Link>
                         <Link
-                            href="#"
+                            href="#how-it-works"
                             className="w-full sm:w-auto text-sm font-medium bg-white text-slate-700 border border-slate-200 px-6 py-3 rounded-full hover:bg-slate-50 transition-all shadow-sm flex items-center justify-center gap-2"
                         >
                             <PlayCircle width={18} strokeWidth={1.5} />
-                            View Demo
+                            See how it works
                         </Link>
                     </div>
                 </div>
@@ -68,7 +68,7 @@ const Sections = () => {
                             Simplicity at its core
                         </h2>
                         <p className="text-slate-500 max-w-xl mx-auto text-sm md:text-base">
-                            We've removed the friction from managing your
+                            We&apos;ve removed the friction from managing your
                             digital life. Three simple steps to total financial
                             clarity.
                         </p>
@@ -128,7 +128,7 @@ const Sections = () => {
                 <div className="max-w-6xl mx-auto px-6">
                     <div className="mb-16">
                         <h2 className="text-2xl md:text-3xl font-semibold mx-auto tracking-tight text-slate-900 mb-4 max-w-xl">
-                            Everything you need. Nothing you don't.
+                            Everything you need. Nothing you don&apos;t.
                         </h2>
                         <p className="text-slate-500 max-w-xl mx-auto text-sm md:text-base">
                             Powerful tools designed with restraint. Built
@@ -209,7 +209,7 @@ const Sections = () => {
                             </h3>
                             <p className="text-sm text-slate-500 leading-relaxed">
                                 Set caps on SaaS or entertainment spending.
-                                We'll warn you when you're approaching your
+                                We&apos;ll warn you when you&apos;re approaching your
                                 monthly limit.
                             </p>
                         </div>
@@ -284,7 +284,22 @@ const Sections = () => {
 
             {/* Pricing Section */}
             <section id="pricing" className="py-24 bg-white">
-                <div className="max-w-6xl mx-auto px-6"></div>
+                <div className="max-w-6xl mx-auto px-6 text-center">
+                    <h2 className="text-3xl md:text-5xl font-semibold tracking-tight text-slate-900 mb-6">
+                        Simple, honest pricing
+                    </h2>
+                    <p className="text-base text-slate-500 mb-10 max-w-2xl mx-auto">
+                        Start free. Upgrade when you need unlimited
+                        subscriptions, recurring-charge reports and export.
+                    </p>
+                    <Link
+                        href="/pricing"
+                        className="inline-flex items-center gap-2 text-sm font-medium bg-indigo-600 text-white px-8 py-4 rounded-full hover:bg-indigo-700 transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
+                    >
+                        Compare plans
+                        <ArrowRight width={18} strokeWidth={1.5} />
+                    </Link>
+                </div>
             </section>
 
             {/* CTA Sectuion */}
@@ -297,13 +312,13 @@ const Sections = () => {
                         Join thousands of privacy-conscious individuals taking
                         control of their recurring expenses today.
                     </p>
-                    <a
-                        href="#"
+                    <Link
+                        href="/auth/sign-up"
                         className="inline-flex items-center gap-2 text-sm font-medium bg-slate-900 text-white px-8 py-4 rounded-full hover:bg-slate-800 transition-all shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
                     >
                         Start Tracking for Free
                         <ArrowRight width={18} strokeWidth={1.5} />
-                    </a>
+                    </Link>
                     <p className="mt-4 text-xs text-slate-400 font-medium">
                         No credit card required for the free plan.
                     </p>
@@ -333,18 +348,6 @@ const Sections = () => {
                             className="hover:text-slate-900 transition-colors"
                         >
                             Terms
-                        </Link>
-                        <Link
-                            href="#"
-                            className="hover:text-slate-900 transition-colors"
-                        >
-                            Contact
-                        </Link>
-                        <Link
-                            href="#"
-                            className="hover:text-slate-900 transition-colors"
-                        >
-                            Twitter
                         </Link>
                     </div>
 

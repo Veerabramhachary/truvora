@@ -5,6 +5,11 @@ import { categories, subscriptions, transactions } from "@/db/schema/schema";
 import { NextResponse } from "next/server";
 import { getSubscriptionGate } from "@/lib/subscription";
 import z from "zod";
+import {
+    ONGOING_END_DATE,
+    nextRenewalDate,
+    subscriptionSchema,
+} from "./schema";
 
 export async function GET() {
     try {
@@ -27,7 +32,10 @@ export async function GET() {
                 categoryId: subscriptions.categoryId,
                 categoryName: categories.name,
                 currency: subscriptions.currency,
+                interval: subscriptions.interval,
+                intervalCount: subscriptions.intervalCount,
                 endDate: subscriptions.endDate,
+                nextDate: subscriptions.nextDate,
             })
             .from(subscriptions)
             .leftJoin(categories, eq(subscriptions.categoryId, categories.id))
@@ -48,20 +56,6 @@ export async function GET() {
         );
     }
 }
-const subscriptionSchema = z.object({
-    name: z.string().min(1),
-    price: z.coerce.string(),
-    currency: z.string().min(1),
-    interval: z.enum(["month", "year"]),
-    intervalCount: z.number().optional(),
-    startDate: z.coerce.date(),
-    endDate: z.coerce.date(),
-    nextDate: z.coerce.date(),
-    category: z.string().min(1),
-    note: z.string().optional(),
-    active: z.boolean().optional(),
-    deactivatedAt: z.date().optional(),
-})
 
 export async function POST(req: Request) {
     const { userId } = await auth();
@@ -69,55 +63,70 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await req.json();
-    const data = subscriptionSchema.parse(body);
-
-    const categoryResult = await db
-        .select({id: categories.id})
-        .from(categories)
-        .where(eq(categories.name, data.category))
-
-    const category = categoryResult[0]?.id;
-    if (!category) {
-        return NextResponse.json(
-            { error: "Category not found" },
-            { status: 404 },
-        );
+    let body: unknown;
+    try {
+        body = await req.json();
+    } catch {
+        return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
 
-    // --- Fetch user's active subscription gate ---
-    const gate = await getSubscriptionGate();
-    if (!gate) {
-        return NextResponse.json(
-            { error: "No active subscription plan found" },
-            { status: 403 },
-        );
+    let data: z.infer<typeof subscriptionSchema>;
+    try {
+        data = subscriptionSchema.parse(body);
+    } catch (error) {
+        const message =
+            error instanceof z.ZodError
+                ? error.issues[0]?.message ?? "Invalid subscription data"
+                : "Invalid subscription data";
+        return NextResponse.json({ error: message }, { status: 400 });
     }
-
-    // --- Get the subscription limit from the plan's feature limits ---
-    const featureLimit = gate.checkFeatures("subscriptions");
-    let maxSubscriptions = 0;
-
-    if (
-        featureLimit &&
-        typeof featureLimit === "object" &&
-        "limit" in featureLimit
-    ) {
-        maxSubscriptions = featureLimit.limit;
-    } else if (typeof featureLimit === "number") {
-        maxSubscriptions = featureLimit;
-    } else {
-        // If the feature is not defined in the plan, deny creation
-        return NextResponse.json(
-            { error: "Your plan does not allow subscriptions" },
-            { status: 403 },
-        );
-    }
-
-    // If the plan allows unlimited subscriptions (limit === -1), skip further checks
-    const unlimited = maxSubscriptions === -1;
 
     try {
+        const categoryResult = await db
+            .select({id: categories.id})
+            .from(categories)
+            .where(eq(categories.name, data.category))
+
+        const category = categoryResult[0]?.id;
+        if (!category) {
+            return NextResponse.json(
+                { error: "Category not found" },
+                { status: 404 },
+            );
+        }
+
+        // --- Fetch user's active subscription gate ---
+        const gate = await getSubscriptionGate();
+        if (!gate) {
+            return NextResponse.json(
+                { error: "No active subscription plan found" },
+                { status: 403 },
+            );
+        }
+
+        // --- Get the subscription limit from the plan's feature limits ---
+        const featureLimit = gate.checkFeatures("subscriptions");
+        let maxSubscriptions = 0;
+
+        if (
+            featureLimit &&
+            typeof featureLimit === "object" &&
+            "limit" in featureLimit
+        ) {
+            maxSubscriptions = featureLimit.limit;
+        } else if (typeof featureLimit === "number") {
+            maxSubscriptions = featureLimit;
+        } else {
+            // If the feature is not defined in the plan, deny creation
+            return NextResponse.json(
+                { error: "Your plan does not allow subscriptions" },
+                { status: 403 },
+            );
+        }
+
+        // If the plan allows unlimited subscriptions (limit === -1), skip further checks
+        const unlimited = maxSubscriptions === -1;
+
         // Transaction: lock active subscriptions and insert new one if under limit
         const result = await db.transaction(async (tx) => {
             if (!unlimited) {
@@ -148,8 +157,15 @@ export async function POST(req: Request) {
                     interval: data.interval,
                     intervalCount: data.intervalCount || 1,
                     startDate: data.startDate,
-                    endDate: data.endDate,
-                    nextDate: data.endDate,
+                    endDate: data.endDate ?? ONGOING_END_DATE,
+                    nextDate:
+                        data.nextDate ??
+                        (data.endDate ??
+                            nextRenewalDate(
+                                data.startDate,
+                                data.interval,
+                                data.intervalCount,
+                            )),
                     categoryId: category,
                     note: data.note || null,
                     active: true,
@@ -171,10 +187,12 @@ export async function POST(req: Request) {
         });
 
         return NextResponse.json(result, { status: 201 });
-    } catch (error: any) {
+    } catch (error) {
         console.error("Subscription creation error:", error);
-        const status =
-            error.message === "Subscription limit exceeded" ? 403 : 400;
-        return NextResponse.json({ error: error.message }, { status });
+        if (error instanceof Error && (error.message === "Subscription limit exceeded" || error.message === "Your plan does not allow subscriptions")) {
+            return NextResponse.json({ error: error.message }, { status: 403 });
+        }
+        // Never leak driver internals to the client.
+        return NextResponse.json({ error: "Could not save the subscription" }, { status: 500 });
     }
 }

@@ -2,7 +2,7 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { db } from "@/db";
 import { plans } from "@/db/schema/plans";
 import { users } from "@/db/schema/users";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
         const origin = request.headers.get("origin") ?? request.nextUrl.origin;
         const metadata = { userId, planId: plan.id };
 
-        const session = await stripe.checkout.sessions.create({
+        const session = await getStripe().checkout.sessions.create({
             mode: "subscription",
             line_items: [{ price: plan.providerPlanId, quantity: 1 }],
             // Reuse the existing Stripe customer so we never create duplicates.

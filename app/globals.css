@@ -22,7 +22,6 @@
     /* ── Backgrounds ── */
     --background: oklch(0.984 0.003 264.542); /* Slate-50    */
     --foreground: oklch(0.208 0.042 265.755); /* Slate-900   */
-    --bg: #f8fafc; /* Slate-50 hex, light mode */
 
     /* ── Card / Surface ── */
     --card: oklch(1 0 0);
@@ -52,9 +51,6 @@
     --input: oklch(0.929 0.013 255.508);
     --ring: oklch(0.511 0.262 276.966); /* Indigo-600  */
 
-    /* ── Border muted helper ── */
-    --secondary--muted: oklch(0.929 0.013 255.508); /* Slate-200   */
-
     /* ── Radius ── */
     --radius: 0.625rem;
 
@@ -74,6 +70,64 @@
     --sidebar-accent-foreground: oklch(0.929 0.013 255.508);
     --sidebar-border: oklch(1 0 0 / 8%);
     --sidebar-ring: oklch(0.511 0.262 276.966);
+}
+
+/*
+  Custom animations.
+  `animate-fade-in-up`, `animate-fade-in-out` and `animate-progress` were
+  referenced in the landing hero and the dashboard loading bar but never
+  defined anywhere, so they resolved to nothing and every element using them
+  sat still. `both` fill keeps the landing's staggered entrance honest — an
+  element stays hidden until its delay elapses rather than popping in early.
+*/
+@theme {
+    --animate-fade-in-up: fade-in-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+    --animate-fade-in-out: fade-in-out 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+    --animate-progress: progress 1.4s ease-in-out infinite;
+
+    @keyframes fade-in-up {
+        from {
+            opacity: 0;
+            transform: translateY(14px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @keyframes fade-in-out {
+        from {
+            opacity: 0;
+        }
+        to {
+            opacity: 1;
+        }
+    }
+
+    @keyframes progress {
+        from {
+            transform: translateX(-100%);
+        }
+        to {
+            transform: translateX(400%);
+        }
+    }
+}
+
+/*
+  Without this, `both` would leave the landing hero stuck at opacity 0 for
+  anyone who suppresses animation. Deliberately un-layered so it outranks the
+  utility class without needing !important.
+*/
+@media (prefers-reduced-motion: reduce) {
+    .animate-fade-in-up,
+    .animate-fade-in-out,
+    .animate-progress {
+        animation: none;
+        opacity: 1;
+        transform: none;
+    }
 }
 
 @theme inline {
@@ -124,16 +178,16 @@
     --radius-4xl: calc(var(--radius) + 16px);
 }
 
-/* ── Dark mode OS-level background ─────────────────────────── */
-@media (prefers-color-scheme: dark) {
-    :root {
-        --bg: #0d1117; /* Deep slate-black — security-grade dark */
-    }
-}
-
 /* ── Base styles ───────────────────────────────────────────── */
+
+/*
+  Body colour comes from the `bg-background` rule in @layer base below, which
+  follows the `dark` class next-themes writes on <html>. An earlier `--bg`
+  variable was driven by `prefers-color-scheme` and applied outside the layer,
+  so a system-dark user running the app in light mode got a dark page behind
+  light components.
+*/
 body {
-    background: var(--bg);
     font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }
 
@@ -141,15 +195,14 @@ h1,
 h2,
 h3,
 h4 {
-    font-family: var(--font-space-grotesk);
+    font-family: var(--font-space-grotesk), var(--font-inter), ui-sans-serif,
+        system-ui, sans-serif;
     letter-spacing: -0.02em;
 }
 /*---break--- */
 
 /* ── Dark mode class overrides ─────────────────────────────── */
 .dark {
-    --bg: #0d1117;
-
     --background: oklch(0.129 0.042 264.695); /* Slate-950   */
     --foreground: oklch(0.968 0.007 247.896); /* Slate-100   */
 

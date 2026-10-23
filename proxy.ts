@@ -5,9 +5,11 @@ import { NextResponse } from "next/server";
 // Public routes (marketing pages)
 const isPublicRoute = createRouteMatcher([
     "/",
-    "/(en|ar)",
-    "/(en|ar)/pricing",
+    "/pricing",
+    "/privacy-policy",
+    "/terms",
     "/auth/sign-in(.*)",
+    "/auth/signout(.*)",
     "/auth/sign-up(.*)",
     "/auth/verify-email(.*)",
     "/sso-callback(.*)",
@@ -19,15 +21,50 @@ const isPublicRoute = createRouteMatcher([
     "/api/crons/(.*)",
 ]);
 
-// Protected dashboard routes
-const isDashboardRoute = createRouteMatcher([
-    "/(en|ar)/(.*)"
-]);
+/*
+  There is no separate "dashboard" list here on purpose. The marketing and
+  auth routes above return early as public, and `/api/*` returns above them
+  too — so every request reaching the bottom is private by definition, and a
+  missing session is the only reason to bounce.
 
-// Admin-only routes
+  An earlier `isDashboardRoute(request) || !userId` version redirected
+  *authenticated* users away from /dashboard on every visit; Clerk then saw an
+  existing session on its sign-in page and sent them straight back to
+  /dashboard, producing an endless loop that parked on the hosted sign-in page.
+*/
 
 // API routes
 const isApiRoute = createRouteMatcher(["/api/(.*)"]);
+
+/*
+  Same-origin guard for state-changing API requests.
+
+  Clerk's session cookie is SameSite=Lax, so this is defence in depth rather
+  than the only barrier — it also catches HTML form posts and survives any
+  future cookie loosening. Requests carrying neither `Sec-Fetch-Site` nor
+  `Origin` (curl, server-to-server, the cron) are allowed through, because only
+  a browser can attach the session cookie to a cross-site request.
+
+  Webhooks and crons never reach this: they're public and return at step 1.
+*/
+const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+function isSameOrigin(request: NextRequest): boolean {
+    const site = request.headers.get("sec-fetch-site");
+    if (site) return site === "same-origin";
+
+    const origin = request.headers.get("origin");
+    if (!origin) return true;
+
+    const host = request.headers.get("host");
+    if (!host) return false;
+
+    try {
+        return new URL(origin).host === host;
+    } catch {
+        return false;
+    }
+}
 
 export async function proxy(req: NextRequest, evt: NextFetchEvent) {
     return clerkMiddleware(async (auth, request) => {
@@ -40,14 +77,19 @@ export async function proxy(req: NextRequest, evt: NextFetchEvent) {
 
         // 2️⃣ Handle API route protection (Return 401 instead of redirect)
         if (isApiRoute(request)) {
+            if (MUTATING_METHODS.has(request.method) && !isSameOrigin(request)) {
+                return new NextResponse("Cross-origin request rejected", {
+                    status: 403,
+                });
+            }
             if (!userId) {
                 return new NextResponse("Unauthorized", { status: 401 });
             }
             return NextResponse.next();
         }
 
-        // 3️⃣ Protect Dashboard & All other private routes
-        if (isDashboardRoute(request) || !userId) {
+        // 3️⃣ Private routes: bounce only when there's genuinely no session.
+        if (!userId) {
             return redirectToSignIn();
         }
 

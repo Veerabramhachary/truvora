@@ -3,67 +3,72 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useSignIn } from "@clerk/nextjs";
-import { Github } from "lucide-react";
+import { Github, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
+import { clerkErrorMessage } from "@/lib/api-error";
 
-// helper
-function getLocaleFromCookie(): string {
-    if (typeof document === "undefined") return "en"; // fallback for SSR
-    const match = document.cookie.match(/(^| )NEXT_LOCALE=([^;]+)/);
-    return match ? match[2] : "en";
-}
+type FieldErrors = { email?: string; password?: string };
 
 const SignIn = () => {
-    const [locale, setLocale] = useState("en");
     const { isLoaded, signIn, setActive } = useSignIn();
     const router = useRouter();
+
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [isLoading, setIsLoading] = useState(false);
 
-    useEffect(() => {
-        setLocale(getLocaleFromCookie());
-    }, []);
+    // Field-level messages render beside the input; the form-level one catches
+    // everything Clerk rejects after submit (wrong password, locked account…).
+    const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+    const [formError, setFormError] = useState<string | null>(null);
+
+    const validate = (): FieldErrors => {
+        const next: FieldErrors = {};
+        if (!email.trim()) {
+            next.email = "Enter your email address";
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+            next.email = "That doesn't look like a valid email address";
+        }
+        if (!password) {
+            next.password = "Enter your password";
+        }
+        return next;
+    };
 
     // Email/Password Sign-In
-    const handleSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
+    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         if (isLoading || !isLoaded) return;
 
-        // Basic validation
-        if (!email || !password) {
-            toast.error("Email and password are required");
-            return;
-        }
+        setFormError(null);
+        const errors = validate();
+        setFieldErrors(errors);
+        if (Object.keys(errors).length > 0) return;
 
         setIsLoading(true);
         try {
             const result = await signIn.create({
-                identifier: email,
+                identifier: email.trim(),
                 password,
             });
 
             if (result.status === "complete") {
-                toast.success("Login successful! Redirecting...");
+                toast.success("Signed in. Redirecting…");
                 await setActive({ session: result.createdSessionId });
-                router.push(`${locale}/dashboard`);
+                router.push("/dashboard");
             } else {
-                // Handle MFA, email verification, etc.
-                toast.info("Additional verification required.");
-                // Optionally redirect to a verification page
-                // router.push(`/verify?signInId=${result.id}`);
+                // MFA or a pending email verification step.
+                setFormError(
+                    "Additional verification is required before you can continue.",
+                );
             }
         } catch (error: unknown) {
-            let message = "An error occurred during sign in.";
-            if (error instanceof Error) {
-                // Try to extract Clerk's user-friendly message
-                const clerkError = error as any; // or use a type guard
-                message = clerkError.errors?.[0]?.message || error.message;
-            }
-            toast.error(message);
+            setFormError(
+                clerkErrorMessage(error, "We couldn't sign you in. Try again."),
+            );
         } finally {
             setIsLoading(false);
         }
@@ -73,32 +78,29 @@ const SignIn = () => {
         provider: "oauth_google" | "oauth_github",
     ) => {
         if (!isLoaded) return;
+        setFormError(null);
         try {
             await signIn.authenticateWithRedirect({
                 strategy: provider,
                 redirectUrl: "/sso-callback",
-                redirectUrlComplete: `/${locale}/dashboard`,
+                redirectUrlComplete: "/dashboard",
             });
         } catch (error: unknown) {
-            if (error instanceof Error) {
-                toast.error(error.message);
-            } else {
-                toast.error("An unknown error occurred", {
-                    position: "top-left",
-                });
-            }
+            setFormError(
+                clerkErrorMessage(error, "We couldn't start sign-in. Try again."),
+            );
         }
     };
 
     return (
-        <div className="w-full min-h-screen flex flex-col lg:flex-row items-center justify-center p-4 lg:p-10 bg-background ">
+        <div className="w-full min-h-screen flex flex-col lg:flex-row items-center justify-center p-4 lg:p-10 bg-background">
             {/* Text Section (unchanged) */}
             <div className="hidden lg:flex lg:w-1/2 flex-col justify-center px-10">
                 <div className="max-w-lg">
                     <h1 className="font-bold text-4xl mb-4 leading-tight text-foreground">
                         Welcome Back to Smarter Financial Control
                     </h1>
-                    <p className="text-gray-500 font-light text-lg mb-8">
+                    <p className="text-muted-foreground font-light text-lg mb-8">
                         Access your secure financial dashboard and stay in
                         control of every transaction. Your data is protected
                         with enterprise-grade security and encrypted
@@ -120,7 +122,7 @@ const SignIn = () => {
                     <h3 className="font-semibold text-xl">
                         Continue building clarity, confidence, and control.
                     </h3>
-                    <p className="text-blue-600 font-medium">
+                    <p className="text-primary font-medium">
                         Sign in and take charge.
                     </p>
                 </div>
@@ -130,12 +132,12 @@ const SignIn = () => {
             <div className="w-full max-w-md border border-border shadow-2xl rounded-3xl px-6 py-10 md:px-9 md:py-16 bg-background">
                 <div className="w-full mb-8">
                     <h1 className="font-bold text-2xl">Sign In</h1>
-                    <p className="text-gray-400">
-                        Login Back to Smarter Financial Control
+                    <p className="text-muted-foreground">
+                        Welcome back — sign in to your account
                     </p>
                 </div>
-                <form onSubmit={handleSubmit} className="w-full ">
-                    <div className="space-y-4 ">
+                <form onSubmit={handleSubmit} noValidate className="w-full">
+                    <div className="space-y-4">
                         <div>
                             <label
                                 htmlFor="email"
@@ -144,13 +146,36 @@ const SignIn = () => {
                                 Email
                             </label>
                             <Input
-                                className="w-full outline-0 border-2 border-border focus:border-blue-500 transition-colors py-6"
+                                id="email"
                                 name="email"
+                                type="email"
+                                autoComplete="email"
+                                aria-invalid={Boolean(fieldErrors.email)}
+                                aria-describedby={
+                                    fieldErrors.email ? "email-error" : undefined
+                                }
+                                className="w-full border-2 border-border focus:border-ring transition-colors py-6"
                                 value={email}
-                                placeholder="Enter your Email"
-                                onChange={(e) => setEmail(e.target.value)}
-                                required
+                                placeholder="you@example.com"
+                                onChange={(e) => {
+                                    setEmail(e.target.value);
+                                    if (fieldErrors.email) {
+                                        setFieldErrors((f) => ({
+                                            ...f,
+                                            email: undefined,
+                                        }));
+                                    }
+                                }}
                             />
+                            {fieldErrors.email && (
+                                <p
+                                    id="email-error"
+                                    role="alert"
+                                    className="mt-2 text-sm text-destructive"
+                                >
+                                    {fieldErrors.email}
+                                </p>
+                            )}
                         </div>
 
                         <div>
@@ -161,37 +186,72 @@ const SignIn = () => {
                                 Password
                             </label>
                             <Input
+                                id="password"
                                 type="password"
-                                className="w-full outline-0 border-2 border-border focus:border-blue-500 transition-colors py-6"
                                 name="password"
+                                autoComplete="current-password"
+                                aria-invalid={Boolean(fieldErrors.password)}
+                                aria-describedby={
+                                    fieldErrors.password
+                                        ? "password-error"
+                                        : undefined
+                                }
+                                className="w-full border-2 border-border focus:border-ring transition-colors py-6"
                                 value={password}
-                                placeholder="Enter your Password"
-                                onChange={(e) => setPassword(e.target.value)}
-                                required
+                                placeholder="Enter your password"
+                                onChange={(e) => {
+                                    setPassword(e.target.value);
+                                    if (fieldErrors.password) {
+                                        setFieldErrors((f) => ({
+                                            ...f,
+                                            password: undefined,
+                                        }));
+                                    }
+                                }}
                             />
-                            <p className="mt-2 text-[12px] text-gray-400">
-                                Use 8 or more characters with a mix of letters,
-                                numbers & symbols
-                            </p>
+                            {fieldErrors.password && (
+                                <p
+                                    id="password-error"
+                                    role="alert"
+                                    className="mt-2 text-sm text-destructive"
+                                >
+                                    {fieldErrors.password}
+                                </p>
+                            )}
                         </div>
 
                         <div id="clerk-captcha" />
+
+                        {formError && (
+                            <p
+                                role="alert"
+                                className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                            >
+                                {formError}
+                            </p>
+                        )}
 
                         <div className="flex flex-col gap-3 pt-2">
                             <Button
                                 type="submit"
                                 disabled={isLoading}
-                                className="w-full py-7 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all cursor-pointer disabled:opacity-50"
+                                className="w-full py-7 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl transition-all cursor-pointer disabled:opacity-50"
                             >
-                                {isLoading ? "Signing In..." : "Sign In"}
+                                {isLoading && (
+                                    <Loader2
+                                        className="me-2 h-4 w-4 animate-spin"
+                                        aria-hidden="true"
+                                    />
+                                )}
+                                {isLoading ? "Signing in…" : "Sign In"}
                             </Button>
 
                             <div className="relative py-4">
                                 <div className="absolute inset-0 flex items-center">
-                                    <span className="w-full border-t border-gray-200"></span>
+                                    <span className="w-full border-t border-border"></span>
                                 </div>
                                 <div className="relative flex justify-center text-xs uppercase">
-                                    <span className="bg-background px-2 text-gray-500">
+                                    <span className="bg-background px-2 text-muted-foreground">
                                         Or continue with
                                     </span>
                                 </div>
@@ -199,29 +259,32 @@ const SignIn = () => {
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <Button
+                                    type="button"
                                     onClick={() =>
                                         handleOAuthSignIn("oauth_google")
                                     }
-                                    className="flex items-center justify-center gap-2 p-4 text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 shadow-sm font-semibold cursor-pointer"
+                                    className="flex items-center justify-center gap-2 p-4 text-foreground bg-background border border-border hover:bg-muted shadow-sm font-semibold cursor-pointer"
                                 >
                                     Google
                                 </Button>
                                 <Button
+                                    type="button"
                                     onClick={() =>
                                         handleOAuthSignIn("oauth_github")
                                     }
-                                    className="flex items-center justify-center gap-2 p-4 text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 shadow-sm font-semibold cursor-pointer"
+                                    className="flex items-center justify-center gap-2 p-4 text-foreground bg-background border border-border hover:bg-muted shadow-sm font-semibold cursor-pointer"
                                 >
-                                    <Github size={20} /> Github
+                                    <Github size={20} aria-hidden="true" />{" "}
+                                    Github
                                 </Button>
                             </div>
                         </div>
 
-                        <p className="text-center mt-6 text-gray-600">
-                            Don't have an account?{" "}
+                        <p className="text-center mt-6 text-muted-foreground">
+                            Don&apos;t have an account?{" "}
                             <Link
                                 href="/auth/sign-up"
-                                className="text-blue-600 font-bold hover:underline"
+                                className="text-primary font-bold hover:underline"
                             >
                                 Sign Up
                             </Link>

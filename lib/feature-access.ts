@@ -206,7 +206,15 @@ export async function canUseFeature(
         };
 
         if (interval) {
-            const period = getPeriod(interval as any);
+            // Narrow instead of casting to `any`. An interval outside these
+            // three values falls through `getPeriod` and returns null, which
+            // the `!period` branch below already treats as "unbounded".
+            const period =
+                interval === "month" ||
+                interval === "year" ||
+                interval === "none"
+                    ? getPeriod(interval)
+                    : null;
             if (!period) return true;
             const current = await getCurrentUsage(
                 userId,

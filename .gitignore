@@ -52,6 +52,8 @@ coverage/
 .cache/
 tmp/
 .temp/
+# Git-for-Windows crash dumps — never source
+*.stackdump
 
 # Vercel
 .vercel

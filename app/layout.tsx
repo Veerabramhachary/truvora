@@ -4,27 +4,55 @@ import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Toaster } from "sonner";
 import { ThemeProvider } from "@/components/theme-provider";
-import { QueryProviders } from "./providers/querystackProvider";
 import { Suspense } from "react";
+import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
 
+// Each font needs its own custom property. They previously all declared
+// `--font-inter`, so Inter won and --font-space-grotesk / --font-jetbrains-mono
+// were never defined — headings and font-mono silently fell back to the system.
 const inter = Inter({
     variable: "--font-inter",
     subsets: ["latin"],
 });
 
-const jetBrainsMomo = JetBrains_Mono({
-    variable: "--font-inter",
+const jetbrainsMono = JetBrains_Mono({
+    variable: "--font-jetbrains-mono",
     subsets: ["latin"],
 });
 
 const spaceGrotesk = Space_Grotesk({
-    variable: "--font-inter",
+    variable: "--font-space-grotesk",
     subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
-    title: "Truvora",
-    description: "Expenses/Income and subscriptions tracker.",
+    // Resolves relative OG/Twitter image URLs to absolute ones.
+    metadataBase: new URL(SITE_URL),
+    title: {
+        default: SITE_NAME,
+        template: `%s · ${SITE_NAME}`,
+    },
+    description: SITE_DESCRIPTION,
+    applicationName: SITE_NAME,
+    keywords: [
+        "expense tracker",
+        "subscription tracker",
+        "recurring charges",
+        "personal finance",
+        "budgeting",
+    ],
+    openGraph: {
+        type: "website",
+        url: SITE_URL,
+        siteName: SITE_NAME,
+        title: SITE_NAME,
+        description: SITE_DESCRIPTION,
+    },
+    twitter: {
+        card: "summary",
+        title: SITE_NAME,
+        description: SITE_DESCRIPTION,
+    },
 };
 
 export default function RootLayout({
@@ -33,10 +61,16 @@ export default function RootLayout({
     children: React.ReactNode;
 }>) {
     return (
-        <ClerkProvider>
+        /*
+          Clerk needs these to reach your own auth screens. Without them,
+          `redirectToSignIn()` in proxy.ts has no configured destination and
+          falls back to Clerk's hosted pages at <instance>.accounts.dev —
+          sending users out to Clerk and back for every protected route.
+        */
+        <ClerkProvider signInUrl="/auth/sign-in" signUpUrl="/auth/sign-up">
             <html lang="en" suppressHydrationWarning>
                 <body
-                    className={`${jetBrainsMomo.variable} ${spaceGrotesk.variable} ${inter.variable} antialiased`}
+                    className={`${jetbrainsMono.variable} ${spaceGrotesk.variable} ${inter.variable} antialiased`}
                     suppressHydrationWarning
                 >
                     <ThemeProvider
@@ -45,9 +79,16 @@ export default function RootLayout({
                         enableSystem
                         disableTransitionOnChange
                     >
-                        <Suspense fallback={null}>
-                            <QueryProviders>{children}</QueryProviders>
-                        </Suspense>
+                        {/*
+                          Suspense is required here, not decorative: the
+                          statically-rendered dashboard reads `?currency` and the
+                          email-verification form reads `?email` via
+                          useSearchParams, which Next only allows inside a
+                          boundary. It no longer wraps a TanStack QueryClient —
+                          Refine mounts its own, so the extra one was dead
+                          weight.
+                        */}
+                        <Suspense fallback={null}>{children}</Suspense>
                     </ThemeProvider>
                     <Toaster />
                 </body>

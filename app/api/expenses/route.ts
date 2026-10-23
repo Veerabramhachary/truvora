@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { expenses } from "@/db/schema/expenses";
 import { desc, eq } from "drizzle-orm";
 import { categories, transactions } from "@/db/schema/schema";
+import { expenseSchema } from "./schema";
 import { z } from "zod";
 import { NextResponse } from "next/server";
 
@@ -32,21 +33,14 @@ export async function GET() {
 
         return NextResponse.json(data, { status: 200 });
     } catch (err) {
+        console.error("Failed to fetch expenses:", err);
         return NextResponse.json({
             success: false,
             error: "Internal server error",
         }, { status: 500 });
     }
 }
-const expenseSchema = z.object({
-    title: z.string().min(1),
-    note: z.string().optional(),    
-    amount: z.string().regex(/^\d+(\.\d{1,2})?$/, "Invalid amount format"),
-    date: z.coerce.date(),
-    type: z.enum(["income", "expense"]),
-    category: z.string().min(1),
-    currency: z.string().min(1),
-});
+
 export const POST = async (req: Request) => {
     try {
         const { userId } = await auth();
@@ -74,7 +68,7 @@ export const POST = async (req: Request) => {
             await tx.insert(expenses).values({
                 title: data.title,
                 note: data.note,
-                amount: data.amount,
+                amount: data.amount.toFixed(2),
                 date: data.date,
                 type: data.type,
                 categoryId: category.id,
@@ -85,7 +79,7 @@ export const POST = async (req: Request) => {
             await tx.insert(transactions).values({
                 title: data.title,
                 description: data.note,
-                amount: data.amount,
+                amount: data.amount.toFixed(2),
                 date: data.date,
                 type: data.type,
                 userId: userId,
@@ -100,16 +94,21 @@ export const POST = async (req: Request) => {
             success: true,
         });
     } catch (error) {
-        if(error instanceof z.ZodError) {
+        if (error instanceof z.ZodError) {
             return NextResponse.json(
-                { success: false, error: error.message},
-                { status: 400}
-            )
+                {
+                    success: false,
+                    error:
+                        error.issues[0]?.message ?? "Invalid expense data",
+                },
+                { status: 400 },
+            );
         }
+        console.error("Failed to create expense:", error);
         return new Response(
             JSON.stringify({
                 success: false,
-                error: "Internal server error"
+                error: "Internal server error",
             }),
             { status: 500 },
         );
