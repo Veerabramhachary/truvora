@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import { closeDb, db } from "@/db";
 import { categories } from "../db/schema/schema";
 import { plans } from "../db/schema/plans";
 import { asc, eq } from "drizzle-orm";
@@ -16,15 +16,14 @@ import {
   subscription row could ever be created, and every gate saw "no plan". Charts,
   exports and the subscription limit all read from here.
 
-  `plans.id` is `defaultRandom()` with no unique constraint on `name`, so
-  upserting by name isn't available; match-then-write instead. Run this after
-  `db:push` and re-running it is safe.
+  `plans.name` has no unique constraint, so match-then-write instead of using
+  an upsert. Run this after `db:push`.
 */
 const PLAN_TIERS = [
     {
         name: "Free",
-        description: "Getting a handle on your spending.",
-        price: "0.00",
+        description: "Get a clear picture of your recurring spending.",
+        price: "0",
         featureLimits: {
             exports: { limit: 5, interval: "month" as const },
             subscriptions: { limit: 5 },
@@ -38,32 +37,32 @@ const PLAN_TIERS = [
     },
     {
         name: "Starter",
-        description: "For households with a few recurring charges.",
-        price: "4.99",
+        description: "For people who want to stay on top of every bill.",
+        price: "99",
         featureLimits: {
-            exports: { limit: 50, interval: "month" as const },
+            exports: { limit: 25, interval: "month" as const },
             subscriptions: { limit: 25 },
             charts: "comparative" as const,
         },
         features: [
             "25 tracked subscriptions",
             "Expenses vs subscriptions breakdown",
-            "50 CSV exports a month",
+            "20 CSV exports a month",
         ],
     },
     {
         name: "Pro",
-        description: "Everything, with no ceiling.",
-        price: "9.99",
+        description: "For complete visibility and more room to grow.",
+        price: "199",
         featureLimits: {
-            exports: { limit: 10_000, interval: "month" as const },
-            subscriptions: { limit: 1_000 },
+            exports: { limit: 1000, interval: "month" as const },
+            subscriptions: { limit: 100 },
             charts: "comparative" as const,
         },
         features: [
-            "Up to 1,000 tracked subscriptions",
+            "Up to 100 tracked subscriptions",
             "Expenses vs subscriptions breakdown",
-            "Up to 10,000 CVS exports a month",
+            "Up to 1,000 CVS exports a month",
         ],
     },
 ] as const;
@@ -72,30 +71,33 @@ export const seedPlans = async () => {
     try {
         console.log("Seeding plans...");
 
-        const existing = await db
-            .select({ id: plans.id, name: plans.name })
-            .from(plans);
+        const existing = await db.select({ name: plans.name }).from(plans);
+        const existingNames = new Set(existing.map((plan) => plan.name));
 
         for (const tier of PLAN_TIERS) {
-            if (existing.some((p) => p.name === tier.name)) {
-                // Leave manually-tuned prices and limits alone.
-                console.log(`  - "${tier.name}" already present, skipping`);
-                continue;
-            }
-
-            await db.insert(plans).values({
+            const values = {
                 name: tier.name,
                 description: tier.description,
                 price: tier.price,
                 currency: "INR",
-                interval: "month",
+                interval: "month" as const,
                 features: [...tier.features],
                 featureLimits: tier.featureLimits,
                 isActive: true,
                 // Not a gateway plan yet — nothing has been purchased.
-                provider: "none",
-            });
-            console.log(`  + created "${tier.name}"`);
+                provider: "none" as const,
+            };
+
+            if (existingNames.has(tier.name)) {
+                await db
+                    .update(plans)
+                    .set(values)
+                    .where(eq(plans.name, tier.name));
+                console.log(`  ~ updated "${tier.name}"`);
+            } else {
+                await db.insert(plans).values(values);
+                console.log(`  + created "${tier.name}"`);
+            }
         }
 
         // Sanity check the ordering the webhook depends on: the cheapest
@@ -111,6 +113,7 @@ export const seedPlans = async () => {
         );
     } catch (error) {
         console.error("❌ Error seeding plans:", error);
+        throw error;
     }
 };
 
@@ -186,10 +189,27 @@ export const seedDynamicCategories = async () => {
         );
     } catch (error) {
         console.error("❌ Error during category update:", error);
+        throw error;
     }
 };
 
-seedDynamicCategories().catch(console.error);
-// Plans have to land too: every feature gate reads them, and the Clerk
-// webhook grants new users the cheapest active one.
-seedPlans().catch(console.error);
+const main = async () => {
+    await seedDynamicCategories();
+    // Plans have to land too: every feature gate reads them, and the Clerk
+    // webhook grants new users the cheapest active one.
+    await seedPlans();
+};
+
+main()
+    .catch((error: unknown) => {
+        console.error("❌ Seed failed:", error);
+        process.exitCode = 1;
+    })
+    .finally(async () => {
+        try {
+            await closeDb();
+        } catch (error) {
+            console.error("❌ Failed to close database connection:", error);
+            process.exitCode = 1;
+        }
+    });

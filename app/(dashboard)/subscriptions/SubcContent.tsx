@@ -14,16 +14,25 @@ import { FeatureGate } from "@/lib/feature-gate";
 import { useDelete, useList } from "@refinedev/core";
 import { useRefreshAll } from "@/lib/use-refresh";
 import { format, isValid } from "date-fns";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import SubsForm, { type SubscriptionRecord } from "./SubsForm";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete";
 import { toast } from "sonner";
 import { apiErrorMessage } from "@/lib/api-error";
 import { formatCurrency } from "@/lib/currencies";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 
 const SubscContent = () => {
     const [open, setOpen] = useState(false);
     const [exporting, setExporting] = useState(false);
+    const [subscriptionLimit, setSubscriptionLimit] = useState<number | null>(null);
+    const [serverActiveCount, setServerActiveCount] = useState(0);
     const [editing, setEditing] = useState<SubscriptionRecord | null>(null);
     const [pendingDelete, setPendingDelete] =
         useState<SubscriptionRecord | null>(null);
@@ -72,6 +81,30 @@ const SubscContent = () => {
     // The data provider returns BaseRecord; assert the shape the API sends so
     // the cards below are typed.
     const data = (result?.data ?? []) as SubscriptionRecord[];
+    const activeCardCount = data.filter((item) => item.active).length;
+
+    useEffect(() => {
+        let cancelled = false;
+        fetch("/api/feature?feature=subscriptions", { cache: "no-store" })
+            .then((response) => response.json())
+            .then((payload: { limit?: number | null; usage?: number }) => {
+                if (!cancelled && typeof payload.limit === "number") {
+                    setSubscriptionLimit(payload.limit);
+                }
+                if (!cancelled && typeof payload.usage === "number") {
+                    setServerActiveCount(payload.usage);
+                }
+            })
+            .catch(() => {
+                // FeatureGate still enforces the server-side limit if this
+                // supplemental display request fails.
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [activeCardCount]);
+
+    const currentActiveCount = Math.max(activeCardCount, serverActiveCount);
 
     // 1. Consistent Loading State (Prevents CLS)
     if (isLoading) {
@@ -101,9 +134,11 @@ const SubscContent = () => {
                     <FeatureGate feature="subscriptions" quantity={1}>
                         <Button
                             variant="secondary"
+                            disabled={subscriptionLimit !== null && subscriptionLimit !== -1 && currentActiveCount >= subscriptionLimit}
+                            title={subscriptionLimit !== null && subscriptionLimit !== -1 && currentActiveCount >= subscriptionLimit ? "Your active subscription limit has been reached." : undefined}
                             onClick={() => {
                                 setEditing(null);
-                                setOpen(!open);
+                                setOpen(true);
                             }}
                         >
                             Create
@@ -121,15 +156,17 @@ const SubscContent = () => {
                     </FeatureGate>
                 </div>
             </Header>
-            <SubsForm
-                className={
-                    open
-                        ? "border-none shadow-none w-full absolute top-0 bg-background p-3 z-10"
-                        : "hidden w-0"
-                }
-                editing={editing}
-                onSaved={closeForm}
-            />
+            <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && closeForm()}>
+                <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle>{editing ? "Edit subscription" : "Add subscription"}</DialogTitle>
+                        <DialogDescription>
+                            {editing ? "Update the price, schedule, and category." : "Track the price and renewal schedule for a recurring service."}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <SubsForm key={editing?.id ?? "new-subscription"} editing={editing} onSaved={closeForm} />
+                </DialogContent>
+            </Dialog>
             {data.length === 0 ? (
                 <div className="text-center p-20 border-2 border-dashed rounded-lg">
                     <p className="text-muted-foreground">

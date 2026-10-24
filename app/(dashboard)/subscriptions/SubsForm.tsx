@@ -2,7 +2,6 @@
 
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -60,7 +59,6 @@ export interface SubscriptionRecord {
 }
 
 interface SubsFormProps {
-    className?: string;
     /** When present the form edits this row instead of creating a new one. */
     editing?: SubscriptionRecord | null;
     /** Called after a successful save, so the parent can close the panel. */
@@ -72,7 +70,7 @@ interface SubsFormProps {
 // "no end date" and should be shown as such rather than prefilled.
 const ONGOING_END_YEAR = 9900;
 
-const SubsForm = ({ className, editing, onSaved }: SubsFormProps) => {
+const SubsForm = ({ editing, onSaved }: SubsFormProps) => {
     // TVariables has to be spelled out: Refine defaults it to `{}`, which
     // would reject the form values on `mutateAsync`.
     const { mutateAsync: createAsync } =
@@ -112,6 +110,7 @@ const SubsForm = ({ className, editing, onSaved }: SubsFormProps) => {
                   name: "",
                   note: "",
                   category: "",
+                  price: 0,
               },
     });
 
@@ -166,8 +165,7 @@ const SubsForm = ({ className, editing, onSaved }: SubsFormProps) => {
     };
 
     return (
-        <Card className={className}>
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-5 p-4 text-left">
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-5 text-left">
                 {/* Title */}
                 <div className="space-y-2">
                     <Label htmlFor="name">Subscription Name</Label>
@@ -176,7 +174,7 @@ const SubsForm = ({ className, editing, onSaved }: SubsFormProps) => {
                 </div>
 
                 {/* Price & Currency */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                         <Label htmlFor="price">Price</Label>
                         <Input id="price" type="number" step="0.01" {...register("price")} placeholder="0.00" />
@@ -190,13 +188,13 @@ const SubsForm = ({ className, editing, onSaved }: SubsFormProps) => {
                 </div>
 
                 {/* Dates Section */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     {/* Start Date */}
                     <div className="space-y-2 flex flex-col">
                         <Label>Start Date</Label>
                         <Popover>
                             <PopoverTrigger asChild>
-                                <Button variant="outline" className={cn("justify-start text-left font-normal", !startDate && "text-muted-foreground")}>
+                                <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !startDate && "text-muted-foreground")}>
                                     <CalendarIcon className="mr-2 h-4 w-4" />
                                     {startDate ? format(startDate, "PP") : <span>Pick date</span>}
                                 </Button>
@@ -217,7 +215,7 @@ const SubsForm = ({ className, editing, onSaved }: SubsFormProps) => {
                         <Label>End Date (Optional)</Label>
                         <Popover>
                             <PopoverTrigger asChild>
-                                <Button variant="outline" className={cn("justify-start text-left font-normal", !endDate && "text-muted-foreground")}>
+                                <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !endDate && "text-muted-foreground")}>
                                     <CalendarIcon className="mr-2 h-4 w-4" />
                                     {endDate ? format(endDate, "PP") : <span>No end date</span>}
                                 </Button>
@@ -232,11 +230,11 @@ const SubsForm = ({ className, editing, onSaved }: SubsFormProps) => {
                             </PopoverContent>
                         </Popover>
                     </div>
-                    {errors.endDate && <p className="text-sm text-destructive">{errors.endDate.message}</p>}
+                    {errors.endDate && <p className="text-sm text-destructive sm:col-span-2">{errors.endDate.message}</p>}
                 </div>
 
                 {/* Interval & Category */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                         <Label>Billing Cycle</Label>
                         <Select onValueChange={(v: "month" | "year") => setValue("interval", v)} value={intervalValue ?? "month"}>
@@ -253,6 +251,12 @@ const SubsForm = ({ className, editing, onSaved }: SubsFormProps) => {
                         <CategorySelector value= {categoryValue}type="subscription" onValueChange={(v) => setValue("category", v)} />
                         {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
                     </div>
+                </div>
+
+                <div className="space-y-2">
+                    <Label htmlFor="subscription-note">Note</Label>
+                    <Input id="subscription-note" {...register("note")} placeholder="Optional details" />
+                    {errors.note && <p className="text-sm text-destructive">{errors.note.message}</p>}
                 </div>
 
                 <div className="flex gap-2">
@@ -272,7 +276,6 @@ const SubsForm = ({ className, editing, onSaved }: SubsFormProps) => {
                     )}
                 </div>
             </form>
-        </Card>
     );
 };
 

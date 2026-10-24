@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db";
 import { asc, desc, eq, sql } from "drizzle-orm";
 import { categories, subscriptions, transactions } from "@/db/schema/schema";
+import { featureUsage } from "@/db/schema/feature-usage";
 import { NextRequest, NextResponse } from "next/server";
 import { getSubscriptionGate } from "@/lib/subscription";
 import z from "zod";
@@ -172,10 +173,13 @@ export async function POST(req: Request) {
         // Transaction: lock active subscriptions and insert new one if under limit
         const result = await db.transaction(async (tx) => {
             if (!unlimited) {
-                // Lock the user's active subscriptions to prevent race conditions
+                // Serialize cap checks per user, including the empty-list case
+                // where SELECT ... FOR UPDATE has no row to lock.
+                await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${userId}))`);
                 const locked = await tx.execute(sql`
                     SELECT id FROM ${subscriptions}
                     WHERE ${subscriptions.userId} = ${userId}
+                    AND ${subscriptions.active} = TRUE
                     AND ${subscriptions.startDate} <= NOW()
                     AND ${subscriptions.endDate} >= NOW()
                     AND ${subscriptions.deactivatedAt} IS NULL
@@ -189,7 +193,7 @@ export async function POST(req: Request) {
             }
 
             // Insert the new subscription
-            await tx
+            const [created] = await tx
                 .insert(subscriptions)
                 .values({
                     userId,
@@ -213,19 +217,40 @@ export async function POST(req: Request) {
                     active: true,
                     deactivatedAt: null,
                 })
+                .returning({ id: subscriptions.id });
 
-                await tx.insert(transactions).values({
-                    title: data.name,
-                    description: data.note,
-                    amount: data.price,
-                    date: data.startDate,
-                    type: "subscription",
-                    userId: userId,
-                    categoryId: category,
-                    action: "created",
-                    currency: data.currency,
-                    createdAt: new Date(),
-                })
+            const [usage] = await tx
+                .select({ count: sql<number>`count(*)::int` })
+                .from(subscriptions)
+                .where(sql`${subscriptions.userId} = ${userId}
+                    AND ${subscriptions.active} = TRUE
+                    AND ${subscriptions.startDate} <= NOW()
+                    AND ${subscriptions.endDate} >= NOW()
+                    AND ${subscriptions.deactivatedAt} IS NULL`);
+
+            await tx.insert(featureUsage).values({
+                userId,
+                feature: "subscriptions",
+                period: "active",
+                count: usage?.count ?? 0,
+            }).onConflictDoUpdate({
+                target: [featureUsage.userId, featureUsage.feature, featureUsage.period],
+                set: { count: usage?.count ?? 0, updatedAt: new Date() },
+            });
+
+            await tx.insert(transactions).values({
+                title: data.name,
+                description: data.note,
+                amount: data.price,
+                date: data.startDate,
+                type: "subscription",
+                userId,
+                categoryId: category,
+                action: "created",
+                currency: data.currency,
+                createdAt: new Date(),
+            });
+            return created;
         });
 
         return NextResponse.json(result, { status: 201 });
