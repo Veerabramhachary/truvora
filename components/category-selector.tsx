@@ -13,6 +13,7 @@ import {
     CommandGroup,
     CommandInput,
     CommandItem,
+    CommandList,
 } from "./ui/command";
 import { cn } from "@/lib/utils";
 
@@ -68,42 +69,49 @@ const CategorySelector = ({
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+            <PopoverContent
+                align="start"
+                sideOffset={4}
+                collisionPadding={12}
+                className="max-h-[min(26rem,var(--radix-popover-content-available-height))] w-[var(--radix-popover-trigger-width)] overflow-hidden p-0"
+            >
                 <Command>
                     <CommandInput placeholder="Search categories..." />
-                    <CommandEmpty>No category found.</CommandEmpty>
-                    {categories.map((group) => (
-                        <CommandGroup key={group.label} heading={group.label}>
-                            {group.items.map((item) => (
-                                <CommandItem
-                                    key={item.value}
-                                    value={item.value}
-                                    // cmdk lowercases the value it hands back from onSelect,
-                                    // and the API looks the category up by its stored name
-                                    // (the label). Read from `item` instead of the callback
-                                    // argument so mixed-case labels survive.
-                                    onSelect={() => {
-                                        onValueChange(
-                                            item.label === value
-                                                ? ""
-                                                : item.label,
-                                        );
-                                        setOpen(false);
-                                    }}
-                                >
-                                    <Check
-                                        className={cn(
-                                            "ms-2 h-4 w-4 shrink-0",
-                                            value === item.label
-                                                ? "opacity-100"
-                                                : "opacity-0",
-                                        )}
-                                    />
-                                    {item.label}
-                                </CommandItem>
-                            ))}
-                        </CommandGroup>
-                    ))}
+                    <CommandList className="max-h-[min(21rem,calc(var(--radix-popover-content-available-height)-3rem))]">
+                        <CommandEmpty>No category found.</CommandEmpty>
+                        {categories.map((group) => (
+                            <CommandGroup key={group.label} heading={group.label}>
+                                {group.items.map((item) => (
+                                    <CommandItem
+                                        key={item.value}
+                                        value={item.value}
+                                        // cmdk lowercases the value it hands back from onSelect,
+                                        // and the API looks the category up by its stored name
+                                        // (the label). Read from `item` instead of the callback
+                                        // argument so mixed-case labels survive.
+                                        onSelect={() => {
+                                            onValueChange(
+                                                item.label === value
+                                                    ? ""
+                                                    : item.label,
+                                            );
+                                            setOpen(false);
+                                        }}
+                                    >
+                                        <Check
+                                            className={cn(
+                                                "ms-2 h-4 w-4 shrink-0",
+                                                value === item.label
+                                                    ? "opacity-100"
+                                                    : "opacity-0",
+                                            )}
+                                        />
+                                        {item.label}
+                                    </CommandItem>
+                                ))}
+                            </CommandGroup>
+                        ))}
+                    </CommandList>
                 </Command>
             </PopoverContent>
         </Popover>
