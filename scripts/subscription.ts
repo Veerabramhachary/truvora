@@ -20,7 +20,7 @@ export const Post = async () => {
                     name: "Netflix",
                     note: "Standard HD plan",
                     price: "15.49",
-                    currency: "USD",
+                    currency: "INR",
                     interval: "month",
                     intervalCount: 1,
                     endDate: new Date('2027-03-17T10:00:00'),
@@ -42,7 +42,7 @@ export const Post = async () => {
                 description: "Standard HD plan",
                 type: "subscription",
                 action: "created",
-                currency: "USD",
+                currency: "INR",
                 createdAt: new Date(),
             });
 

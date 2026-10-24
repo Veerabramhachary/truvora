@@ -5,11 +5,12 @@ import { auth } from "@clerk/nextjs/server";
 import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import z from "zod";
+import { toPaise } from "@/lib/money";
 
 const querySchema = z.object({
     startDate: z.string().datetime(),
     endDate: z.string().datetime(),
-    currency: z.string().default("USD"),
+    currency: z.literal("INR").default("INR"),
 });
 
 export const GET = async (request: NextRequest) => {
@@ -40,7 +41,7 @@ export const GET = async (request: NextRequest) => {
     const expenseData = await db
         .select({
             date: expenses.date,
-            amount: sql<number>`COALESCE(SUM(${expenses.amount}), 0) AS FLOAT`,
+            amount: sql<string>`COALESCE(SUM(${expenses.amount}), 0)::text`,
         })
         .from(expenses)
         .where(
@@ -58,7 +59,7 @@ export const GET = async (request: NextRequest) => {
     const subscriptionData = await db
         .select({
             date: subscriptions.startDate,
-            amount: sql<number>`COALESCE(SUM(${subscriptions.price}), 0)::FLOAT`,
+            amount: sql<string>`COALESCE(SUM(ROUND(${subscriptions.price} / (CASE WHEN ${subscriptions.interval} = 'year' THEN 12 ELSE 1 END * ${subscriptions.intervalCount}), 2)), 0)::text`,
         })
         .from(subscriptions)
         .where(
@@ -74,24 +75,24 @@ export const GET = async (request: NextRequest) => {
     // Combine into a map of date -> { expense, subscription }
     const resultMap = new Map<
         string,
-        { expense: number; subscription: number }
+        { expense: bigint; subscription: bigint }
     >();
     expenseData.forEach((row) => {
         const dateKey = row.date.toISOString().split("T")[0];
         resultMap.set(dateKey, {
-            expense: row.amount,
-            subscription: resultMap.get(dateKey)?.subscription ?? 0,
+            expense: toPaise(row.amount),
+            subscription: resultMap.get(dateKey)?.subscription ?? BigInt(0),
         });
     });
     subscriptionData.forEach((row) => {
         const dateKey = row.date.toISOString().split("T")[0];
         const existing = resultMap.get(dateKey) ?? {
-            expense: 0,
-            subscription: 0,
+            expense: BigInt(0),
+            subscription: BigInt(0),
         };
         resultMap.set(dateKey, {
             ...existing,
-            subscription: existing.subscription + row.amount,
+            subscription: existing.subscription + toPaise(row.amount),
         });
     });
 
@@ -100,11 +101,11 @@ export const GET = async (request: NextRequest) => {
     const current = new Date(start);
     while (current <= end) {
         const dateKey = current.toISOString().split("T")[0];
-        const data = resultMap.get(dateKey) ?? { expense: 0, subscription: 0 };
+        const data = resultMap.get(dateKey) ?? { expense: BigInt(0), subscription: BigInt(0) };
         dates.push({
             date: dateKey,
-            expense: data.expense,
-            subscription: data.subscription,
+            expense: Number(data.expense) / 100,
+            subscription: Number(data.subscription) / 100,
         });
         current.setDate(current.getDate() + 1);
     }

@@ -7,7 +7,7 @@ import { z } from "zod";
 
 const querySchema = z.object({
     interval: z.enum(["month", "year"]).default("month"),
-    currency: z.string().default("USD"),
+    currency: z.literal("INR").default("INR"),
 });
 
 export async function GET(request: NextRequest) {
@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
         const { searchParams } = request.nextUrl;
         const query = querySchema.safeParse({
             interval: searchParams.get("interval"),
-            currency: searchParams.get("currency"),
+            currency: searchParams.get("currency") ?? undefined,
         });
 
         if (!query.success) {

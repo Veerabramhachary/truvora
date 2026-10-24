@@ -18,9 +18,10 @@ interface PlanCardProps {
 }
 
 export function PlanCard({ plan, interval }: PlanCardProps) {
-    const formattedPrice = new Intl.NumberFormat(undefined, {
+    const formattedPrice = new Intl.NumberFormat("en-IN", {
         style: "currency",
         currency: plan.currency,
+        maximumFractionDigits: 2,
         minimumFractionDigits: 2,
     }).format(plan.price);
 

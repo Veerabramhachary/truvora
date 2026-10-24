@@ -6,6 +6,7 @@ import { getStripe } from "@/lib/stripe";
 import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { toPaise } from "@/lib/money";
 
 const bodySchema = z.object({
     planId: z.string().uuid("planId must be a uuid"),
@@ -51,6 +52,25 @@ export async function POST(request: NextRequest) {
             return NextResponse.json(
                 { error: "Plan is not available for purchase" },
                 { status: 400 },
+            );
+        }
+        if (plan.currency !== "INR") {
+            return NextResponse.json(
+                { error: "Only INR plans are available" },
+                { status: 400 },
+            );
+        }
+        const stripePrice = await getStripe().prices.retrieve(plan.providerPlanId);
+        if (
+            !stripePrice.active ||
+            stripePrice.currency.toUpperCase() !== "INR" ||
+            stripePrice.unit_amount === null ||
+            BigInt(stripePrice.unit_amount) !== toPaise(plan.price)
+        ) {
+            console.error("Stripe price does not match the INR plan configuration", plan.id);
+            return NextResponse.json(
+                { error: "Plan payment configuration is unavailable" },
+                { status: 503 },
             );
         }
 

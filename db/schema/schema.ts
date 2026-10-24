@@ -12,6 +12,7 @@ import {
     
 } from "drizzle-orm/pg-core";
 import { encryptedText } from "./custom-types";
+import { expenses } from "./expenses";
 
 export const transactionTypeEnum = pgEnum("transaction_type", [
     "expense",
@@ -51,15 +52,16 @@ export const categories = pgTable(
 export const transactions = pgTable("transactions", {
     id: uuid("id").primaryKey().defaultRandom(),
     userId: text("user_id").notNull(),
-    title:  text("title").notNull().default('untitled'),
+    title:  encryptedText("title").notNull().default('untitled'),
     categoryId: uuid("category_id").references(() => categories.id),
     amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
     date: timestamp("date").notNull(),
     description: encryptedText("description"),
     type: transactionTypeEnum("type").notNull(),
     subscriptionId: uuid("subscription_id").references(() => subscriptions.id),
+    expenseId: uuid("expense_id").unique().references(() => expenses.id, { onDelete: "cascade" }),
     action: transactionActionEnum("action").notNull(),
-    currency: text("currency").notNull().default("USD"),
+    currency: text("currency").notNull().default("INR"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -68,10 +70,10 @@ export const subscriptions = pgTable("subscriptions", {
     id: uuid("id").primaryKey().defaultRandom(),
     userId: text("user_id").notNull(),
     categoryId: uuid("category_id").references(() => categories.id),
-    name: text("name").notNull(),
+    name: encryptedText("name").notNull(),
     note: encryptedText("note"),
     price: numeric("price", { precision: 10, scale: 2 }).notNull(),
-    currency: text("currency").notNull().default("USD"),
+    currency: text("currency").notNull().default("INR"),
     interval: text("interval").notNull(),
     intervalCount: integer("interval_count").notNull().default(1),
     startDate: timestamp("start_date").notNull(),

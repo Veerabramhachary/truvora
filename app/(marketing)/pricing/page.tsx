@@ -1,16 +1,11 @@
 import { Suspense } from "react";
 import { PricingCards } from "./PricingCards";
 import { PricingSkeleton } from "./PricingSkeleton";
-import { CurrencySwitcher } from "./CurrencySwitcher";
 import { db } from "@/db";
 import { plans } from "@/db/schema/plans";
 import { and, eq } from "drizzle-orm";
 import { Plan } from "./types";
-import {
-    CURRENCIES,
-    DEFAULT_CURRENCY,
-    type CurrencyCode,
-} from "@/lib/currencies";
+import { DEFAULT_CURRENCY, type CurrencyCode } from "@/lib/currencies";
 
 // Title renders as "Pricing · Truvora" via the root layout's template.
 export const metadata = {
@@ -18,23 +13,6 @@ export const metadata = {
     description:
         "Compare Truvora's Free, Starter and Pro plans. Cancel anytime — your tracked data stays yours.",
 };
-
-/**
- * `searchParams` makes this route dynamic. That's deliberate: the plan list is
- * data, and reading it per request means a price or plan added in the DB shows
- * up without a redeploy.
- */
-type PageProps = {
-    searchParams: Promise<{ currency?: string | string[] }>;
-};
-
-function normaliseCurrency(raw: unknown): CurrencyCode {
-    const candidate =
-        typeof raw === "string" ? raw.toUpperCase() : DEFAULT_CURRENCY;
-    return CURRENCIES.some((c) => c.code === candidate)
-        ? (candidate as CurrencyCode)
-        : DEFAULT_CURRENCY;
-}
 
 async function getPlans(
     interval: "month" | "year",
@@ -91,9 +69,7 @@ async function PricingCardsLoader({ currency }: { currency: CurrencyCode }) {
     );
 }
 
-export default async function PricingPage({ searchParams }: PageProps) {
-    const { currency } = await searchParams;
-    const active = normaliseCurrency(Array.isArray(currency) ? currency[0] : currency);
+export default async function PricingPage() {
 
     return (
         <section className="flex flex-col w-full min-h-screen items-center gap-10 py-10 bg-background">
@@ -104,13 +80,11 @@ export default async function PricingPage({ searchParams }: PageProps) {
                 <p className="text-muted-foreground text-lg mt-2 max-w-2xl">
                     Affordable and adaptable pricing to suit your goals
                 </p>
-                <div className="mt-6">
-                    <CurrencySwitcher value={active} />
-                </div>
+                <p className="mt-3 text-sm text-muted-foreground">All prices in Indian Rupees (INR)</p>
             </div>
 
             <Suspense fallback={<PricingSkeleton />}>
-                <PricingCardsLoader currency={active} />
+                <PricingCardsLoader currency={DEFAULT_CURRENCY} />
             </Suspense>
         </section>
     );

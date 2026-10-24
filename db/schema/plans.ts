@@ -49,7 +49,7 @@ export const plans = pgTable("plans", {
     name: text("name").notNull(), // e.g., "Pro Monthly"
     description: text("description"),
     price: decimal("price", { precision: 10, scale: 2 }).notNull(), // store as string to avoid floating point
-    currency: text("currency").notNull().default("USD"),
+    currency: text("currency").notNull().default("INR"),
     interval: intervalEnum("plan_interval").notNull(),
     intervalCount: integer("interval_count").notNull().default(1), // e.g., 3 months
     trialDays: integer("trial_days").default(0),

@@ -6,6 +6,11 @@ import { users } from "@/db/schema/users";
 import { asc, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { app_subscriptions, plans } from "@/db/schema/plans";
+import { expenses } from "@/db/schema/expenses";
+import { categories, subscriptions, transactions } from "@/db/schema/schema";
+import { featureUsage } from "@/db/schema/feature-usage";
+import { paymentInvoices } from "@/db/schema/appInvoices";
+import { paymentTransactions } from "@/db/schema/appTransactions";
 
 export async function POST(req: NextRequest) {
     const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET;
@@ -144,10 +149,25 @@ export async function POST(req: NextRequest) {
         if (eventType === "user.deleted") {
             const { id } = evt.data;
             if (id) {
-                await db
-                    .delete(app_subscriptions)
-                    .where(eq(app_subscriptions.userId, id));
-                await db.delete(users).where(eq(users.id, id));
+                await db.transaction(async (tx) => {
+                    const billingSubs = await tx.select({ id: app_subscriptions.id }).from(app_subscriptions).where(eq(app_subscriptions.userId, id));
+                    const billingIds = billingSubs.map((row) => row.id);
+                    if (billingIds.length) {
+                        // Retain aggregate billing facts, but sever customer,
+                        // subscription, and provider references and remove invoice details.
+                        await tx.update(paymentTransactions).set({ subscriptionsId: null, invoiceId: null, idempotencyKey: null, providerTransactionId: null, metadata: null, errorMessage: null }).where(eq(paymentTransactions.subscriptionsId, billingIds[0]));
+                        for (const billingId of billingIds.slice(1)) await tx.update(paymentTransactions).set({ subscriptionsId: null, invoiceId: null, idempotencyKey: null, providerTransactionId: null, metadata: null, errorMessage: null }).where(eq(paymentTransactions.subscriptionsId, billingId));
+                        await tx.update(paymentInvoices).set({ subscriptionId: null, providerInvoiceId: null, invoiceNumber: null, lines: null, metadata: null }).where(eq(paymentInvoices.subscriptionId, billingIds[0]));
+                        for (const billingId of billingIds.slice(1)) await tx.update(paymentInvoices).set({ subscriptionId: null, providerInvoiceId: null, invoiceNumber: null, lines: null, metadata: null }).where(eq(paymentInvoices.subscriptionId, billingId));
+                    }
+                    await tx.delete(expenses).where(eq(expenses.userId, id));
+                    await tx.delete(transactions).where(eq(transactions.userId, id));
+                    await tx.delete(subscriptions).where(eq(subscriptions.userId, id));
+                    await tx.delete(featureUsage).where(eq(featureUsage.userId, id));
+                    await tx.delete(categories).where(eq(categories.userId, id));
+                    await tx.delete(app_subscriptions).where(eq(app_subscriptions.userId, id));
+                    await tx.delete(users).where(eq(users.id, id));
+                });
             }
         }
     } catch (error) {

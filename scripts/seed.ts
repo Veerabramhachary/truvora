@@ -87,7 +87,7 @@ export const seedPlans = async () => {
                 name: tier.name,
                 description: tier.description,
                 price: tier.price,
-                currency: "USD",
+                currency: "INR",
                 interval: "month",
                 features: [...tier.features],
                 featureLimits: tier.featureLimits,

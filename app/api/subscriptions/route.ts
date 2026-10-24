@@ -18,7 +18,6 @@ import {
  */
 const SORTABLE = {
     id: subscriptions.id,
-    title: subscriptions.name,
     amount: subscriptions.price,
     date: subscriptions.startDate,
     active: subscriptions.active,
@@ -122,6 +121,9 @@ export async function POST(req: Request) {
     }
 
     try {
+        if (data.currency !== "INR") {
+            return NextResponse.json({ error: "New financial records must use INR" }, { status: 400 });
+        }
         const categoryResult = await db
             .select({id: categories.id})
             .from(categories)

@@ -275,7 +275,7 @@ const Sections = () => {
                                     width="20"
                                     className="text-indigo-400 shrink-0"
                                 />
-                                Works globally with multi-currency support.
+                                Track spending in Indian Rupees (INR).
                             </li>
                         </ul>
                     </div>

@@ -80,7 +80,7 @@ export function ChartAreaInteractive() {
             query: {
                 startDate: getDateRange.startDate.toISOString(),
                 endDate: getDateRange.endDate.toISOString(),
-                currency: "USD",
+                currency: "INR",
             },
         },
         queryOptions: {

@@ -1,9 +1,10 @@
 import { z } from "zod";
+import { positiveMoneySchema } from "@/lib/money";
 
 /** Shared request contract for creating and editing a subscription. */
 export const subscriptionSchema = z.object({
     name: z.string().min(1),
-    price: z.coerce.string(),
+    price: positiveMoneySchema,
     currency: z.string().min(1),
     interval: z.enum(["month", "year"]),
     intervalCount: z.number().optional(),

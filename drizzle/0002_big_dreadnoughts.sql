@@ -1,0 +1,1 @@
+ALTER TABLE "payment_transactions" ADD CONSTRAINT "payment_transactions_invoice_id_payment_invoices_id_fk" FOREIGN KEY ("invoice_id") REFERENCES "public"."payment_invoices"("id") ON DELETE no action ON UPDATE no action;

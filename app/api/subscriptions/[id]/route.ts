@@ -41,6 +41,17 @@ export async function PATCH(req: Request, { params }: Params) {
 
         const data = subscriptionSchema.parse(body);
 
+        const [existingSubscription] = await db.select({ currency: subscriptions.currency })
+            .from(subscriptions)
+            .where(and(eq(subscriptions.id, id), eq(subscriptions.userId, userId)))
+            .limit(1);
+        if (!existingSubscription) {
+            return NextResponse.json({ error: "Subscription not found" }, { status: 404 });
+        }
+        if (data.currency !== existingSubscription.currency) {
+            return NextResponse.json({ error: "Currency cannot be changed for an existing record" }, { status: 400 });
+        }
+
         const categoryResult = await db
             .select({ id: categories.id })
             .from(categories)

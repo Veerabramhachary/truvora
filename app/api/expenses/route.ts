@@ -17,7 +17,6 @@ import { NextRequest, NextResponse } from "next/server";
  */
 const SORTABLE = {
     id: expenses.id,
-    title: expenses.title,
     amount: expenses.amount,
     date: expenses.date,
     type: expenses.type,
@@ -106,6 +105,9 @@ export const POST = async (req: Request) => {
 
         const body = await req.json();
         const data = expenseSchema.parse(body);
+        if (data.currency !== "INR") {
+            return NextResponse.json({ error: "New financial records must use INR" }, { status: 400 });
+        }
 
         const categoryResult = await db
             .select({ id: categories.id })
@@ -121,24 +123,25 @@ export const POST = async (req: Request) => {
         }
 
         await db.transaction(async (tx) => {
-            await tx.insert(expenses).values({
+            const [expense] = await tx.insert(expenses).values({
                 title: data.title,
                 note: data.note,
-                amount: data.amount.toFixed(2),
+                amount: data.amount,
                 date: data.date,
                 type: data.type,
                 categoryId: category.id,
                 userId: userId,
                 currency: data.currency,
-            });
+            }).returning({ id: expenses.id });
 
             await tx.insert(transactions).values({
                 title: data.title,
                 description: data.note,
-                amount: data.amount.toFixed(2),
+                amount: data.amount,
                 date: data.date,
                 type: data.type,
                 userId: userId,
+                expenseId: expense.id,
                 categoryId: category.id,
                 action: "created",
                 currency: data.currency,

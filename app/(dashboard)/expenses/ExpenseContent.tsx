@@ -21,6 +21,7 @@ import { useState } from "react";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete";
 import { toast } from "sonner";
 import { apiErrorMessage } from "@/lib/api-error";
+import { formatCurrency } from "@/lib/currencies";
 
 const ExpenseContent = () => {
     const [open, setOpen] = useState(false);
@@ -162,8 +163,7 @@ const ExpenseContent = () => {
                                 {/* Fixed: Removed h1 for price to fix SEO/Accessibility */}
                                 <div>
                                     <p className="text-2xl font-bold tracking-tight">
-                                        {item.currency || "$"}{" "}
-                                        {(item.amount ?? 0).toLocaleString()}
+                                        {formatCurrency(Number(item.amount ?? 0), item.currency || "INR")}
                                     </p>
                                     <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
                                         {item.categoryName}

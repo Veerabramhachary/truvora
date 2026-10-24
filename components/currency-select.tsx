@@ -1,18 +1,10 @@
 "use client";
 
 import { Label } from "@/components/ui/label";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
-import { CURRENCIES, DEFAULT_CURRENCY } from "@/lib/currencies";
+import { DEFAULT_CURRENCY } from "@/lib/currencies";
 
 interface CurrencySelectProps {
-    /** Controlled value — required so an edit form can show the row's existing
-     * currency instead of silently snapping back to USD. */
+    /** Kept in the form contract; INR is the only selectable currency. */
     value: string;
     onValueChange: (value: string) => void;
     label?: string;
@@ -22,7 +14,6 @@ interface CurrencySelectProps {
 
 export function CurrencySelect({
     value,
-    onValueChange,
     label = "Currency",
     id = "currency",
     errorMessage,
@@ -30,18 +21,11 @@ export function CurrencySelect({
     return (
         <div className="space-y-2">
             <Label htmlFor={id}>{label}</Label>
-            <Select value={value} onValueChange={onValueChange}>
-                <SelectTrigger id={id} className="w-full">
-                    <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                    {CURRENCIES.map((currency) => (
-                        <SelectItem key={currency.code} value={currency.code}>
-                            {currency.code} — {currency.label}
-                        </SelectItem>
-                    ))}
-                </SelectContent>
-            </Select>
+            <div id={id} className="flex h-9 w-full items-center rounded-md border px-3 text-sm">
+                {value === DEFAULT_CURRENCY
+                    ? "INR — Indian Rupee"
+                    : `${value} — Legacy currency (no longer supported)`}
+            </div>
             {errorMessage && (
                 <p className="text-sm text-destructive">{errorMessage}</p>
             )}

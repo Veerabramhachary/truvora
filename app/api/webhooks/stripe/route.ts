@@ -7,6 +7,7 @@ import { getStripe } from "@/lib/stripe";
 import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
+import { fromMinorUnits } from "@/lib/money";
 
 type ExpandedInvoice = Stripe.Invoice & {
     subscription: Stripe.Subscription | string;
@@ -142,8 +143,8 @@ async function handleInvoicePaid(invoice: ExpandedInvoice) {
                 subscriptionId: sub.id,
                 providerInvoiceId: invoice.id,
                 invoiceNumber: invoice.number ?? `INV-${Date.now()}`,
-                amountDue: (invoice.amount_due / 100).toFixed(2),
-                amountPaid: (invoice.amount_paid / 100).toFixed(2),
+                amountDue: fromMinorUnits(invoice.amount_due),
+                amountPaid: fromMinorUnits(invoice.amount_paid),
                 currency: invoice.currency,
                 status: mapStripeInvoiceStatus(invoice.status),
                 paidAt: invoice.status_transitions?.paid_at
@@ -151,14 +152,14 @@ async function handleInvoicePaid(invoice: ExpandedInvoice) {
                     : new Date(),
                 lines: invoice.lines.data.map((line) => ({
                     description: line.description ?? "No description",
-                    amount: line.amount / 100,
+                    amount: Number(fromMinorUnits(line.amount)),
                 })),
             })
             .onConflictDoUpdate({
                 target: paymentInvoices.providerInvoiceId,
                 set: {
                     status: "paid",
-                    amountPaid: (invoice.amount_paid / 100).toFixed(2),
+                    amountPaid: fromMinorUnits(invoice.amount_paid),
                 },
             })
             .returning();
@@ -169,7 +170,7 @@ async function handleInvoicePaid(invoice: ExpandedInvoice) {
                 subscriptionsId: sub.id,
                 invoiceId: localInvoice.id,
                 type: "payment",
-                amount: (invoice.amount_paid / 100).toFixed(2),
+                amount: fromMinorUnits(invoice.amount_paid),
                 currency: invoice.currency,
                 status: "succeeded",
                 providerTransactionId: chargeId,
@@ -205,13 +206,13 @@ async function handleInvoicePaymentFailed(invoice: ExpandedInvoice) {
             subscriptionId: subscription.id,
             providerInvoiceId: invoice.id,
             invoiceNumber: invoice.number ?? `INV-${Date.now()}`,
-            amountDue: (invoice.amount_due / 100).toFixed(2),
-            amountPaid: (invoice.amount_paid / 100).toFixed(2),
+            amountDue: fromMinorUnits(invoice.amount_due),
+            amountPaid: fromMinorUnits(invoice.amount_paid),
             currency: invoice.currency,
             status: status,
             lines: invoice.lines.data.map((line) => ({
                 description: line.description ?? "No description",
-                amount: line.amount / 100,
+                amount: Number(fromMinorUnits(line.amount)),
                 period: line.period
                     ? {
                           start: new Date(line.period.start * 1000),
@@ -238,7 +239,7 @@ async function handleInvoicePaymentFailed(invoice: ExpandedInvoice) {
                 subscriptionsId: subscription.id,
                 invoiceId: localInvoice.id,
                 type: "payment",
-                amount: (invoice.amount_due / 100).toFixed(2),
+                amount: fromMinorUnits(invoice.amount_due),
                 currency: invoice.currency,
                 status: "failed",
                 providerTransactionId: chargeId,

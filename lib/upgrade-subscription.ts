@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { paymentInvoices } from "@/db/schema/appInvoices";
 import { app_subscriptions, plans } from "@/db/schema/plans";
 import { and, eq } from "drizzle-orm";
+import { fromPaise, toPaise } from "@/lib/money";
 
 export type ProrationBehavior = "always_invoice" | "create_prorations";
 
@@ -61,16 +62,19 @@ export async function upgradeSubscription(params: {
         if (!newPlan) {
             throw new UpgradeError("New plan not found", 404);
         }
+        if (newPlan.currency !== "INR") {
+            throw new UpgradeError("Only INR plans are available", 400);
+        }
 
         const now = new Date();
         const currentPeriodEnd = sub.currentPeriodEnd;
 
         // If the new plan is more expensive and we need to charge prorated amount
-        const currentPrice = Number(sub.planSnapshot.price);
-        const newPrice = Number(newPlan.price);
+        const currentPricePaise = toPaise(String(sub.planSnapshot.price));
+        const newPricePaise = toPaise(newPlan.price);
 
         if (
-            newPrice > currentPrice &&
+            newPricePaise > currentPricePaise &&
             prorationBehavior === "create_prorations"
         ) {
             // Calculate proration: (newPrice - currentPrice) * (days left / total days)
@@ -87,8 +91,11 @@ export async function upgradeSubscription(params: {
             // Guard against a zero-length billing period, which would make the
             // proration `Infinity` and fail the insert below.
             if (daysLeft > 0 && totalDays > 0) {
-                const prorationAmount =
-                    ((newPrice - currentPrice) * daysLeft) / totalDays;
+                const numerator = (newPricePaise - currentPricePaise) * BigInt(daysLeft);
+                const totalDaysBigInt = BigInt(totalDays);
+                const prorationAmount = fromPaise(
+                    (numerator + totalDaysBigInt / BigInt(2)) / totalDaysBigInt,
+                );
 
                 // Create a one-off invoice for the prorated amount
                 const invoiceNumber = `INV-${Date.now()}-${sub.id}`;
@@ -96,13 +103,13 @@ export async function upgradeSubscription(params: {
                     subscriptionId: sub.id,
                     invoiceNumber,
                     providerInvoiceId: invoiceNumber,
-                    amountDue: prorationAmount.toFixed(2),
+                    amountDue: prorationAmount,
                     currency: newPlan.currency,
                     status: "open",
                     lines: [
                         {
                             description: `Prorated upgrade from ${sub.planSnapshot.name} to ${newPlan.name}`,
-                            amount: Number(prorationAmount.toFixed(2)),
+                            amount: Number(prorationAmount),
                         },
                     ],
                 });
