@@ -298,4 +298,4 @@ const planData: NewPlan[] = [
         metadata: { tier: "pro", discount: '20%' },
     },
 ];
-await db.insert(plans).values(planData);
+await db.insert(plans).values(planData.filter((plan) => plan.currency === "INR"));

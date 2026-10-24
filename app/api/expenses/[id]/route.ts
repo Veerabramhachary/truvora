@@ -47,6 +47,15 @@ export async function PATCH(req: Request, { params }: Params) {
 
         const data = expenseSchema.parse(body);
 
+        const [existingExpense] = await db.select({ currency: expenses.currency })
+            .from(expenses).where(scope(userId, id)).limit(1);
+        if (!existingExpense) {
+            return NextResponse.json({ error: "Expense not found" }, { status: 404 });
+        }
+        if (data.currency !== existingExpense.currency) {
+            return NextResponse.json({ error: "Currency cannot be changed for an existing record" }, { status: 400 });
+        }
+
         const categoryResult = await db
             .select({ id: categories.id })
             .from(categories)
@@ -60,20 +69,26 @@ export async function PATCH(req: Request, { params }: Params) {
             );
         }
 
-        const updated = await db
-            .update(expenses)
-            .set({
+        const updated = await db.transaction(async (tx) => {
+            const updatedRows = await tx.update(expenses).set({
                 title: data.title,
                 note: data.note,
-                amount: data.amount.toFixed(2),
+                amount: data.amount,
                 date: data.date,
                 type: data.type,
                 categoryId: category.id,
                 currency: data.currency,
                 updatedAt: new Date(),
-            })
-            .where(scope(userId, id))
-            .returning({ id: expenses.id });
+            }).where(scope(userId, id)).returning({ id: expenses.id });
+            if (updatedRows.length) {
+                await tx.update(transactions).set({
+                    title: data.title, description: data.note, amount: data.amount,
+                    date: data.date, type: data.type, categoryId: category.id,
+                    currency: data.currency, updatedAt: new Date(),
+                }).where(and(eq(transactions.expenseId, id), eq(transactions.userId, userId)));
+            }
+            return updatedRows;
+        });
 
         if (updated.length === 0) {
             return NextResponse.json(
@@ -113,7 +128,8 @@ export async function DELETE(_req: Request, { params }: Params) {
             );
         }
 
-        const deleted = await db
+        const deleted = await db.transaction(async (tx) => {
+            const rows = await tx
             .delete(expenses)
             .where(scope(userId, id))
             .returning({
@@ -123,6 +139,9 @@ export async function DELETE(_req: Request, { params }: Params) {
                 date: expenses.date,
                 type: expenses.type,
             });
+            if (rows.length) await tx.delete(transactions).where(and(eq(transactions.expenseId, id), eq(transactions.userId, userId)));
+            return rows;
+        });
 
         if (deleted.length === 0) {
             return NextResponse.json(
@@ -131,30 +150,7 @@ export async function DELETE(_req: Request, { params }: Params) {
             );
         }
 
-        // Expenses are mirrored into the `transactions` ledger on create, but
-        // that ledger row carries no `expense_id` — so the only way to avoid
-        // leaving a ghost row behind is to match on the exact values that were
-        // written. Look the row up first (Drizzle has no `DELETE ... LIMIT`),
-        // scoped to this user, and only ever delete one.
         const removed = deleted[0];
-        const [mirror] = await db
-            .select({ id: transactions.id })
-            .from(transactions)
-            .where(
-                and(
-                    eq(transactions.userId, userId),
-                    eq(transactions.title, removed.title),
-                    eq(transactions.amount, removed.amount),
-                    eq(transactions.type, removed.type),
-                    eq(transactions.action, "created"),
-                    eq(transactions.date, removed.date),
-                ),
-            )
-            .limit(1);
-
-        if (mirror) {
-            await db.delete(transactions).where(eq(transactions.id, mirror.id));
-        }
 
         return NextResponse.json({ success: true, data: removed });
     } catch (error) {

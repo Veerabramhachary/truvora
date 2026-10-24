@@ -8,6 +8,41 @@
       "when": 1792675410869,
       "tag": "0000_baseline",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792826242692,
+      "tag": "0001_overrated_living_tribunal",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792826254001,
+      "tag": "0002_big_dreadnoughts",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792826426576,
+      "tag": "0003_daffy_peter_parker",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792826451017,
+      "tag": "0004_public_scarlet_witch",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792827145430,
+      "tag": "0005_safe_donald_blake",
+      "breakpoints": true
     }
   ]
 }

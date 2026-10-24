@@ -12,7 +12,6 @@ import { NextRequest, NextResponse } from "next/server";
  */
 const SORTABLE = {
     id: transactions.id,
-    title: transactions.title,
     amount: transactions.amount,
     type: transactions.type,
     date: transactions.date,

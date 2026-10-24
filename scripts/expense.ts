@@ -109,7 +109,7 @@ export const Post = async () => {
                 description: "Bulk expense import",
                 type: "expense",
                 action: "created",
-                currency: "USD",
+                currency: "INR",
                 createdAt: new Date(),
             });
 

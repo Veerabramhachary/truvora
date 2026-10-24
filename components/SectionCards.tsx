@@ -1,6 +1,5 @@
 "use client";
 import { useCustom } from "@refinedev/core";
-import { useSearchParams } from "next/navigation";
 import {
     Card,
     CardDescription,
@@ -12,8 +11,7 @@ import {
 import { Badge } from "./ui/badge";
 
 const SectionCards = () => {
-    const searchParams = useSearchParams();
-    const currency = searchParams.get("currency") || "USD";
+    const currency = "INR";
 
     const { query, result } = useCustom<{
         totalSpend: number;
@@ -32,7 +30,7 @@ const SectionCards = () => {
     const data = result?.data ?? {};
 
     const format = (value: number, opts?: Intl.NumberFormatOptions) =>
-        new Intl.NumberFormat(undefined, opts).format(value);
+        new Intl.NumberFormat("en-IN", opts).format(value);
 
     if (isLoading) {
         return (

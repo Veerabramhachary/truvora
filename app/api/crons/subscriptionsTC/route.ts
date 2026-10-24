@@ -1,88 +1,70 @@
 import { NextRequest, NextResponse } from "next/server";
-import { SubscriptionsDue } from "./subscriptions";
+import { and, eq, lt } from "drizzle-orm";
 import { Resend } from "resend";
+import { db } from "@/db";
+import { reminderDeliveries } from "@/db/schema/reminder-deliveries";
 import { EmailTemplate } from "@/components/email-template";
+import { SubscriptionsDue } from "./subscriptions";
 import type { SubscriptionItem } from "@/components/email-template";
-
-async function sendGroupNotification(
-    email: string,
-    userName: string,
-    subs: SubscriptionItem[],
-    apiKey: string,
-) {
-    const resend = new Resend(apiKey);
-
-    // `send` reports API failures in its return value rather than throwing, so
-    // they have to be surfaced here or every send looks like a success and the
-    // failure accounting downstream never fires.
-    const { error } = await resend.emails.send({
-        from: "Truvora <onboarding@resend.dev>",
-        to: email,
-        subject: "Your subscriptions renew soon",
-        react: EmailTemplate({ userName: userName, subscriptions: subs }),
-    });
-
-    if (error) {
-        throw new Error(`Resend rejected the send: ${error.name}`);
-    }
-}
 
 export async function GET(request: NextRequest) {
     const secret = process.env.CRON_SECRET;
-    // Fail closed. With no CRON_SECRET set, the old comparison expected the
-    // literal string "Bearer undefined", which any caller could just send.
-    if (!secret) {
-        console.error("CRON_SECRET is not set — refusing to run the cron.");
-        return new NextResponse("Cron is not configured", { status: 503 });
-    }
-    if (request.headers.get("authorization") !== `Bearer ${secret}`) {
-        return new NextResponse("Unauthorized", { status: 401 });
-    }
-
+    if (!secret) return new NextResponse("Cron is not configured", { status: 503 });
+    if (request.headers.get("authorization") !== `Bearer ${secret}`) return new NextResponse("Unauthorized", { status: 401 });
     const apiKey = process.env.RESEND_API_KEY;
-    if (!apiKey) {
-        console.error("RESEND_API_KEY is not set — cannot send reminders.");
-        return new NextResponse("Email is not configured", { status: 503 });
-    }
+    const sender = process.env.RENEWAL_EMAIL_FROM;
+    if (!apiKey || !sender) return new NextResponse("Email is not configured", { status: 503 });
 
     try {
-        const groupedSubscriptions = await SubscriptionsDue();
-
-        const emailPromises = Object.values(groupedSubscriptions).map(
-            (userSubs) => {
-                const recipientEmail = userSubs[0]?.email;
-                if (!recipientEmail) return Promise.resolve(null);
-                return sendGroupNotification(
-                    recipientEmail,
-                    "Valued Member",
-                    userSubs,
-                    apiKey,
-                );
-            },
-        );
-
-        // Awaiting the same promises twice meant any rejection escaped through
-        // the earlier `Promise.all` straight into the outer catch, making the
-        // failure log below unreachable and reporting one bad send as a total
-        // crash. `allSettled` on its own keeps the run going and counts what
-        // actually failed.
-        const results = await Promise.allSettled(emailPromises);
-        const failures = results.filter(
-            (result): result is PromiseRejectedResult =>
-                result.status === "rejected",
-        );
-        if (failures.length > 0) {
-            console.error(
-                `Renewal reminders: ${failures.length} of ${results.length} sends failed`,
-                failures.map((f) => f.reason),
-            );
+        const resend = new Resend(apiKey);
+        const due = await SubscriptionsDue();
+        let sent = 0;
+        let failed = 0;
+        const grouped = due.reduce<Record<string, typeof due>>((result, item) => {
+            (result[item.userId] ??= []).push(item);
+            return result;
+        }, {});
+        for (const [userId, subs] of Object.entries(grouped)) {
+            const email = subs[0]?.email;
+            if (!email) continue;
+            const claimed: typeof due = [];
+            for (const sub of subs) {
+                const now = new Date();
+                const [delivery] = await db.insert(reminderDeliveries).values({
+                    subscriptionId: sub.id, renewalDate: sub.nextDate, daysBefore: sub.daysLeft,
+                    status: "sending", claimedAt: now,
+                }).onConflictDoNothing().returning({ id: reminderDeliveries.id });
+                if (delivery) claimed.push(sub);
+                else {
+                    // Release abandoned claims after a process crash; normal
+                    // send errors below release immediately for prompt retry.
+                    const [reclaimed] = await db.update(reminderDeliveries).set({ status: "sending", claimedAt: now })
+                        .where(and(eq(reminderDeliveries.subscriptionId, sub.id), eq(reminderDeliveries.renewalDate, sub.nextDate), eq(reminderDeliveries.daysBefore, sub.daysLeft), eq(reminderDeliveries.status, "sending"), lt(reminderDeliveries.claimedAt, new Date(now.getTime() - 10 * 60_000))))
+                        .returning({ id: reminderDeliveries.id });
+                    if (reclaimed) claimed.push(sub);
+                }
+            }
+            if (!claimed.length) continue;
+            const items: SubscriptionItem[] = claimed.map(({ name, daysLeft }) => ({ name: name ?? "Subscription", daysLeft }));
+            try {
+                const result = await resend.emails.send({
+                    from: sender,
+                    to: email,
+                    subject: "Your subscriptions renew soon",
+                    react: EmailTemplate({ userName: subs[0]?.firstName || "there", subscriptions: items }),
+                });
+                if (result.error) throw new Error(`Resend rejected send: ${result.error.name}`);
+                const sentAt = new Date();
+                for (const sub of claimed) await db.update(reminderDeliveries).set({ status: "sent", sentAt })
+                    .where(and(eq(reminderDeliveries.subscriptionId, sub.id), eq(reminderDeliveries.renewalDate, sub.nextDate), eq(reminderDeliveries.daysBefore, sub.daysLeft)));
+                sent++;
+            } catch (error) {
+                console.error(`Renewal reminder send failed for user ${userId}:`, error);
+                for (const sub of claimed) await db.delete(reminderDeliveries).where(and(eq(reminderDeliveries.subscriptionId, sub.id), eq(reminderDeliveries.renewalDate, sub.nextDate), eq(reminderDeliveries.daysBefore, sub.daysLeft)));
+                failed++;
+            }
         }
-
-        return NextResponse.json({
-            success: true,
-            sent: results.length - failures.length,
-            failed: failures.length,
-        });
+        return NextResponse.json({ success: true, sent, failed });
     } catch (error) {
         console.error("Cron job failed:", error);
         return new NextResponse("Internal Server Error", { status: 500 });

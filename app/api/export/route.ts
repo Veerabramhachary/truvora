@@ -17,12 +17,16 @@ const SOURCES = ["subscriptions", "expenses", "transactions"] as const;
 type Source = (typeof SOURCES)[number];
 
 function csvCell(value: unknown): string {
-    const text = value === null || value === undefined ? "" : String(value);
-    // Quote anything that would otherwise break a row, and escape quotes.
-    if (/[",\n\r]/.test(text)) {
-        return `"${text.replace(/"/g, '""')}"`;
-    }
-    return text;
+    let text = value === null || value === undefined ? "" : String(value);
+    // Excel/LibreOffice interpret these leading characters as formulas even
+    // when the cell is otherwise correctly quoted. Prefix an apostrophe so
+    // spreadsheet imports treat user-controlled values as literal text.
+    const numericLiteral = typeof value === "number" ||
+        (typeof value === "string" && /^-?\d+(?:\.\d+)?$/.test(value));
+    if (!numericLiteral && /^[\u0000-\u0020]*[=+\-@＝＋－＠]/u.test(text)) text = `'${text}`;
+    // Always quote fields for predictable spreadsheet import, and escape
+    // embedded quotes using the RFC 4180 doubled-quote convention.
+    return `"${text.replace(/"/g, '""')}"`;
 }
 
 function toCsv(headers: string[], rows: unknown[][]): string {
@@ -38,6 +42,14 @@ function formatDate(value: Date | string | null | undefined): string {
     return isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
 }
 
+function formatAmount(value: string | null | undefined): string {
+    if (!value) return "0.00";
+    const amount = /^(-?)(\d+)(?:\.(\d+))?$/.exec(value);
+    if (!amount) return value;
+    const fraction = amount[3] ?? "";
+    return `${amount[1]}${amount[2]}.${fraction.padEnd(2, "0").slice(0, 2)}`;
+}
+
 export async function GET(req: Request) {
     try {
         const { userId } = await auth();
@@ -48,7 +60,7 @@ export async function GET(req: Request) {
         const source = new URL(req.url).searchParams.get("type");
         if (!SOURCES.includes(source as Source)) {
             return NextResponse.json(
-                { error: "type must be one of: subscriptions, expenses" },
+                { error: "type must be one of: subscriptions, expenses, transactions" },
                 { status: 400 },
             );
         }
@@ -77,7 +89,7 @@ export async function GET(req: Request) {
                 .orderBy(desc(subscriptions.startDate));
 
             headers = [
-                "Title",
+                "Description",
                 "Price",
                 "Currency",
                 "Interval",
@@ -88,7 +100,7 @@ export async function GET(req: Request) {
             ];
             rows = data.map((row) => [
                 row.title,
-                row.price,
+                formatAmount(row.price),
                 row.currency,
                 row.interval,
                 formatDate(row.startDate),
@@ -111,14 +123,14 @@ export async function GET(req: Request) {
                 .where(eq(expenses.userId, userId))
                 .orderBy(desc(expenses.date));
 
-            headers = ["Title", "Type", "Amount", "Currency", "Date", "Category"];
+            headers = ["Date", "Description", "Category", "Type", "Amount", "Currency"];
             rows = data.map((row) => [
-                row.title,
-                row.type,
-                row.amount,
-                row.currency,
                 formatDate(row.date),
+                row.title,
                 row.categoryName ?? "",
+                row.type,
+                formatAmount(row.amount),
+                row.currency,
             ]);
         } else {
             const data = await db
@@ -141,24 +153,24 @@ export async function GET(req: Request) {
                 .orderBy(desc(transactions.createdAt));
 
             headers = [
-                "Title",
+                "Date",
+                "Description",
+                "Category",
                 "Type",
                 "Action",
                 "Amount",
                 "Currency",
-                "Date",
                 "Recorded",
-                "Category",
             ];
             rows = data.map((row) => [
+                formatDate(row.date),
                 row.title,
+                row.categoryName ?? "",
                 row.type,
                 row.action,
-                row.amount,
+                formatAmount(row.amount),
                 row.currency,
-                formatDate(row.date),
                 formatDate(row.createdAt),
-                row.categoryName ?? "",
             ]);
         }
 
@@ -173,7 +185,7 @@ export async function GET(req: Request) {
         }
 
         const stamp = new Date().toISOString().slice(0, 10);
-        return new Response(toCsv(headers, rows), {
+        return new Response(`\uFEFF${toCsv(headers, rows)}`, {
             status: 200,
             headers: {
                 "Content-Type": "text/csv; charset=utf-8",

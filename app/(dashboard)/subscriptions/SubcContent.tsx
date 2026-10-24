@@ -19,6 +19,7 @@ import SubsForm, { type SubscriptionRecord } from "./SubsForm";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete";
 import { toast } from "sonner";
 import { apiErrorMessage } from "@/lib/api-error";
+import { formatCurrency } from "@/lib/currencies";
 
 const SubscContent = () => {
     const [open, setOpen] = useState(false);
@@ -159,7 +160,7 @@ const SubscContent = () => {
                             <CardContent className="flex-1 flex flex-col gap-3">
                                 {/* Changed h1 to p with styling for SEO/Accessibility */}
                                 <p className="text-2xl md:text-3xl font-bold tracking-tight">
-                                    {item.currency} {item.amount}
+                                    {formatCurrency(Number(item.amount), item.currency || "INR")}
                                 </p>
                                 <p className="text-sm text-muted-foreground line-clamp-2">
                                     {item.description}
