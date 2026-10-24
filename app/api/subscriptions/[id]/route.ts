@@ -1,9 +1,10 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import { categories, subscriptions, transactions } from "@/db/schema/schema";
+import { featureUsage } from "@/db/schema/feature-usage";
 import {
     ONGOING_END_DATE,
     nextRenewalDate,
@@ -102,6 +103,8 @@ export async function PATCH(req: Request, { params }: Params) {
             );
         }
 
+        await syncActiveSubscriptionUsage(userId);
+
         return NextResponse.json({ success: true, data: updated[0] });
     } catch (error) {
         if (error instanceof z.ZodError) {
@@ -165,6 +168,8 @@ export async function DELETE(_req: Request, { params }: Params) {
             );
         }
 
+        await syncActiveSubscriptionUsage(userId);
+
         return NextResponse.json({
             success: true,
             data: { ...deleted[0], ledgerRowsRemoved: ledgerRows.length },
@@ -176,4 +181,25 @@ export async function DELETE(_req: Request, { params }: Params) {
             { status: 500 },
         );
     }
+}
+
+async function syncActiveSubscriptionUsage(userId: string) {
+    const [active] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(subscriptions)
+        .where(sql`${subscriptions.userId} = ${userId}
+            AND ${subscriptions.active} = TRUE
+            AND ${subscriptions.startDate} <= NOW()
+            AND ${subscriptions.endDate} >= NOW()
+            AND ${subscriptions.deactivatedAt} IS NULL`);
+
+    await db.insert(featureUsage).values({
+        userId,
+        feature: "subscriptions",
+        period: "active",
+        count: active?.count ?? 0,
+    }).onConflictDoUpdate({
+        target: [featureUsage.userId, featureUsage.feature, featureUsage.period],
+        set: { count: active?.count ?? 0, updatedAt: new Date() },
+    });
 }

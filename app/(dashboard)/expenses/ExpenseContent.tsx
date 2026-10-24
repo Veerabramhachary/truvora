@@ -22,6 +22,13 @@ import { ConfirmDeleteDialog } from "@/components/confirm-delete";
 import { toast } from "sonner";
 import { apiErrorMessage } from "@/lib/api-error";
 import { formatCurrency } from "@/lib/currencies";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 
 const ExpenseContent = () => {
     const [open, setOpen] = useState(false);
@@ -106,7 +113,7 @@ const ExpenseContent = () => {
                         size="sm"
                         onClick={() => {
                             setEditing(null);
-                            setOpen(!open);
+                            setOpen(true);
                         }}
                     >
                         Create
@@ -123,14 +130,17 @@ const ExpenseContent = () => {
                     </FeatureGate>
                 </div>
             </Header>
-            {open && (
-                <FormExpense
-                    className="w-full bg-background p-3"
-                    editing={editing}
-                    onClose={closeForm}
-                    onSaved={closeForm}
-                />
-            )}
+            <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && closeForm()}>
+                <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
+                    <DialogHeader>
+                        <DialogTitle>{editing ? "Edit transaction" : "Add transaction"}</DialogTitle>
+                        <DialogDescription>
+                            {editing ? "Update the details for this record." : "Add an expense or income to your ledger."}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <FormExpense editing={editing} onClose={closeForm} onSaved={closeForm} />
+                </DialogContent>
+            </Dialog>
 
             {data.length === 0 ? (
                 <div className="text-center p-20 border-2 border-dashed rounded-lg">

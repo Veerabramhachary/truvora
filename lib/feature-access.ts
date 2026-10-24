@@ -33,7 +33,7 @@ export async function getFeatureLimit(userId: string, featureKey: keyof FeatureL
     return gate.checkFeatures(featureKey);
 }
 
-const getCurrentCountForStaticCap = async (
+export const getCurrentCountForStaticCap = async (
     userId: string,
     feature: string,
 ): Promise<number> => {
@@ -45,6 +45,7 @@ const getCurrentCountForStaticCap = async (
             .where(
                 and(
                     eq(subscriptions.userId, userId),
+                    eq(subscriptions.active, true),
                     lte(subscriptions.startDate, now),
                     gte(subscriptions.endDate, now),
                     isNull(subscriptions.deactivatedAt),

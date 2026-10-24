@@ -4,6 +4,7 @@ import {
     tryConsumeFeature,
     canUseFeature,
     getFeatureLimit,
+    getCurrentCountForStaticCap,
 } from "@/lib/feature-access";
 import type { FeatureLimits } from "@/lib/subscription";
 
@@ -79,6 +80,15 @@ export async function GET(req: NextRequest) {
         if (feature === "charts") {
             const limit = await getFeatureLimit(userId, "charts");
             return NextResponse.json({ allowed: limit !== null, limit });
+        }
+
+        if (feature === "subscriptions") {
+            const limit = await getFeatureLimit(userId, "subscriptions");
+            const usage = await getCurrentCountForStaticCap(userId, "subscriptions");
+            const max = typeof limit === "object" && limit && "limit" in limit
+                ? limit.limit
+                : typeof limit === "number" ? limit : null;
+            return NextResponse.json({ allowed, limit: max, usage });
         }
 
         return Response.json({ allowed });
