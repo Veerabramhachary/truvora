@@ -16,7 +16,8 @@
         "insert-seed": "tsx scripts/seed.ts",
         "insert-db": "tsx scripts/expense.ts",
         "insert-sub": "tsx scripts/subscription.ts",
-        "insert-plans": "tsx scripts/plans.ts"
+        "insert-plans": "tsx scripts/plans.ts",
+        "update-user-plan": "tsx scripts/update-user-plan.ts"
     },
     "dependencies": {
         "@clerk/nextjs": "^6.39.0",
