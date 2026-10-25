@@ -1,7 +1,40 @@
 "use client";
 
-import { ChartAreaInteractive } from "@/components/ChartAreaInteractive";
+import dynamic from "next/dynamic";
 import SectionCards from "@/components/SectionCards";
+import {
+    Card,
+    CardContent,
+    CardHeader,
+} from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+
+const ChartAreaInteractive = dynamic(
+    () =>
+        import("@/components/ChartAreaInteractive").then(
+            (module) => module.ChartAreaInteractive,
+        ),
+    {
+        ssr: false,
+        loading: () => (
+            <Card className="pt-0" role="status" aria-label="Loading spending chart">
+                <CardHeader className="flex items-center gap-2 space-y-0 border-b py-4 sm:flex-row">
+                    <div className="grid flex-1 gap-2">
+                        <Skeleton className="h-5 w-44" />
+                        <Skeleton className="h-4 w-64 max-w-full" />
+                    </div>
+                    <Skeleton className="ml-auto hidden h-9 w-40 rounded-lg sm:block" />
+                </CardHeader>
+                <CardContent
+                    className="px-2 pt-4 sm:px-6 sm:pt-6"
+                    style={{ minHeight: "300px" }}
+                >
+                    <Skeleton className="h-52 w-full rounded-xl" />
+                </CardContent>
+            </Card>
+        ),
+    },
+);
 
 /*
   Deliberately not a <SidebarInset>: that component renders a <main> element,

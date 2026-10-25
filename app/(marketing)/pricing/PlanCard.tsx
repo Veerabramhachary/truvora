@@ -18,6 +18,7 @@ interface PlanCardProps {
 }
 
 export function PlanCard({ plan, interval }: PlanCardProps) {
+    const isFreePlan = plan.price === 0;
     const formattedPrice = new Intl.NumberFormat("en-IN", {
         style: "currency",
         currency: plan.currency,
@@ -55,9 +56,20 @@ export function PlanCard({ plan, interval }: PlanCardProps) {
             </CardContent>
 
             <CardFooter>
-                <Button className="w-full" size="lg" asChild>
-                    <Link href="/auth/sign-up">Get Started</Link>
-                </Button>
+                {isFreePlan ? (
+                    <Button className="w-full" size="lg" asChild>
+                        <Link href="/auth/sign-up">Get Started</Link>
+                    </Button>
+                ) : (
+                    <Button
+                        className="w-full"
+                        size="lg"
+                        disabled
+                        aria-label={`${plan.name} is not available for purchase yet`}
+                    >
+                        Payments unavailable
+                    </Button>
+                )}
             </CardFooter>
         </Card>
     );
