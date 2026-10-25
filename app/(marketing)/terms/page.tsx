@@ -76,6 +76,13 @@ export default function TermsPage() {
                         5. Billing and refunds
                     </h2>
                     <p>
+                        Truvora does not currently accept payments or offer
+                        paid plan checkout. If paid plans become available, we
+                        will show the applicable price, billing period and
+                        cancellation terms before you purchase. The terms below
+                        apply only when a paid plan is offered.
+                    </p>
+                    <p className="mt-3">
                         Paid plans are billed in advance for each billing
                         period. Unless the law requires otherwise, payments are
                         non-refundable once a period has started. You can cancel

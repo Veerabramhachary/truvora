@@ -1,12 +1,10 @@
 "use client";
 
 import { useClerk } from "@clerk/nextjs";
-import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 export default function Signout() {
     const { signOut } = useClerk();
-    const router = useRouter();
     useEffect(() => {
         const logout = async () => {
             // Let Clerk perform the navigation after clearing the session.

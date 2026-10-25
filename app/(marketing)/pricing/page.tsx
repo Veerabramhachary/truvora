@@ -11,7 +11,7 @@ import { DEFAULT_CURRENCY, type CurrencyCode } from "@/lib/currencies";
 export const metadata = {
     title: "Pricing",
     description:
-        "Compare Truvora's Free, Starter and Pro plans. Cancel anytime — your tracked data stays yours.",
+        "Explore Truvora plans. The free plan is available now; paid checkout is coming soon.",
 };
 
 async function getPlans(

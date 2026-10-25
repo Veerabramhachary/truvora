@@ -1,12 +1,16 @@
 /**
- * Single source of truth for the production origin.
+ * Single source of truth for the public origin.
  *
- * Used by the root metadata, sitemap and robots so they can't disagree. Set
- * `NEXT_PUBLIC_APP_URL` to the real domain before launch — the localhost
- * fallback is only for local development and would produce a useless sitemap.
+ * Prefer the explicit canonical URL. On Vercel, fall back to the active
+ * deployment hostname so previews and the initial Vercel subdomain don't
+ * produce localhost metadata or sitemap URLs. Set NEXT_PUBLIC_APP_URL when a
+ * stable custom domain is connected.
  */
-export const SITE_URL =
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+const configuredSiteUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
+const vercelHost = process.env.VERCEL_URL?.trim();
+
+export const SITE_URL = configuredSiteUrl ||
+    (vercelHost ? `https://${vercelHost}` : "http://localhost:3000");
 
 export const SITE_NAME = "Truvora";
 

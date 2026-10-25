@@ -12,6 +12,10 @@ const bodySchema = z.object({
     planId: z.string().uuid("planId must be a uuid"),
 });
 
+function arePaymentsEnabled() {
+    return false;
+}
+
 /**
  * Creates a Stripe Checkout session for a local plan.
  *
@@ -24,6 +28,16 @@ export async function POST(request: NextRequest) {
         const { userId } = await auth();
         if (!userId) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
+        // Paid checkout is intentionally unavailable until Truvora begins
+        // accepting payments. Keep this server-side guard so a direct API call
+        // cannot create a Stripe Checkout session while the pricing CTA is off.
+        if (!arePaymentsEnabled()) {
+            return NextResponse.json(
+                { error: "Payments are not available yet" },
+                { status: 503 },
+            );
         }
 
         const parsed = bodySchema.safeParse(await request.json());
