@@ -1,15 +1,11 @@
 import Link from "next/link"
+import { SiteLogo } from "@/components/site-logo"
 
 const Navbar = () => {
     return (
         <nav className="fixed top-0 left-0 right-0 z-50 glass-nav bg-transparent">
             <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded bg-indigo-600 flex items-center justify-center">
-                        <div className="w-2 h-2 bg-white rounded-full"></div>
-                    </div>
-                    <span className="font-semibold text-lg tracking-tighter text-slate-900">TRUVORA</span>
-                </div>
+                <SiteLogo className="text-slate-900" />
                 <div className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-500">
                     <Link href={"#features"} className="hover:text-slate-900 transition-colors text-slate-500">Features</Link>
                     <Link href={"#how-it-works"} className="hover:text-slate-900 transition-colors text-slate-500">How it works</Link>
