@@ -47,7 +47,7 @@ const PLAN_TIERS = [
         features: [
             "25 tracked subscriptions",
             "Expenses vs subscriptions breakdown",
-            "20 CSV exports a month",
+            "25 CSV exports a month",
         ],
     },
     {
