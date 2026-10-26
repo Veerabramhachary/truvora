@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { toPaise } from "@/lib/money";
+import { checkRateLimits, rateLimitResponse } from "@/lib/rate-limit";
 
 const bodySchema = z.object({
     planId: z.string().uuid("planId must be a uuid"),
@@ -29,6 +30,11 @@ export async function POST(request: NextRequest) {
         if (!userId) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
+
+        const limited = rateLimitResponse(
+            await checkRateLimits(`user:${userId}:checkout`, ["sensitive"]),
+        );
+        if (limited) return limited;
 
         // Paid checkout is intentionally unavailable until Truvora begins
         // accepting payments. Keep this server-side guard so a direct API call

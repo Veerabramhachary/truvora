@@ -1,6 +1,7 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import type { NextFetchEvent, NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { checkRateLimits, getClientIp, rateLimitHeaders } from "@/lib/rate-limit";
 
 // Public routes (marketing pages)
 const isPublicRoute = createRouteMatcher([
@@ -16,6 +17,7 @@ const isPublicRoute = createRouteMatcher([
     "/api/webhooks/clerk(.*)",
     "/api/webhooks/stripe(.*)",
     "/api/plans(.*)",
+    "/api/stripe/prices(.*)",
     // Cron routes authenticate with the CRON_SECRET bearer token instead of a
     // Clerk session, so they must be reachable without a signed-in user.
     "/api/crons/(.*)",
@@ -72,6 +74,16 @@ export async function proxy(req: NextRequest, evt: NextFetchEvent) {
 
         // 1️⃣ Allow public routes immediately
         if (isPublicRoute(request)) {
+            const pathname = request.nextUrl.pathname;
+            if (pathname === "/api/plans" || pathname === "/api/stripe/prices") {
+                const result = await checkRateLimits(`ip:${getClientIp(request)}`, ["public"]);
+                if (result && !result.allowed) {
+                    return NextResponse.json(
+                        { error: "Too many requests. Please try again later." },
+                        { status: 429, headers: rateLimitHeaders(result) },
+                    );
+                }
+            }
             return NextResponse.next();
         }
 
@@ -84,6 +96,13 @@ export async function proxy(req: NextRequest, evt: NextFetchEvent) {
             }
             if (!userId) {
                 return new NextResponse("Unauthorized", { status: 401 });
+            }
+            const result = await checkRateLimits(`user:${userId}`, ["api"]);
+            if (result && !result.allowed) {
+                return NextResponse.json(
+                    { error: "Too many requests. Please try again later." },
+                    { status: 429, headers: rateLimitHeaders(result) },
+                );
             }
             return NextResponse.next();
         }

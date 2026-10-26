@@ -3,7 +3,7 @@ import { WebhookEvent } from "@clerk/nextjs/server";
 import { headers } from "next/headers";
 import { db } from "@/db";
 import { users } from "@/db/schema/users";
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { app_subscriptions, plans } from "@/db/schema/plans";
 import { expenses } from "@/db/schema/expenses";
@@ -11,6 +11,7 @@ import { categories, subscriptions, transactions } from "@/db/schema/schema";
 import { featureUsage } from "@/db/schema/feature-usage";
 import { paymentInvoices } from "@/db/schema/appInvoices";
 import { paymentTransactions } from "@/db/schema/appTransactions";
+import { reminderDeliveries } from "@/db/schema/reminder-deliveries";
 
 export async function POST(req: NextRequest) {
     const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET;
@@ -159,6 +160,16 @@ export async function POST(req: NextRequest) {
                         for (const billingId of billingIds.slice(1)) await tx.update(paymentTransactions).set({ subscriptionsId: null, invoiceId: null, idempotencyKey: null, providerTransactionId: null, metadata: null, errorMessage: null }).where(eq(paymentTransactions.subscriptionsId, billingId));
                         await tx.update(paymentInvoices).set({ subscriptionId: null, providerInvoiceId: null, invoiceNumber: null, lines: null, metadata: null }).where(eq(paymentInvoices.subscriptionId, billingIds[0]));
                         for (const billingId of billingIds.slice(1)) await tx.update(paymentInvoices).set({ subscriptionId: null, providerInvoiceId: null, invoiceNumber: null, lines: null, metadata: null }).where(eq(paymentInvoices.subscriptionId, billingId));
+                    }
+                    const userSubscriptions = await tx
+                        .select({ id: subscriptions.id })
+                        .from(subscriptions)
+                        .where(eq(subscriptions.userId, id));
+                    const subscriptionIds = userSubscriptions.map((row) => row.id);
+                    if (subscriptionIds.length) {
+                        await tx.delete(reminderDeliveries).where(
+                            inArray(reminderDeliveries.subscriptionId, subscriptionIds),
+                        );
                     }
                     await tx.delete(expenses).where(eq(expenses.userId, id));
                     await tx.delete(transactions).where(eq(transactions.userId, id));

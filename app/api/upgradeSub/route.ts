@@ -5,6 +5,7 @@ import {
     UpgradeError,
     upgradeSubscription,
 } from "@/lib/upgrade-subscription";
+import { checkRateLimits, rateLimitResponse } from "@/lib/rate-limit";
 
 const bodySchema = z.object({
     subscriptionId: z.string().uuid("subscriptionId must be a uuid"),
@@ -21,6 +22,11 @@ export async function POST(request: NextRequest) {
         if (!userId) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
+
+        const limited = rateLimitResponse(
+            await checkRateLimits(`user:${userId}:upgrade`, ["sensitive"]),
+        );
+        if (limited) return limited;
 
         // Parse
         const parsed = bodySchema.safeParse(await request.json());
