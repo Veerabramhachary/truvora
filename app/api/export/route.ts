@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { expenses } from "@/db/schema/expenses";
 import { categories, subscriptions, transactions } from "@/db/schema/schema";
 import { tryConsumeFeature } from "@/lib/feature-access";
+import { checkRateLimits, rateLimitResponse } from "@/lib/rate-limit";
 
 /**
  * CSV export for the Exports feature gate.
@@ -56,6 +57,11 @@ export async function GET(req: Request) {
         if (!userId) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
+
+        const limited = rateLimitResponse(
+            await checkRateLimits(`user:${userId}`, ["export"]),
+        );
+        if (limited) return limited;
 
         const source = new URL(req.url).searchParams.get("type");
         if (!SOURCES.includes(source as Source)) {
