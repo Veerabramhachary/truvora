@@ -136,17 +136,23 @@ const SubsForm = ({ editing, onSaved }: SubsFormProps) => {
 
     const onSubmit: SubmitHandler<FormValues> = async (data) => {
         const isEdit = Boolean(editing);
+        const endDate = data.endDate ? new Date(data.endDate) : undefined;
+        endDate?.setHours(23, 59, 59, 999);
+        const values = {
+            ...data,
+            endDate,
+        };
         try {
             if (editing) {
                 await updateAsync({
                     resource: "subscriptions",
                     id: editing.id,
-                    values: data,
+                    values,
                 });
             } else {
                 await createAsync({
                     resource: "subscriptions",
-                    values: data,
+                    values,
                 });
             }
             // The dashboard reads through useCustom, which Refine doesn't
