@@ -3,7 +3,7 @@ import { WebhookEvent } from "@clerk/nextjs/server";
 import { headers } from "next/headers";
 import { db } from "@/db";
 import { users } from "@/db/schema/users";
-import { asc, eq, inArray } from "drizzle-orm";
+import { asc, eq, inArray, or } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { app_subscriptions, plans } from "@/db/schema/plans";
 import { expenses } from "@/db/schema/expenses";
@@ -202,13 +202,30 @@ export async function POST(req: NextRequest) {
                         .from(subscriptions)
                         .where(eq(subscriptions.userId, id));
                     const subscriptionIds = userSubscriptions.map((row) => row.id);
+                    const userExpenses = await tx
+                        .select({ id: expenses.id })
+                        .from(expenses)
+                        .where(eq(expenses.userId, id));
+                    const expenseIds = userExpenses.map((row) => row.id);
+
+                    // Delete ledger rows by owner and by their linked source
+                    // records. The relation filters also clean up older rows
+                    // whose stored user_id did not match the Clerk user id.
+                    const transactionFilters = [eq(transactions.userId, id)];
+                    if (expenseIds.length) {
+                        transactionFilters.push(inArray(transactions.expenseId, expenseIds));
+                    }
+                    if (subscriptionIds.length) {
+                        transactionFilters.push(inArray(transactions.subscriptionId, subscriptionIds));
+                    }
+                    await tx.delete(transactions).where(or(...transactionFilters));
+
                     if (subscriptionIds.length) {
                         await tx.delete(reminderDeliveries).where(
                             inArray(reminderDeliveries.subscriptionId, subscriptionIds),
                         );
                     }
                     await tx.delete(expenses).where(eq(expenses.userId, id));
-                    await tx.delete(transactions).where(eq(transactions.userId, id));
                     await tx.delete(subscriptions).where(eq(subscriptions.userId, id));
                     await tx.delete(featureUsage).where(eq(featureUsage.userId, id));
                     await tx.delete(categories).where(eq(categories.userId, id));
