@@ -23,11 +23,28 @@ export default function VerifyEmailContent() {
     const [timeLeft, setTimeLeft] = useState(RESEND_SECONDS);
     const [formError, setFormError] = useState<string | null>(null);
     const [restartSignUp, setRestartSignUp] = useState(false);
+    const [missingFields, setMissingFields] = useState<string[]>([]);
+    const [requirementValues, setRequirementValues] = useState<Record<string, string>>({});
 
     // Whether resending is allowed is a function of the timer, not a second
     // piece of state — keeping it in state meant writing it back from inside an
     // effect, which is both redundant and a cascading-render hazard.
     const canResend = timeLeft <= 0;
+
+    const finishSignUp = async (result: NonNullable<typeof signUp>) => {
+        if (!setActive) return false;
+        if (result.status === "complete" && result.createdSessionId) {
+            await setActive({ session: result.createdSessionId });
+            toast.success("Email verified. Redirecting to dashboard…");
+            router.replace("/dashboard");
+            return true;
+        }
+
+        const emailStillUnverified = result.unverifiedFields?.includes("email_address");
+        setMissingFields(emailStillUnverified ? [] : (result.missingFields ?? []));
+        setRequirementValues({});
+        return false;
+    };
 
     // Countdown for resend
     useEffect(() => {
@@ -86,12 +103,14 @@ export default function VerifyEmailContent() {
             });
 
             if (result.status === "complete") {
-                await setActive({ session: result.createdSessionId });
-                toast.success("Email verified. Redirecting to dashboard…");
-                router.push("/dashboard");
+                await finishSignUp(result);
             } else {
+                const emailStillUnverified = result.unverifiedFields?.includes("email_address");
+                await finishSignUp(result);
                 setFormError(
-                    "That code didn't complete verification. Try again.",
+                    result.missingFields?.length && !emailStillUnverified
+                        ? "Your email is verified. Complete the remaining account details below."
+                        : "That code didn't complete verification. Try again.",
                 );
             }
         } catch (error: unknown) {
@@ -100,15 +119,16 @@ export default function VerifyEmailContent() {
             // before treating the attempt as a failed verification.
             try {
                 const currentSignUp = await signUp.reload();
+                if (await finishSignUp(currentSignUp)) {
+                    return;
+                }
                 if (
-                    currentSignUp.status === "complete" &&
-                    currentSignUp.createdSessionId
+                    currentSignUp.missingFields?.length &&
+                    !currentSignUp.unverifiedFields?.includes("email_address")
                 ) {
-                    await setActive({
-                        session: currentSignUp.createdSessionId,
-                    });
-                    toast.success("Email verified. Redirecting to dashboard…");
-                    router.replace("/dashboard");
+                    setFormError(
+                        "Your email is verified. Complete the remaining account details below.",
+                    );
                     return;
                 }
             } catch (recoveryError: unknown) {
@@ -134,6 +154,43 @@ export default function VerifyEmailContent() {
             ) {
                 setRestartSignUp(true);
             }
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleCompleteSignUp = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!isLoaded || isLoading) return;
+
+        const values = requirementValues;
+        const updates: {
+            firstName?: string;
+            lastName?: string;
+            username?: string;
+            phoneNumber?: string;
+            password?: string;
+            legalAccepted?: boolean;
+        } = {};
+        if (values.first_name?.trim()) updates.firstName = values.first_name.trim();
+        if (values.last_name?.trim()) updates.lastName = values.last_name.trim();
+        if (values.username?.trim()) updates.username = values.username.trim();
+        if (values.phone_number?.trim()) updates.phoneNumber = values.phone_number.trim();
+        if (values.password) updates.password = values.password;
+        if (missingFields.includes("legal_accepted")) updates.legalAccepted = true;
+
+        setIsLoading(true);
+        setFormError(null);
+        try {
+            const result = await signUp.update(updates);
+            if (await finishSignUp(result)) return;
+            setFormError(
+                "More account details or verification are still required. Check the fields below or contact support.",
+            );
+        } catch (error: unknown) {
+            setFormError(
+                clerkErrorMessage(error, "We couldn't finish creating your account."),
+            );
         } finally {
             setIsLoading(false);
         }
@@ -168,7 +225,41 @@ export default function VerifyEmailContent() {
                     </p>
                 </div>
 
-                <form onSubmit={handleVerify} noValidate className="space-y-6">
+                {missingFields.length > 0 ? (
+                <form onSubmit={handleCompleteSignUp} noValidate className="space-y-6">
+                    {missingFields.map((field) => {
+                        const labels: Record<string, string> = {
+                            first_name: "First name",
+                            last_name: "Last name",
+                            username: "Username",
+                            phone_number: "Phone number",
+                            password: "Password",
+                        };
+                        const label = labels[field];
+                        if (!label) return null;
+                        return (
+                            <div key={field}>
+                                <label htmlFor={`requirement-${field}`} className="font-semibold block mb-1">
+                                    {label}
+                                </label>
+                                <Input
+                                    id={`requirement-${field}`}
+                                    type={field === "password" ? "password" : "text"}
+                                    autoComplete={field === "password" ? "new-password" : "off"}
+                                    value={requirementValues[field] ?? ""}
+                                    onChange={(event) => setRequirementValues((current) => ({ ...current, [field]: event.target.value }))}
+                                    required
+                                    className="w-full border-2 border-border py-6"
+                                />
+                            </div>
+                        );
+                    })}
+                    {formError && <p role="alert" className="text-sm text-destructive">{formError}</p>}
+                    <Button type="submit" disabled={isLoading} className="w-full py-7">
+                        {isLoading ? "Finishing sign-up…" : "Complete sign-up"}
+                    </Button>
+                </form>
+                ) : <form onSubmit={handleVerify} noValidate className="space-y-6">
                     <div>
                         <label
                             htmlFor="code"
@@ -219,7 +310,7 @@ export default function VerifyEmailContent() {
                         )}
                         {isLoading ? "Verifying…" : "Verify Email"}
                     </Button>
-                </form>
+                </form>}
 
                 <div className="mt-6 text-center">
                     <button
