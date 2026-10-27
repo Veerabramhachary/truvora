@@ -12,6 +12,9 @@ import { featureUsage } from "@/db/schema/feature-usage";
 import { paymentInvoices } from "@/db/schema/appInvoices";
 import { paymentTransactions } from "@/db/schema/appTransactions";
 import { reminderDeliveries } from "@/db/schema/reminder-deliveries";
+import { Resend } from "resend";
+import { WelcomeEmail } from "@/components/welcome-email";
+import { SITE_URL } from "@/lib/site";
 
 export async function POST(req: NextRequest) {
     const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET;
@@ -145,6 +148,39 @@ export async function POST(req: NextRequest) {
                     updatedAt: now,
                 });
             });
+
+            // Clerk emits user.created after either email verification or
+            // successful OAuth registration. Keeping this on the shared
+            // webhook path covers both signup methods; retries use a stable
+            // idempotency key so they don't send duplicate welcome emails.
+            if (eventType === "user.created") {
+                const resendKey = process.env.RESEND_API_KEY;
+                const sender = process.env.RENEWAL_EMAIL_FROM;
+                if (!resendKey || !sender) {
+                    console.error("[clerk-webhook] Welcome email is not configured");
+                    return NextResponse.json(
+                        { error: "Welcome email is not configured" },
+                        { status: 503 },
+                    );
+                }
+
+                const resend = new Resend(resendKey);
+                const result = await resend.emails.send(
+                    {
+                        from: sender,
+                        to: primaryEmail,
+                        subject: "Welcome to Truvora",
+                        react: WelcomeEmail({
+                            firstName: first_name || "there",
+                            dashboardUrl: `${SITE_URL}/dashboard`,
+                        }),
+                    },
+                    { idempotencyKey: `welcome/${id}` },
+                );
+                if (result.error) {
+                    throw new Error(`Welcome email send failed: ${result.error.name}`);
+                }
+            }
         }
 
         if (eventType === "user.deleted") {

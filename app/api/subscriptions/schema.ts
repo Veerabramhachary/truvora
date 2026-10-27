@@ -29,15 +29,45 @@ export type SubscriptionInput = z.infer<typeof subscriptionSchema>;
  */
 export const ONGOING_END_DATE = new Date("9999-12-31T00:00:00.000Z");
 
+/** Treat a selected end date as valid through that calendar day. */
+export function subscriptionEndDate(date?: Date): Date {
+    if (!date) return ONGOING_END_DATE;
+    const end = new Date(date);
+    end.setUTCHours(23, 59, 59, 999);
+    return end;
+}
+
 export function nextRenewalDate(
     startDate: Date,
     interval: "month" | "year",
     intervalCount?: number,
+    now = new Date(),
 ): Date {
-    const months =
+    const monthsPerCycle =
         (interval === "year" ? 12 : 1) *
         (intervalCount && intervalCount > 0 ? intervalCount : 1);
-    const next = new Date(startDate);
-    next.setUTCMonth(next.getUTCMonth() + months);
+    const startMonth = startDate.getUTCFullYear() * 12 + startDate.getUTCMonth();
+    const currentMonth = now.getUTCFullYear() * 12 + now.getUTCMonth();
+    const today = Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate(),
+    );
+
+    const dateForCycle = (cycle: number) => {
+        const monthIndex = startMonth + cycle * monthsPerCycle;
+        const year = Math.floor(monthIndex / 12);
+        const month = monthIndex % 12;
+        const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+        const next = new Date(startDate);
+        next.setUTCFullYear(year, month, Math.min(startDate.getUTCDate(), lastDay));
+        return next;
+    };
+
+    let cycle = Math.max(1, Math.floor((currentMonth - startMonth) / monthsPerCycle));
+    let next = dateForCycle(cycle);
+    while (Date.UTC(next.getUTCFullYear(), next.getUTCMonth(), next.getUTCDate()) < today) {
+        next = dateForCycle(++cycle);
+    }
     return next;
 }

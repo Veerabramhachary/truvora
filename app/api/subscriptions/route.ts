@@ -7,8 +7,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSubscriptionGate } from "@/lib/subscription";
 import z from "zod";
 import {
-    ONGOING_END_DATE,
     nextRenewalDate,
+    subscriptionEndDate,
     subscriptionSchema,
 } from "./schema";
 
@@ -33,6 +33,20 @@ export async function GET(req: NextRequest) {
         }
 
         const params = req.nextUrl.searchParams;
+
+        // Expired records should stop counting as active even when the user
+        // has not opened the subscription screen since its end date passed.
+        const now = new Date();
+        await db
+            .update(subscriptions)
+            .set({
+                active: false,
+                deactivatedAt: sql`COALESCE(${subscriptions.deactivatedAt}, ${subscriptions.endDate})`,
+                updatedAt: now,
+            })
+            .where(sql`${subscriptions.userId} = ${userId}
+                AND ${subscriptions.active} = TRUE
+                AND ${subscriptions.endDate} < ${now}`);
 
         // Clamp so a crafted query can't request the whole table at once.
         const requestedStart = Number(params.get("_start") ?? "0");
@@ -65,7 +79,12 @@ export async function GET(req: NextRequest) {
             .select({
                 id: subscriptions.id,
                 title: subscriptions.name,
-                active: subscriptions.active,
+                active: sql<boolean>`CASE
+                    WHEN ${subscriptions.active} = TRUE
+                        AND ${subscriptions.deactivatedAt} IS NULL
+                        AND ${subscriptions.startDate} <= NOW()
+                        AND ${subscriptions.endDate} >= NOW()
+                    THEN TRUE ELSE FALSE END`,
                 amount: subscriptions.price,
                 date: subscriptions.startDate,
                 description: subscriptions.note,
@@ -203,19 +222,23 @@ export async function POST(req: Request) {
                     interval: data.interval,
                     intervalCount: data.intervalCount || 1,
                     startDate: data.startDate,
-                    endDate: data.endDate ?? ONGOING_END_DATE,
+                    endDate: subscriptionEndDate(data.endDate),
                     nextDate:
                         data.nextDate ??
-                        (data.endDate ??
-                            nextRenewalDate(
-                                data.startDate,
-                                data.interval,
-                                data.intervalCount,
-                            )),
+                        nextRenewalDate(
+                            data.startDate,
+                            data.interval,
+                            data.intervalCount,
+                        ),
                     categoryId: category,
                     note: data.note || null,
-                    active: true,
-                    deactivatedAt: null,
+                    // Keep future-dated subscriptions eligible to become
+                    // active automatically when their start date arrives.
+                    active: subscriptionEndDate(data.endDate) >= new Date(),
+                    deactivatedAt:
+                        subscriptionEndDate(data.endDate) < new Date()
+                            ? subscriptionEndDate(data.endDate)
+                            : null,
                 })
                 .returning({ id: subscriptions.id });
 
