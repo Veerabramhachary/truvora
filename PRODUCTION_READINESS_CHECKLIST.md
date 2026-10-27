@@ -6,17 +6,21 @@ them in a staging environment configured like production.
 
 ## Manual staging tests
 
-- [ ] Sign up, verify email, sign in, sign out, and confirm a signed-out user
+- [x] Sign up, verify email, sign in, sign out, and confirm a signed-out user
       cannot access dashboard pages or protected APIs.
-- [ ] Create, edit, list, export, and delete expenses and subscriptions. Check
+- [ ] Sign in on a mobile device with an account already registered on desktop;
+      confirm the additional verification prompt is expected and can be
+      completed successfully.
+- [x] Create, edit, list, export, and delete expenses and subscriptions. Check
       that the right user's records appear, ownership is enforced, and expense
       changes stay consistent in the transaction history.
-- [ ] Try invalid input, missing records, and another user's record IDs; confirm
+- [x] Try invalid input, missing records, and another user's record IDs; confirm
       requests fail safely without exposing database or provider details.
-- [ ] Test CSV exports in spreadsheet software with values beginning with
+- [ ] When user add expired subscription it should automatically mark as a deactivate.
+- [x] Test CSV exports in spreadsheet software with values beginning with
       `=`, `+`, `-`, and `@`; confirm they are treated as text and normal values
       still export correctly.
-- [ ] Delete an account in Settings. Confirm Clerk deletion completes and the
+- [x] Delete an account in Settings. Confirm Clerk deletion completes and the
       signed `user.deleted` webhook removes that user's finance records,
       categories, usage, and account data. Retry the webhook and confirm it is
       safe to process again. Check that retained billing aggregates are
@@ -25,10 +29,10 @@ them in a staging environment configured like production.
       incorrect `CRON_SECRET`, sends to the intended recipients, and does not
       send duplicate reminders after retries. Confirm Resend sender-domain
       verification and delivery in its logs.
-- [ ] Exercise plan feature limits through the UI and direct API requests,
+- [x] Exercise plan feature limits through the UI and direct API requests,
       including concurrent requests near a limit. Confirm denied operations
       don't consume quota unexpectedly.
-- [ ] Confirm the current checkout behavior is intentional: authenticated
+- [x] Confirm the current checkout behavior is intentional: authenticated
       checkout requests return `503` because payments are disabled.
 - [ ] Test on supported mobile and desktop browsers, including empty states,
       error states, and recovery after refresh or network failure.

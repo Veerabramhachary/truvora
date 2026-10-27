@@ -6,14 +6,15 @@ import { db } from "@/db";
 import { categories, subscriptions, transactions } from "@/db/schema/schema";
 import { featureUsage } from "@/db/schema/feature-usage";
 import {
-    ONGOING_END_DATE,
     nextRenewalDate,
+    subscriptionEndDate,
     subscriptionSchema,
 } from "../schema";
 
 type Params = { params: Promise<{ id: string }> };
 
 const idSchema = z.string().uuid();
+const statusSchema = z.object({ active: z.boolean() }).strict();
 
 export async function PATCH(req: Request, { params }: Params) {
     try {
@@ -40,9 +41,44 @@ export async function PATCH(req: Request, { params }: Params) {
             );
         }
 
+        const statusUpdate = statusSchema.safeParse(body);
+        if (statusUpdate.success) {
+            const [existing] = await db
+                .select({
+                    startDate: subscriptions.startDate,
+                    endDate: subscriptions.endDate,
+                })
+                .from(subscriptions)
+                .where(and(eq(subscriptions.id, id), eq(subscriptions.userId, userId)))
+                .limit(1);
+            if (!existing) {
+                return NextResponse.json({ error: "Subscription not found" }, { status: 404 });
+            }
+
+            const now = new Date();
+            if (statusUpdate.data.active && (existing.startDate > now || existing.endDate < now)) {
+                return NextResponse.json(
+                    { error: "A subscription can only be activated between its start and end dates" },
+                    { status: 400 },
+                );
+            }
+
+            await db.update(subscriptions).set({
+                active: statusUpdate.data.active,
+                deactivatedAt: statusUpdate.data.active ? null : now,
+                updatedAt: now,
+            }).where(and(eq(subscriptions.id, id), eq(subscriptions.userId, userId)));
+            await syncActiveSubscriptionUsage(userId);
+            return NextResponse.json({ success: true, data: { id, active: statusUpdate.data.active } });
+        }
+
         const data = subscriptionSchema.parse(body);
 
-        const [existingSubscription] = await db.select({ currency: subscriptions.currency })
+        const [existingSubscription] = await db.select({
+            currency: subscriptions.currency,
+            active: subscriptions.active,
+            deactivatedAt: subscriptions.deactivatedAt,
+        })
             .from(subscriptions)
             .where(and(eq(subscriptions.id, id), eq(subscriptions.userId, userId)))
             .limit(1);
@@ -66,6 +102,19 @@ export async function PATCH(req: Request, { params }: Params) {
             );
         }
 
+        const now = new Date();
+        const endDate = subscriptionEndDate(data.endDate);
+        const expired = endDate < now;
+        const shouldBeActive = data.active ?? existingSubscription.active;
+        if (
+            shouldBeActive &&
+            (data.startDate > now || expired)
+        ) {
+            return NextResponse.json(
+                { error: "A subscription can only be active between its start and end dates" },
+                { status: 400 },
+            );
+        }
         const updated = await db
             .update(subscriptions)
             .set({
@@ -75,17 +124,22 @@ export async function PATCH(req: Request, { params }: Params) {
                 interval: data.interval,
                 intervalCount: data.intervalCount ?? 1,
                 startDate: data.startDate,
-                endDate: data.endDate ?? ONGOING_END_DATE,
+                endDate,
                 nextDate:
                     data.nextDate ??
-                    (data.endDate ??
-                        nextRenewalDate(
-                            data.startDate,
-                            data.interval,
-                            data.intervalCount,
-                        )),
+                    nextRenewalDate(
+                        data.startDate,
+                        data.interval,
+                        data.intervalCount,
+                    ),
                 categoryId: category.id,
                 note: data.note || null,
+                active: expired ? false : shouldBeActive,
+                deactivatedAt: expired
+                    ? endDate
+                    : shouldBeActive
+                      ? null
+                      : existingSubscription.deactivatedAt ?? now,
                 updatedAt: new Date(),
             })
             .where(

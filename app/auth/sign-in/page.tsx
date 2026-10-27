@@ -20,6 +20,8 @@ const SignIn = () => {
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [verificationCode, setVerificationCode] = useState("");
+    const [verificationRequired, setVerificationRequired] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
 
     // Field-level messages render beside the input; the form-level one catches
@@ -86,8 +88,25 @@ const SignIn = () => {
                 toast.success("Signed in. Redirecting…");
                 await setActive({ session: result.createdSessionId });
                 router.push("/dashboard");
+            } else if (result.status === "needs_first_factor") {
+                const emailFactor = result.supportedFirstFactors?.find(
+                    (factor) => factor.strategy === "email_code",
+                );
+
+                if (!emailFactor || emailFactor.strategy !== "email_code") {
+                    setFormError(
+                        "Your account needs another verification method. Contact support to finish signing in.",
+                    );
+                    return;
+                }
+
+                await signIn.prepareFirstFactor({
+                    strategy: "email_code",
+                    emailAddressId: emailFactor.emailAddressId,
+                });
+                setVerificationRequired(true);
+                toast.success("We sent a verification code to your email.");
             } else {
-                // MFA or a pending email verification step.
                 setFormError(
                     "Additional verification is required before you can continue.",
                 );
@@ -116,6 +135,39 @@ const SignIn = () => {
             setFormError(
                 clerkErrorMessage(error, "We couldn't start sign-in. Try again."),
             );
+        }
+    };
+
+    const handleVerifySignIn = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        if (!isLoaded || isLoading) return;
+        if (!verificationCode.trim()) {
+            setFormError("Enter the verification code we emailed you.");
+            return;
+        }
+
+        setIsLoading(true);
+        setFormError(null);
+        try {
+            const result = await signIn.attemptFirstFactor({
+                strategy: "email_code",
+                code: verificationCode.trim(),
+            });
+            if (result.status === "complete") {
+                await setActive({ session: result.createdSessionId });
+                toast.success("Verified. Redirecting…");
+                router.push("/dashboard");
+            } else {
+                setFormError(
+                    "Another verification step is required. Please contact support.",
+                );
+            }
+        } catch (error: unknown) {
+            setFormError(
+                clerkErrorMessage(error, "That code didn't work. Try again."),
+            );
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -158,13 +210,36 @@ const SignIn = () => {
             {/* Sign In Form */}
             <div className="w-full max-w-md border border-border shadow-2xl rounded-3xl px-6 py-10 md:px-9 md:py-16 bg-background">
                 <div className="w-full mb-8">
-                    <h1 className="font-bold text-2xl">Sign In</h1>
+                    <h1 className="font-bold text-2xl">
+                        {verificationRequired ? "Verify your sign in" : "Sign In"}
+                    </h1>
                     <p className="text-muted-foreground">
-                        Welcome back — sign in to your account
+                        {verificationRequired
+                            ? `Enter the verification code sent to ${email.trim()}.`
+                            : "Welcome back — sign in to your account"}
                     </p>
                 </div>
-                <form onSubmit={handleSubmit} noValidate className="w-full">
+                <form onSubmit={verificationRequired ? handleVerifySignIn : handleSubmit} noValidate className="w-full">
                     <div className="space-y-4">
+                        {verificationRequired ? (
+                            <div>
+                                <label htmlFor="verification-code" className="font-semibold block mb-1">
+                                    Verification code
+                                </label>
+                                <Input
+                                    id="verification-code"
+                                    name="one-time-code"
+                                    type="text"
+                                    inputMode="numeric"
+                                    autoComplete="one-time-code"
+                                    value={verificationCode}
+                                    onChange={(event) => setVerificationCode(event.target.value)}
+                                    className="w-full border-2 border-border py-6"
+                                    autoFocus
+                                />
+                            </div>
+                        ) : (
+                        <>
                         <div>
                             <label
                                 htmlFor="email"
@@ -246,8 +321,10 @@ const SignIn = () => {
                                 </p>
                             )}
                         </div>
+                        </>
+                        )}
 
-                        <div id="clerk-captcha" />
+                        {!verificationRequired && <div id="clerk-captcha" />}
 
                         {formError && (
                             <p
@@ -270,9 +347,12 @@ const SignIn = () => {
                                         aria-hidden="true"
                                     />
                                 )}
-                                {isLoading ? "Signing in…" : "Sign In"}
+                                {isLoading
+                                    ? verificationRequired ? "Verifying…" : "Signing in…"
+                                    : verificationRequired ? "Verify and continue" : "Sign In"}
                             </Button>
 
+                            {!verificationRequired && <>
                             <div className="relative py-4">
                                 <div className="absolute inset-0 flex items-center">
                                     <span className="w-full border-t border-border"></span>
@@ -305,6 +385,7 @@ const SignIn = () => {
                                     Github
                                 </Button>
                             </div>
+                            </>}
                         </div>
 
                         <p className="text-center mt-6 text-muted-foreground">
