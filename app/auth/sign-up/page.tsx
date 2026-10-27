@@ -25,7 +25,7 @@ const Page = () => {
     const [password, setPassword] = useState("");
     const [acceptedTerms, setAcceptedTerms] = useState(false);
 
-    const { isLoaded, signUp } = useSignUp();
+    const { isLoaded, signUp, setActive } = useSignUp();
 
     const [isLoading, setIsLoading] = useState(false);
     const [oAuthLoading, setOAuthLoading] = useState<string | null>(null);
@@ -72,6 +72,7 @@ const Page = () => {
                 firstName: firstName.trim(),
                 emailAddress: email.trim(),
                 password,
+                legalAccepted: true,
             });
             if (result.status === "missing_requirements") {
                 // Trigger email verification, then hand off to the code screen.
@@ -84,7 +85,12 @@ const Page = () => {
                 );
             } else if (result.status === "complete") {
                 // No verification required for this instance.
+                await setActive({ session: result.createdSessionId });
                 router.push("/dashboard");
+            } else {
+                setFormError(
+                    "Your account couldn't be completed. Please try signing up again.",
+                );
             }
         } catch (error: unknown) {
             setFormError(
@@ -99,6 +105,13 @@ const Page = () => {
         provider: "oauth_google" | "oauth_github",
     ) => {
         if (!isLoaded || !signUp || oAuthLoading) return;
+        if (!acceptedTerms) {
+            setFieldErrors((prev) => ({
+                ...prev,
+                terms: "You need to accept the Terms to create an account",
+            }));
+            return;
+        }
 
         setOAuthLoading(provider);
         setFormError(null);
@@ -106,6 +119,7 @@ const Page = () => {
         try {
             await signUp.authenticateWithRedirect({
                 strategy: provider,
+                legalAccepted: true,
                 redirectUrl: "/sso-callback",
                 redirectUrlComplete: "/dashboard",
             });

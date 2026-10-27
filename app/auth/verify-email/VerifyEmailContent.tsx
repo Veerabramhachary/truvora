@@ -69,6 +69,7 @@ export default function VerifyEmailContent() {
 
     const handleVerify = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!isLoaded || isLoading) return;
         setFormError(null);
 
         const trimmed = code.trim();
@@ -93,6 +94,33 @@ export default function VerifyEmailContent() {
                 );
             }
         } catch (error: unknown) {
+            const message = clerkErrorMessage(error, "");
+            if (
+                message.toLowerCase().includes("already") &&
+                message.toLowerCase().includes("verif")
+            ) {
+                try {
+                    const currentSignUp = await signUp.reload();
+                    if (
+                        currentSignUp.status === "complete" &&
+                        currentSignUp.createdSessionId
+                    ) {
+                        await setActive({
+                            session: currentSignUp.createdSessionId,
+                        });
+                        toast.success(
+                            "Email verified. Redirecting to dashboard…",
+                        );
+                        router.replace("/dashboard");
+                        return;
+                    }
+                } catch (recoveryError: unknown) {
+                    console.error(
+                        "Could not resume completed email verification",
+                        recoveryError,
+                    );
+                }
+            }
             setFormError(
                 clerkErrorMessage(
                     error,

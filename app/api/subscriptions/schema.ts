@@ -7,7 +7,7 @@ export const subscriptionSchema = z.object({
     price: positiveMoneySchema,
     currency: z.string().min(1),
     interval: z.enum(["month", "year"]),
-    intervalCount: z.number().optional(),
+    intervalCount: z.number().int().positive().optional(),
     startDate: z.coerce.date(),
     // Optional for ongoing subscriptions — the server derives endDate/nextDate
     // when they're omitted.
