@@ -22,6 +22,7 @@ export default function VerifyEmailContent() {
     const [isLoading, setIsLoading] = useState(false);
     const [timeLeft, setTimeLeft] = useState(RESEND_SECONDS);
     const [formError, setFormError] = useState<string | null>(null);
+    const [restartSignUp, setRestartSignUp] = useState(false);
 
     // Whether resending is allowed is a function of the timer, not a second
     // piece of state — keeping it in state meant writing it back from inside an
@@ -94,39 +95,45 @@ export default function VerifyEmailContent() {
                 );
             }
         } catch (error: unknown) {
-            const message = clerkErrorMessage(error, "");
+            // A code can be consumed before the response reaches this page
+            // (for example, after a retry). Refresh Clerk's sign-up state
+            // before treating the attempt as a failed verification.
+            try {
+                const currentSignUp = await signUp.reload();
+                if (
+                    currentSignUp.status === "complete" &&
+                    currentSignUp.createdSessionId
+                ) {
+                    await setActive({
+                        session: currentSignUp.createdSessionId,
+                    });
+                    toast.success("Email verified. Redirecting to dashboard…");
+                    router.replace("/dashboard");
+                    return;
+                }
+            } catch (recoveryError: unknown) {
+                console.error(
+                    "Could not resume completed email verification",
+                    recoveryError,
+                );
+            }
+
+            const message = clerkErrorMessage(
+                error,
+                "That code didn't work. Check it and try again.",
+            );
+            setFormError(
+                message.toLowerCase().includes("already") &&
+                    message.toLowerCase().includes("verif")
+                    ? "This email is verified, but sign-up did not finish. Return to sign-up to complete your account."
+                    : message,
+            );
             if (
                 message.toLowerCase().includes("already") &&
                 message.toLowerCase().includes("verif")
             ) {
-                try {
-                    const currentSignUp = await signUp.reload();
-                    if (
-                        currentSignUp.status === "complete" &&
-                        currentSignUp.createdSessionId
-                    ) {
-                        await setActive({
-                            session: currentSignUp.createdSessionId,
-                        });
-                        toast.success(
-                            "Email verified. Redirecting to dashboard…",
-                        );
-                        router.replace("/dashboard");
-                        return;
-                    }
-                } catch (recoveryError: unknown) {
-                    console.error(
-                        "Could not resume completed email verification",
-                        recoveryError,
-                    );
-                }
+                setRestartSignUp(true);
             }
-            setFormError(
-                clerkErrorMessage(
-                    error,
-                    "That code didn't work. Check it and try again.",
-                ),
-            );
         } finally {
             setIsLoading(false);
         }
@@ -230,12 +237,12 @@ export default function VerifyEmailContent() {
                 </div>
 
                 <p className="text-center mt-8 text-muted-foreground">
-                    Already have an account?{" "}
+                    {restartSignUp ? "Continue creating your account: " : "Already have an account? "}
                     <Link
-                        href="/auth/sign-in"
+                        href={restartSignUp ? "/auth/sign-up" : "/auth/sign-in"}
                         className="text-primary font-bold hover:underline"
                     >
-                        Sign In
+                        {restartSignUp ? "Return to sign-up" : "Sign In"}
                     </Link>
                 </p>
             </div>
