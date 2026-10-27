@@ -43,6 +43,13 @@
       "when": 1792827145430,
       "tag": "0005_safe_donald_blake",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793094215226,
+      "tag": "0006_positive_subscription_interval_count",
+      "breakpoints": true
     }
   ]
 }

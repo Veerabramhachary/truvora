@@ -56,7 +56,7 @@ export async function PATCH(req: Request, { params }: Params) {
             }
 
             const now = new Date();
-            if (statusUpdate.data.active && (existing.startDate > now || existing.endDate < now)) {
+            if (statusUpdate.data.active && existing.endDate < now) {
                 return NextResponse.json(
                     { error: "A subscription can only be activated between its start and end dates" },
                     { status: 400 },
@@ -106,12 +106,9 @@ export async function PATCH(req: Request, { params }: Params) {
         const endDate = subscriptionEndDate(data.endDate);
         const expired = endDate < now;
         const shouldBeActive = data.active ?? existingSubscription.active;
-        if (
-            shouldBeActive &&
-            (data.startDate > now || expired)
-        ) {
+        if (shouldBeActive && expired) {
             return NextResponse.json(
-                { error: "A subscription can only be active between its start and end dates" },
+                { error: "An expired subscription cannot be active" },
                 { status: 400 },
             );
         }

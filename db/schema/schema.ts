@@ -9,8 +9,9 @@ import {
     integer,
     boolean,
     foreignKey,
-    
+    check,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { encryptedText } from "./custom-types";
 import { expenses } from "./expenses";
 
@@ -83,4 +84,6 @@ export const subscriptions = pgTable("subscriptions", {
     active: boolean("active").notNull().default(true),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => [
+    check("subscriptions_interval_count_positive", sql`${table.intervalCount} > 0`),
+]);

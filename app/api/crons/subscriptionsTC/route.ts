@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { and, eq, lt } from "drizzle-orm";
 import { Resend } from "resend";
@@ -46,21 +47,56 @@ export async function GET(request: NextRequest) {
             }
             if (!claimed.length) continue;
             const items: SubscriptionItem[] = claimed.map(({ name, daysLeft }) => ({ name: name ?? "Subscription", daysLeft }));
+            const idempotencyKey = `renewal-reminder/${createHash("sha256")
+                .update(
+                    [
+                        userId,
+                        ...claimed
+                            .map(
+                                (sub) =>
+                                    `${sub.id}:${sub.nextDate.toISOString()}:${sub.daysLeft}`,
+                            )
+                            .sort(),
+                    ].join("|"),
+                )
+                .digest("hex")}`;
             try {
                 const result = await resend.emails.send({
                     from: sender,
                     to: email,
                     subject: "Your subscriptions renew soon",
                     react: EmailTemplate({ userName: subs[0]?.firstName || "there", subscriptions: items }),
-                });
+                }, { idempotencyKey });
                 if (result.error) throw new Error(`Resend rejected send: ${result.error.name}`);
+            } catch (error) {
+                // Keep claims on uncertain failures. They can be retried after
+                // the stale-claim timeout using the same Resend idempotency key.
+                console.error(`Renewal reminder send failed for user ${userId}:`, error);
+                failed++;
+                continue;
+            }
+
+            try {
                 const sentAt = new Date();
-                for (const sub of claimed) await db.update(reminderDeliveries).set({ status: "sent", sentAt })
-                    .where(and(eq(reminderDeliveries.subscriptionId, sub.id), eq(reminderDeliveries.renewalDate, sub.nextDate), eq(reminderDeliveries.daysBefore, sub.daysLeft)));
+                await db.transaction(async (tx) => {
+                    for (const sub of claimed) {
+                        await tx
+                            .update(reminderDeliveries)
+                            .set({ status: "sent", sentAt })
+                            .where(
+                                and(
+                                    eq(reminderDeliveries.subscriptionId, sub.id),
+                                    eq(reminderDeliveries.renewalDate, sub.nextDate),
+                                    eq(reminderDeliveries.daysBefore, sub.daysLeft),
+                                ),
+                            );
+                    }
+                });
                 sent++;
             } catch (error) {
-                console.error(`Renewal reminder send failed for user ${userId}:`, error);
-                for (const sub of claimed) await db.delete(reminderDeliveries).where(and(eq(reminderDeliveries.subscriptionId, sub.id), eq(reminderDeliveries.renewalDate, sub.nextDate), eq(reminderDeliveries.daysBefore, sub.daysLeft)));
+                // The provider accepted the email. Leave claims in place so a
+                // retry uses the same idempotency key rather than sending again.
+                console.error(`Could not record renewal reminder delivery for user ${userId}:`, error);
                 failed++;
             }
         }

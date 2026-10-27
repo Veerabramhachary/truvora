@@ -7,7 +7,7 @@ export const subscriptionSchema = z.object({
     price: positiveMoneySchema,
     currency: z.string().min(1),
     interval: z.enum(["month", "year"]),
-    intervalCount: z.number().optional(),
+    intervalCount: z.number().int().positive().optional(),
     startDate: z.coerce.date(),
     // Optional for ongoing subscriptions — the server derives endDate/nextDate
     // when they're omitted.
@@ -29,12 +29,10 @@ export type SubscriptionInput = z.infer<typeof subscriptionSchema>;
  */
 export const ONGOING_END_DATE = new Date("9999-12-31T00:00:00.000Z");
 
-/** Treat a selected end date as valid through that calendar day. */
+/** Preserve the end-of-local-day instant supplied by the form. */
 export function subscriptionEndDate(date?: Date): Date {
     if (!date) return ONGOING_END_DATE;
-    const end = new Date(date);
-    end.setUTCHours(23, 59, 59, 999);
-    return end;
+    return new Date(date);
 }
 
 export function nextRenewalDate(
