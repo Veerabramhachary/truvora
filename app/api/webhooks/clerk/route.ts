@@ -154,31 +154,31 @@ export async function POST(req: NextRequest) {
             // webhook path covers both signup methods; retries use a stable
             // idempotency key so they don't send duplicate welcome emails.
             if (eventType === "user.created") {
-                const resendKey = process.env.RESEND_API_KEY;
-                const sender = process.env.RENEWAL_EMAIL_FROM;
-                if (!resendKey || !sender) {
-                    console.error("[clerk-webhook] Welcome email is not configured");
-                    return NextResponse.json(
-                        { error: "Welcome email is not configured" },
-                        { status: 503 },
-                    );
-                }
+                try {
+                    const resendKey = process.env.RESEND_API_KEY;
+                    const sender = process.env.RENEWAL_EMAIL_FROM;
+                    if (!resendKey || !sender) {
+                        throw new Error("Welcome email is not configured");
+                    }
 
-                const resend = new Resend(resendKey);
-                const result = await resend.emails.send(
-                    {
-                        from: sender,
-                        to: primaryEmail,
-                        subject: "Welcome to Truvora",
-                        react: WelcomeEmail({
-                            firstName: first_name || "there",
-                            dashboardUrl: `${SITE_URL}/dashboard`,
-                        }),
-                    },
-                    { idempotencyKey: `welcome/${id}` },
-                );
-                if (result.error) {
-                    throw new Error(`Welcome email send failed: ${result.error.name}`);
+                    const resend = new Resend(resendKey);
+                    const result = await resend.emails.send(
+                        {
+                            from: sender,
+                            to: primaryEmail,
+                            subject: "Welcome to Truvora",
+                            react: WelcomeEmail({
+                                firstName: first_name || "there",
+                                dashboardUrl: `${SITE_URL}/dashboard`,
+                            }),
+                        },
+                        { idempotencyKey: `welcome/${id}` },
+                    );
+                    if (result.error) {
+                        throw new Error(`Welcome email send failed: ${result.error.name}`);
+                    }
+                } catch (error) {
+                    console.error("[clerk-webhook] Failed to send welcome email:", error);
                 }
             }
         }
