@@ -1,0 +1,37 @@
+/* Shared Truvora brand palette for marketing and dashboard surfaces. */
+:root,
+html:not(:has([data-dashboard-root])) {
+    --brand-cream: #ffe3b3;
+    --brand-lime: #c2dd6c;
+    --brand-green-light: #79ce67;
+    --brand-green: #30b155;
+
+    --primary: var(--brand-green);
+    --primary-foreground: #ffffff;
+    --ring: var(--brand-green);
+    --accent: color-mix(in srgb, var(--brand-lime) 30%, white);
+    --accent-foreground: #204b2d;
+    --chart-1: var(--brand-green);
+    --chart-2: var(--brand-green-light);
+    --chart-3: var(--brand-lime);
+    --chart-4: var(--brand-cream);
+    --chart-5: #208d43;
+    --sidebar-primary: var(--brand-green);
+    --sidebar-ring: var(--brand-green);
+}
+
+.dark,
+html.dark:not(:has([data-dashboard-root])) {
+    --primary: var(--brand-green-light);
+    --primary-foreground: #15351f;
+    --ring: var(--brand-green-light);
+    --accent: color-mix(in srgb, var(--brand-green) 24%, #17231a);
+    --accent-foreground: var(--brand-lime);
+    --chart-1: var(--brand-green-light);
+    --chart-2: var(--brand-green);
+    --chart-3: var(--brand-lime);
+    --chart-4: var(--brand-cream);
+    --chart-5: #a2e28f;
+    --sidebar-primary: var(--brand-green-light);
+    --sidebar-ring: var(--brand-green-light);
+}
