@@ -1,301 +1,105 @@
-import { db } from "@/db";
+import { db, closeDb } from "@/db";
 import { plans } from "@/db/schema/plans";
-import { InferInsertModel } from "drizzle-orm";
+import { and, eq, notInArray, type InferInsertModel } from "drizzle-orm";
 
-type NewPlan = InferInsertModel<typeof plans>;
-const planData: NewPlan[] = [
-    // Paypal provider
-    // us free
+type PlanData = Pick<InferInsertModel<typeof plans>, "name" | "description" | "price" | "featureLimits" | "features" | "metadata">;
+const planData: PlanData[] = [
     {
         name: "Free",
-        description: "Basic access with limited features",
+        description: "Track recurring spending and stay ahead of renewals.",
         price: "0.00",
-        currency: "USD",
-        interval: "month",
-        intervalCount: 1,
-        trialDays: 0,
-        features: [
-            "Up to 10 exports per month",
-            "Manage up to 5 active subscriptions",
-            "Basic chart",
-            "Email reminders",
-            "Email notifications",
-        ],
         featureLimits: {
-            exports: { limit: 10, interval: "month" },
-            subscriptions: { limit: 5 },
+            subscriptions: { limit: 10 },
             charts: "basic",
-            earlyAccess: false,
-            autoRenewal: false,
+            exports: { limit: 10, interval: "month" },
             reminders: "email",
-            notifications: "email",
-            webhooks: false,
+            exportFormats: { csv: true, pdf: false, pdfLevel: "none", xlsx: false },
+            customCategories: false,
         },
-        isActive: true,
-        provider: "paypal",
-        providerPlanId: null,
+        features: [
+            "Track up to 10 subscriptions",
+            "Basic recurring-spend chart",
+            "10 CSV exports per month",
+            "Renewal reminders",
+        ],
         metadata: { tier: "free" },
     },
-    // Aue free plan
     {
-        name: "Free",
-        description: "Basic access with limited features",
-        price: "0.00",
-        currency: "AED",
-        interval: "month",
-        intervalCount: 1,
-        trialDays: 0,
-        features: [
-            "Up to 10 exports per month",
-            "Manage up to 5 active subscriptions",
-            "Basic chart",
-            "Email reminders",
-            "Email notifications",
-        ],
+        name: "Starter",
+        description: "More room to organize spending and export your data.",
+        price: "99.00",
         featureLimits: {
-            exports: { limit: 10, interval: "month" },
-            subscriptions: { limit: 5 },
-            charts: "basic",
-            earlyAccess: false,
-            autoRenewal: false,
+            subscriptions: { limit: 50 },
+            charts: "comparative",
+            exports: { limit: 100, interval: "month" },
             reminders: "email",
-            notifications: "email",
-            webhooks: false,
+            exportFormats: { csv: true, pdf: true, pdfLevel: "basic", xlsx: false },
+            customCategories: true,
         },
-        isActive: true,
-        provider: "paypal",
-        providerPlanId: null,
-        metadata: { tier: "free" },
-    },
-    //INR
-    {
-        name: "Free",
-        description: "Basic access with limited features",
-        price: "0.00",
-        currency: "INR",
-        interval: "month",
-        intervalCount: 1,
-        trialDays: 0,
         features: [
-            "Up to 10 exports per month",
-            "Manage up to 5 active subscriptions",
-            "Basic chart",
-            "Email reminders",
-            "Email notifications",
+            "Track up to 50 subscriptions",
+            "Expense vs subscription breakdown",
+            "Custom categories and renewal reminders",
+            "100 CSV exports per month",
+            "Basic PDF exports per month",
         ],
-        featureLimits: {
-            exports: { limit: 10, interval: "month" },
-            subscriptions: { limit: 5 },
-            charts: "basic",
-            earlyAccess: false,
-            autoRenewal: false,
-            reminders: "email",
-            notifications: "email",
-            webhooks: false,
-        },
-        isActive: true,
-        provider: "paypal",
-        providerPlanId: null,
-        metadata: { tier: "free" },
+        metadata: { tier: "starter" },
     },
-
-    //Pro plans
-    // Monthly plans
-    //USD
     {
-        name: "Pro Monthly",
-        description: "For individuals and small teams",
-        price: "4.99",
-        currency: "USD",
-        interval: "month",
-        intervalCount: 1,
-        trialDays: 14,
-        features: [
-            "Up to 250 exports per month",
-            "Manage up to 25 active subscriptions",
-            "Basic comparison",
-            'Early access to new features (beta)',
-            'Auto-renewal',
-            "Email reminders (customizable)",
-            "Email + push",
-        ],
+        name: "Pro",
+        description: "Advanced insights, flexible views, and expanded exports.",
+        price: "199.00",
         featureLimits: {
-            exports: { limit: 250, interval: "month" },
-            subscriptions: { limit: 25 },
-            charts: "comparative",
-            earlyAccess: true,
-            autoRenewal: true,
+            subscriptions: { limit: -1 },
+            charts: "advanced",
+            exports: { limit: 1000, interval: "month" },
             reminders: "priority",
-            notifications: "push",
-            webhooks: false,
+            viewsAndFilters: true,
+            exportFormats: { csv: true, pdf: true, pdfLevel: "advanced", xlsx: true },
+            customCategories: true,
         },
-        isActive: true,
-        provider: "paypal",
-        providerPlanId: null,
+        features: [
+            "Unlimited subscriptions",
+            "Advanced charts, views, and filters",
+            "Priority renewal reminders",
+            "1,000 CSV exports per month",
+            "Advanced PDF and XLSX exports per month",
+        ],
         metadata: { tier: "pro" },
-    },
-    {
-        name: "Pro Monthly",
-        description: "For individuals and small teams",
-        price: "4.99",
-        currency: "AED",
-        interval: "month",
-        intervalCount: 1,
-        trialDays: 14,
-        features: [
-            "Up to 250 exports per month",
-            "Manage up to 25 active subscriptions",
-            "Basic comparison",
-            'Early access to new features (beta)',
-            'Auto-renewal',
-            "Email reminders",
-            "Email + push",
-        ],
-        featureLimits: {
-            exports: { limit: 250, interval: "month" },
-            subscriptions: { limit: 25 },
-            charts: "comparative",
-            earlyAccess: true,
-            autoRenewal: true,
-            reminders: "priority",
-            notifications: "push",
-            webhooks: false,
-        },
-        isActive: true,
-        provider: "paypal",
-        providerPlanId: null,
-        metadata: { tier: "pro" },
-    },
-    {
-        name: "Pro Monthly",
-        description: "For individuals and small teams",
-        price: "299",
-        currency: "INR",
-        interval: "month",
-        intervalCount: 1,
-        trialDays: 14,
-        features: [
-            "Up to 250 exports per month",
-            "Manage up to 25 active subscriptions",
-            "Basic comparison",
-            'Early access to new features (beta)',
-            'Auto-renewal',
-            "Email reminders",
-            "Email + push",
-        ],
-        featureLimits: {
-            exports: { limit: 250, interval: "month" },
-            subscriptions: { limit: 25 },
-            charts: "comparative",
-            earlyAccess: true,
-            autoRenewal: true,
-            reminders: "priority",
-            notifications: "push",
-            webhooks: false,
-        },
-        isActive: true,
-        provider: "paypal",
-        providerPlanId: null,
-        metadata: { tier: "pro" },
-    },
-
-    // Pro plan yearly
-    //USD yearly
-    {
-        name: "Pro Yearly",
-        description: "For individuals and small teams",
-        price: "47.90", // 4.99 * 12 * 0.8
-        currency: "USD",
-        interval: "year",
-        intervalCount: 1,
-        trialDays: 14,
-        features: [
-            "Up to 250 exports per month",
-            "Manage up to 25 active subscriptions",
-            "Basic comparison",
-            'Early access to new features (beta)',
-            'Auto-renewal',
-            "Email reminders",
-            "Email + push",
-        ],
-        featureLimits: {
-            exports: { limit: 250, interval: "month" },
-            subscriptions: { limit: 25 },
-            charts: "comparative",
-            earlyAccess: true,
-            autoRenewal: true,
-            reminders: "priority",
-            notifications: "push",
-            webhooks: false,
-        },
-        isActive: true,
-        provider: "paypal",
-        providerPlanId: null,
-        metadata: { tier: "pro", discount: '20%' },
-    },
-    {
-        name: "Pro Yearly",
-        description: "For individuals and small teams",
-        price: "47.90", // 4.99 * 12 * 0.8
-        currency: "AED",
-        interval: "year",
-        intervalCount: 1,
-        trialDays: 14,
-        features: [
-            "Up to 250 exports per month",
-            "Manage up to 25 active subscriptions",
-            "Basic comparison",
-            'Early access to new features (beta)',
-            'Auto-renewal',
-            "Email reminders",
-            "Email + push",
-        ],
-        featureLimits: {
-            exports: { limit: 250, interval: "month" },
-            subscriptions: { limit: 25 },
-            charts: "comparative",
-            earlyAccess: true,
-            autoRenewal: true,
-            reminders: "priority",
-            notifications: "push",
-            webhooks: false,
-        },
-        isActive: true,
-        provider: "paypal",
-        providerPlanId: null,
-        metadata: { tier: "pro", discount: '20%' },
-    },
-    {
-        name: "Pro Yearly",
-        description: "For individuals and small teams",
-        price: "2870", // 299 * 12 * 0.8
-        currency: "INR",
-        interval: "year",
-        intervalCount: 1,
-        trialDays: 14,
-        features: [
-            "Up to 250 exports per month",
-            "Manage up to 25 active subscriptions",
-            "Basic comparison",
-            'Early access to new features (beta)',
-            'Auto-renewal',
-            "Email reminders",
-            "Email + push",
-        ],
-        featureLimits: {
-            exports: { limit: 250, interval: "month" },
-            subscriptions: { limit: 25 },
-            charts: "comparative",
-            earlyAccess: true,
-            autoRenewal: true,
-            reminders: "priority",
-            notifications: "push",
-            webhooks: false,
-        },
-        isActive: true,
-        provider: "paypal",
-        providerPlanId: null,
-        metadata: { tier: "pro", discount: '20%' },
     },
 ];
-await db.insert(plans).values(planData.filter((plan) => plan.currency === "INR"));
+
+async function seedPlans() {
+    const names = planData.map((plan) => plan.name);
+    await db.update(plans).set({ isActive: false }).where(
+        and(eq(plans.currency, "INR"), eq(plans.isActive, true), notInArray(plans.name, names)),
+    );
+
+    for (const plan of planData) {
+        const values = {
+            ...plan,
+            currency: "INR",
+            interval: "month" as const,
+            intervalCount: 1,
+            trialDays: 0,
+            isActive: true,
+            provider: "none" as const,
+            providerPlanId: null,
+        };
+        const [existing] = await db.select({ id: plans.id }).from(plans).where(
+            and(eq(plans.name, plan.name), eq(plans.currency, "INR"), eq(plans.interval, "month")),
+        ).limit(1);
+
+        if (existing) {
+            await db.update(plans).set(values).where(eq(plans.id, existing.id));
+        } else {
+            await db.insert(plans).values(values);
+        }
+    }
+}
+
+seedPlans().then(closeDb).catch(async (error) => {
+    console.error("Failed to seed plans:", error);
+    await closeDb();
+    process.exitCode = 1;
+});

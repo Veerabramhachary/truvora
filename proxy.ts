@@ -2,6 +2,7 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import type { NextFetchEvent, NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { checkRateLimits, getClientIp, rateLimitHeaders } from "@/lib/rate-limit";
+import { SITE_URL } from "@/lib/site";
 
 // Public routes (marketing pages)
 const isPublicRoute = createRouteMatcher([
@@ -37,6 +38,18 @@ const isPublicRoute = createRouteMatcher([
 
 // API routes
 const isApiRoute = createRouteMatcher(["/api/(.*)"]);
+const APP_ORIGIN = new URL(SITE_URL).origin;
+
+function hasAllowedOrigin(request: NextRequest): boolean {
+    const origin = request.headers.get("origin");
+    if (!origin) return true; // Server-to-server callers and webhooks.
+
+    try {
+        return new URL(origin).origin === APP_ORIGIN;
+    } catch {
+        return false;
+    }
+}
 
 /*
   Same-origin guard for state-changing API requests.
@@ -71,6 +84,25 @@ function isSameOrigin(request: NextRequest): boolean {
 export async function proxy(req: NextRequest, evt: NextFetchEvent) {
     return clerkMiddleware(async (auth, request) => {
         const { userId, redirectToSignIn } = await auth();
+
+        // Enforce the canonical app origin for browser API requests, including
+        // read-only routes. Originless server-to-server requests remain valid.
+        if (isApiRoute(request) && !hasAllowedOrigin(request)) {
+            return new NextResponse("Cross-origin request rejected", { status: 403 });
+        }
+
+        if (isApiRoute(request) && request.method === "OPTIONS") {
+            return new NextResponse(null, {
+                status: 204,
+                headers: {
+                    "Access-Control-Allow-Origin": APP_ORIGIN,
+                    "Access-Control-Allow-Credentials": "true",
+                    "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+                    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+                    Vary: "Origin",
+                },
+            });
+        }
 
         // 1️⃣ Allow public routes immediately
         if (isPublicRoute(request)) {

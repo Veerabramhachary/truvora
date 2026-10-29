@@ -8,8 +8,9 @@ import {
     index,
     integer,
     boolean,
-    foreignKey,
     check,
+    foreignKey,
+    uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { encryptedText } from "./custom-types";
@@ -27,26 +28,34 @@ export const transactionActionEnum = pgEnum("trasaction_action", [
     "deleted",
 ])
 
+export const customCategoryTypeEnum = pgEnum("custom_category_type", [
+    "expense",
+    "subscription",
+]);
+
 export const categories = pgTable(
     "categories",
     {
         id: uuid("id").primaryKey().defaultRandom(),
-        name: text("name").notNull().unique(), // Added unique for FK reference
+        name: text("name").notNull().unique(),
         icon: text("icon"),
         color: text("color"),
         userId: text("user_id"),
-        // 1. Changed from uuid to text
-        parentName: text("parent_name"), 
+        categoryType: customCategoryTypeEnum("category_type"),
+        displayName: text("display_name"),
+        parentName: text("parent_name"),
     },
     (table) => ({
-        // 2. Updated foreign key to point to the 'name' column
         parentFk: foreignKey({
             columns: [table.parentName],
             foreignColumns: [table.name],
             name: "category_parent_fk",
         }).onDelete("cascade"),
-        
+
         userIndex: index("category_user_idx").on(table.userId),
+        customCategoryNameUnique: uniqueIndex("categories_custom_owner_name_unique")
+            .on(table.userId, table.categoryType, sql`lower(${table.displayName})`)
+            .where(sql`${table.userId} IS NOT NULL AND ${table.categoryType} IS NOT NULL AND ${table.displayName} IS NOT NULL`),
     }),
 );
 

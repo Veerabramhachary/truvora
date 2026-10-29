@@ -39,6 +39,9 @@ export type FeatureLimits = {
     earlyAccess?: boolean;
     autoRenewal?: boolean;
     reminders?: 'email' | 'priority' | 'customizable' | 'personalized';
+    exportFormats?: { csv: boolean; pdf: boolean; pdfLevel: 'none' | 'basic' | 'advanced'; xlsx: boolean };
+    customCategories?: boolean;
+    viewsAndFilters?: boolean;
     notifications?: 'email' | 'push' | 'webhook' | 'all';
     webhooks?: boolean; // whether user can define outgoing webhooks
     // ... any other feature

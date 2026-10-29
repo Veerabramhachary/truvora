@@ -85,8 +85,7 @@ export default function RootLayout({
                     >
                         {/*
                           Suspense is required here, not decorative: the
-                          statically-rendered dashboard reads `?currency` and the
-                          email-verification form reads `?email` via
+                          statically-rendered dashboard reads `?currency` via
                           useSearchParams, which Next only allows inside a
                           boundary. It no longer wraps a TanStack QueryClient —
                           Refine mounts its own, so the extra one was dead

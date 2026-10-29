@@ -19,6 +19,7 @@ import { useCreate, useUpdate, type BaseRecord, type HttpError } from "@refinede
 import { useRefreshAll } from "@/lib/use-refresh";
 import { toast } from "sonner";
 import CategorySelector from "@/components/category-selector";
+import { CustomCategoryField } from "@/components/custom-category-field";
 import { apiErrorMessage } from "@/lib/api-error";
 import { CurrencySelect } from "@/components/currency-select";
 import { DEFAULT_CURRENCY } from "@/lib/currencies";
@@ -227,7 +228,19 @@ export function TransactionForm({
             {/* Category */}
             <div className="space-y-2">
                 <Label>Category</Label>
-                <CategorySelector type={type} value={categoryValue} onValueChange={(v) => setValue("category", v)}/>
+                {type === "expense" ? (
+                    <CustomCategoryField
+                        type="expense"
+                        value={categoryValue}
+                        onValueChange={(v) => setValue("category", v)}
+                    />
+                ) : (
+                    <CategorySelector
+                        type="income"
+                        value={categoryValue}
+                        onValueChange={(v) => setValue("category", v)}
+                    />
+                )}
                 {errors.category && (
                     <p className="text-sm text-red-500">
                         {errors.category.message}

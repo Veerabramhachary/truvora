@@ -1,4 +1,5 @@
-import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { platformDiscounts } from "./platform-discounts";
 
 
 export const users = pgTable("users", {
@@ -6,6 +7,8 @@ export const users = pgTable("users", {
     email: text("email").notNull(),
     firstName: text("first_name"),
     imageUrl: text("image_url"),
+    referralPlatform: text("referral_platform"),
+    platformDiscountId: uuid("platform_discount_id").references(() => platformDiscounts.id, { onDelete: "set null" }),
     stripeCustomerId: text("stripe_customer_id").unique(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),

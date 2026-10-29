@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { expenses } from "@/db/schema/expenses";
 import { categories, subscriptions, transactions } from "@/db/schema/schema";
@@ -84,7 +84,7 @@ export async function GET(req: Request) {
                     startDate: subscriptions.startDate,
                     nextDate: subscriptions.nextDate,
                     active: subscriptions.active,
-                    categoryName: categories.name,
+                    categoryName: sql`COALESCE(${categories.displayName}, ${categories.name})`,
                 })
                 .from(subscriptions)
                 .leftJoin(
@@ -122,7 +122,7 @@ export async function GET(req: Request) {
                     amount: expenses.amount,
                     currency: expenses.currency,
                     date: expenses.date,
-                    categoryName: categories.name,
+                    categoryName: sql`COALESCE(${categories.displayName}, ${categories.name})`,
                 })
                 .from(expenses)
                 .leftJoin(categories, eq(expenses.categoryId, categories.id))
@@ -148,7 +148,7 @@ export async function GET(req: Request) {
                     currency: transactions.currency,
                     date: transactions.date,
                     createdAt: transactions.createdAt,
-                    categoryName: categories.name,
+                    categoryName: sql`COALESCE(${categories.displayName}, ${categories.name})`,
                 })
                 .from(transactions)
                 .leftJoin(
