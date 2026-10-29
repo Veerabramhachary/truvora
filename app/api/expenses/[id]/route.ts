@@ -4,8 +4,10 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import { expenses } from "@/db/schema/expenses";
-import { categories, transactions } from "@/db/schema/schema";
+import { transactions } from "@/db/schema/schema";
 import { expenseSchema } from "../schema";
+import { resolveCategory } from "@/lib/category-access";
+import { canUseFeature } from "@/lib/feature-access";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -56,16 +58,21 @@ export async function PATCH(req: Request, { params }: Params) {
             return NextResponse.json({ error: "Currency cannot be changed for an existing record" }, { status: 400 });
         }
 
-        const categoryResult = await db
-            .select({ id: categories.id })
-            .from(categories)
-            .where(eq(categories.name, data.category));
-
-        const category = categoryResult[0];
+        const category = await resolveCategory(
+            userId,
+            data.category,
+            data.type === "expense" ? "expense" : null,
+        );
         if (!category) {
             return NextResponse.json(
                 { error: "Category not found" },
                 { status: 404 },
+            );
+        }
+        if (category.isCustom && !(await canUseFeature(userId, "customCategories"))) {
+            return NextResponse.json(
+                { error: "Upgrade your plan to use custom categories" },
+                { status: 403 },
             );
         }
 

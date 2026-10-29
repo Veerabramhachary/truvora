@@ -6,6 +6,8 @@ import { categories, transactions } from "@/db/schema/schema";
 import { expenseSchema } from "./schema";
 import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
+import { resolveCategory } from "@/lib/category-access";
+import { canUseFeature } from "@/lib/feature-access";
 
 /**
  * `@refinedev/simple-rest` sends `_start`/`_end`/`_sort`/`_order` and reads the
@@ -73,7 +75,7 @@ export async function GET(req: NextRequest) {
                 date: expenses.date,
                 description: expenses.note,
                 categoryId: expenses.categoryId,
-                categoryName: categories.name,
+                categoryName: sql`COALESCE(${categories.displayName}, ${categories.name})`,
                 currency: expenses.currency,
             })
             .from(expenses)
@@ -109,17 +111,22 @@ export const POST = async (req: Request) => {
             return NextResponse.json({ error: "New financial records must use INR" }, { status: 400 });
         }
 
-        const categoryResult = await db
-            .select({ id: categories.id })
-            .from(categories)
-            .where(eq(categories.name, data.category));
-
-        const category = categoryResult[0];
+        const category = await resolveCategory(
+            userId,
+            data.category,
+            data.type === "expense" ? "expense" : null,
+        );
         if (!category) {
             return NextResponse.json(
                         { error: "Category not found" },
                         { status: 404 },
                     );
+        }
+        if (category.isCustom && !(await canUseFeature(userId, "customCategories"))) {
+            return NextResponse.json(
+                { error: "Upgrade your plan to use custom categories" },
+                { status: 403 },
+            );
         }
 
         await db.transaction(async (tx) => {

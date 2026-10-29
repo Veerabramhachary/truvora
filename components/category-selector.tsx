@@ -21,11 +21,13 @@ interface CategortSectorProps {
     type: "income" | "expense" | "subscription";
     value: string;
     onValueChange: (value: string) => void;
+    customCategories?: { id: string; name: string }[];
 }
 const CategorySelector = ({
     type,
     value,
     onValueChange,
+    customCategories = [],
 }: CategortSectorProps) => {
     const [open, setOpen] = useState(false);
     let categories:
@@ -55,6 +57,9 @@ const CategorySelector = ({
     );
 
     const selectedItem = allItems.find((item) => item.label === value);
+    const selectedCustomCategory = customCategories.find(
+        (category) => category.name === value,
+    );
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
@@ -65,7 +70,9 @@ const CategorySelector = ({
                     aria-expanded={open}
                     className="w-full justify-between font-normal"
                 >
-                    {selectedItem ? selectedItem.label : "Select a category..."}
+                    {selectedItem?.label ??
+                        selectedCustomCategory?.name ??
+                        (value || "Select a category...")}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
             </PopoverTrigger>
@@ -111,6 +118,34 @@ const CategorySelector = ({
                                 ))}
                             </CommandGroup>
                         ))}
+                        {customCategories.length > 0 && (
+                            <CommandGroup heading="Your Categories">
+                                {customCategories.map((category) => (
+                                    <CommandItem
+                                        key={category.id}
+                                        value={category.name}
+                                        onSelect={() => {
+                                            onValueChange(
+                                                category.name === value
+                                                    ? ""
+                                                    : category.name,
+                                            );
+                                            setOpen(false);
+                                        }}
+                                    >
+                                        <Check
+                                            className={cn(
+                                                "ms-2 h-4 w-4 shrink-0",
+                                                value === category.name
+                                                    ? "opacity-100"
+                                                    : "opacity-0",
+                                            )}
+                                        />
+                                        {category.name}
+                                    </CommandItem>
+                                ))}
+                            </CommandGroup>
+                        )}
                     </CommandList>
                 </Command>
             </PopoverContent>

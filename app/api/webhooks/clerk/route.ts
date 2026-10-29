@@ -15,6 +15,7 @@ import { reminderDeliveries } from "@/db/schema/reminder-deliveries";
 import { Resend } from "resend";
 import { WelcomeEmail } from "@/components/welcome-email";
 import { SITE_URL } from "@/lib/site";
+import { platformDiscounts } from "@/db/schema/platform-discounts";
 
 export async function POST(req: NextRequest) {
     const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET;
@@ -59,6 +60,17 @@ export async function POST(req: NextRequest) {
     try {
         if (eventType === "user.created" || eventType === "user.updated") {
             const { id, email_addresses, first_name, image_url } = evt.data;
+            const unsafeMetadata = "unsafe_metadata" in evt.data
+                ? evt.data.unsafe_metadata as Record<string, unknown> | null
+                : null;
+            const referralPlatform = typeof unsafeMetadata?.referralPlatform === "string"
+                ? unsafeMetadata.referralPlatform.trim().toLowerCase().slice(0, 64)
+                : null;
+            const [campaign] = referralPlatform ? await db
+                .select({ id: platformDiscounts.id })
+                .from(platformDiscounts)
+                .where(eq(platformDiscounts.platform, referralPlatform))
+                .limit(1) : [];
 
             const primaryEmail =
                 email_addresses.find(
@@ -91,6 +103,8 @@ export async function POST(req: NextRequest) {
                         email: primaryEmail,
                         firstName: first_name,
                         imageUrl: image_url,
+                        ...(eventType === "user.created" && referralPlatform ? { referralPlatform } : {}),
+                        ...(eventType === "user.created" && campaign ? { platformDiscountId: campaign.id } : {}),
                         updatedAt: new Date(),
                     })
                     .onConflictDoUpdate({
@@ -99,6 +113,8 @@ export async function POST(req: NextRequest) {
                             email: primaryEmail,
                             firstName: first_name,
                             imageUrl: image_url,
+                            ...(eventType === "user.created" && referralPlatform ? { referralPlatform } : {}),
+                            ...(eventType === "user.created" && campaign ? { platformDiscountId: campaign.id } : {}),
                             updatedAt: new Date(),
                         },
                     });

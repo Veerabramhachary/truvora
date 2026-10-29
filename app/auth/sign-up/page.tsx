@@ -68,11 +68,13 @@ const Page = () => {
 
         setIsLoading(true);
         try {
+            const referralPlatform = new URLSearchParams(window.location.search).get("ref")?.trim().toLowerCase().slice(0, 64);
             const result = await signUp.create({
                 firstName: firstName.trim(),
                 emailAddress: email.trim(),
                 password,
                 legalAccepted: true,
+                ...(referralPlatform ? { unsafeMetadata: { referralPlatform } } : {}),
             });
             if (result.status === "missing_requirements") {
                 // Trigger email verification, then hand off to the code screen.
@@ -80,9 +82,7 @@ const Page = () => {
                     strategy: "email_code",
                 });
                 toast.success("Verification code sent!");
-                router.push(
-                    `/auth/verify-email?email=${encodeURIComponent(email.trim())}`,
-                );
+                router.push("/auth/verify-email");
             } else if (result.status === "complete") {
                 // No verification required for this instance.
                 await setActive({ session: result.createdSessionId });

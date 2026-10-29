@@ -1,7 +1,7 @@
 "use client";
 
 import { useSignUp } from "@clerk/nextjs";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -15,8 +15,7 @@ const RESEND_SECONDS = 60;
 export default function VerifyEmailContent() {
     const { isLoaded, signUp, setActive } = useSignUp();
     const router = useRouter();
-    const searchParams = useSearchParams();
-    const email = searchParams.get("email");
+    const email = signUp?.emailAddress ?? "";
 
     const [code, setCode] = useState("");
     const [isLoading, setIsLoading] = useState(false);
@@ -52,14 +51,6 @@ export default function VerifyEmailContent() {
         const timer = setTimeout(() => setTimeLeft((prev) => prev - 1), 1000);
         return () => clearTimeout(timer);
     }, [timeLeft]);
-
-    // If no email in URL, redirect to sign-up
-    useEffect(() => {
-        if (isLoaded && !email) {
-            toast.error("No email provided. Please sign up again.");
-            router.push("/auth/sign-up");
-        }
-    }, [isLoaded, email, router]);
 
     // If there's no active sign-up, tell the user and go back. Kept out of the
     // render path so it doesn't fire side effects during render (StrictMode
@@ -105,13 +96,8 @@ export default function VerifyEmailContent() {
             if (result.status === "complete") {
                 await finishSignUp(result);
             } else {
-                const emailStillUnverified = result.unverifiedFields?.includes("email_address");
                 await finishSignUp(result);
-                setFormError(
-                    result.missingFields?.length && !emailStillUnverified
-                        ? "Your email is verified. Complete the remaining account details below."
-                        : "That code didn't complete verification. Try again.",
-                );
+                setFormError("Your email could not be verified yet. Please try again.");
             }
         } catch (error: unknown) {
             // A code can be consumed before the response reaches this page

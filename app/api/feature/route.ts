@@ -23,6 +23,7 @@ const FEATURE_KEYS = [
     "reminders",
     "notifications",
     "webhooks",
+    "customCategories",
 ] as const satisfies ReadonlyArray<keyof FeatureLimits>;
 
 function isFeatureKey(value: string): value is keyof FeatureLimits {

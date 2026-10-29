@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
                 createdAt: transactions.createdAt,
                 category: {
                     id: categories.id,
-                    name: categories.name,
+                    name: sql`COALESCE(${categories.displayName}, ${categories.name})`,
                     color: categories.color,
                 },
                 date: transactions.date,

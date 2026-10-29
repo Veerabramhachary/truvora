@@ -135,7 +135,7 @@ export async function POST(request: NextRequest) {
             client_reference_id: userId,
             metadata,
             subscription_data: { metadata },
-            success_url: `${origin}/?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+            success_url: `${origin}/?checkout=success`,
             cancel_url: `${origin}/?checkout=cancelled`,
         });
 

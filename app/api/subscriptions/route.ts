@@ -11,6 +11,8 @@ import {
     subscriptionEndDate,
     subscriptionSchema,
 } from "./schema";
+import { resolveCategory } from "@/lib/category-access";
+import { canUseFeature } from "@/lib/feature-access";
 
 /**
  * `@refinedev/simple-rest` sends `_start`/`_end`/`_sort`/`_order` and reads the
@@ -89,7 +91,7 @@ export async function GET(req: NextRequest) {
                 date: subscriptions.startDate,
                 description: subscriptions.note,
                 categoryId: subscriptions.categoryId,
-                categoryName: categories.name,
+                categoryName: sql`COALESCE(${categories.displayName}, ${categories.name})`,
                 currency: subscriptions.currency,
                 interval: subscriptions.interval,
                 intervalCount: subscriptions.intervalCount,
@@ -144,16 +146,21 @@ export async function POST(req: Request) {
         if (data.currency !== "INR") {
             return NextResponse.json({ error: "New financial records must use INR" }, { status: 400 });
         }
-        const categoryResult = await db
-            .select({id: categories.id})
-            .from(categories)
-            .where(eq(categories.name, data.category))
-
-        const category = categoryResult[0]?.id;
+        const category = await resolveCategory(
+            userId,
+            data.category,
+            "subscription",
+        );
         if (!category) {
             return NextResponse.json(
                 { error: "Category not found" },
                 { status: 404 },
+            );
+        }
+        if (category.isCustom && !(await canUseFeature(userId, "customCategories"))) {
+            return NextResponse.json(
+                { error: "Upgrade your plan to use custom categories" },
+                { status: 403 },
             );
         }
 
@@ -230,7 +237,7 @@ export async function POST(req: Request) {
                             data.interval,
                             data.intervalCount,
                         ),
-                    categoryId: category,
+                    categoryId: category.id,
                     note: data.note || null,
                     // Keep future-dated subscriptions eligible to become
                     // active automatically when their start date arrives.
@@ -268,7 +275,7 @@ export async function POST(req: Request) {
                 date: data.startDate,
                 type: "subscription",
                 userId,
-                categoryId: category,
+                categoryId: category.id,
                 action: "created",
                 currency: data.currency,
                 createdAt: new Date(),

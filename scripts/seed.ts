@@ -1,8 +1,7 @@
 import { closeDb, db } from "@/db";
 import { categories } from "../db/schema/schema";
 import { plans } from "../db/schema/plans";
-import { asc, eq } from "drizzle-orm";
-import { sql } from "drizzle-orm";
+import { and, asc, eq, notInArray, sql } from "drizzle-orm";
 import {
     expenseCategories,
     incomeCategories,
@@ -22,47 +21,62 @@ import {
 const PLAN_TIERS = [
     {
         name: "Free",
-        description: "Get a clear picture of your recurring spending.",
-        price: "0",
+        description: "Track recurring spending and stay ahead of renewals.",
+        price: "0.00",
         featureLimits: {
-            exports: { limit: 5, interval: "month" as const },
-            subscriptions: { limit: 5 },
+            exports: { limit: 10, interval: "month" as const },
+            subscriptions: { limit: 10 },
             charts: "basic" as const,
+            reminders: "email" as const,
+            exportFormats: { csv: true, pdf: false, pdfLevel: "none" as const, xlsx: false },
+            customCategories: false,
         },
         features: [
-            "5 tracked subscriptions",
-            "Basic spending chart",
-            "5 CSV exports a month",
+            "Track up to 10 subscriptions",
+            "Basic recurring-spend chart",
+            "10 CSV exports per month",
+            "Renewal reminders",
         ],
     },
     {
         name: "Starter",
-        description: "For people who want to stay on top of every bill.",
-        price: "99",
+        description: "More room to organize spending and export your data.",
+        price: "99.00",
         featureLimits: {
-            exports: { limit: 25, interval: "month" as const },
-            subscriptions: { limit: 25 },
+            exports: { limit: 100, interval: "month" as const },
+            subscriptions: { limit: 50 },
             charts: "comparative" as const,
+            reminders: "email" as const,
+            exportFormats: { csv: true, pdf: true, pdfLevel: "basic" as const, xlsx: false },
+            customCategories: true,
         },
         features: [
-            "25 tracked subscriptions",
-            "Expenses vs subscriptions breakdown",
-            "25 CSV exports a month",
+            "Track up to 50 subscriptions",
+            "Expense vs subscription breakdown",
+            "Custom categories and renewal reminders",
+            "100 CSV exports per month",
+            "Basic PDF exports per month",
         ],
     },
     {
         name: "Pro",
-        description: "For complete visibility and more room to grow.",
-        price: "199",
+        description: "Advanced insights, flexible views, and expanded exports.",
+        price: "199.00",
         featureLimits: {
             exports: { limit: 1000, interval: "month" as const },
-            subscriptions: { limit: 100 },
-            charts: "comparative" as const,
+            subscriptions: { limit: -1 },
+            charts: "advanced" as const,
+            reminders: "priority" as const,
+            viewsAndFilters: true,
+            exportFormats: { csv: true, pdf: true, pdfLevel: "advanced" as const, xlsx: true },
+            customCategories: true,
         },
         features: [
-            "Up to 100 tracked subscriptions",
-            "Expenses vs subscriptions breakdown",
-            "Up to 1,000 CVS exports a month",
+            "Unlimited subscriptions",
+            "Advanced charts, views, and filters",
+            "Priority renewal reminders",
+            "1,000 CSV exports per month",
+            "Advanced PDF and XLSX exports per month",
         ],
     },
 ] as const;
@@ -71,8 +85,10 @@ export const seedPlans = async () => {
     try {
         console.log("Seeding plans...");
 
-        const existing = await db.select({ name: plans.name }).from(plans);
-        const existingNames = new Set(existing.map((plan) => plan.name));
+        const names = PLAN_TIERS.map((plan) => plan.name);
+        await db.update(plans).set({ isActive: false }).where(
+            and(eq(plans.currency, "INR"), eq(plans.isActive, true), notInArray(plans.name, names)),
+        );
 
         for (const tier of PLAN_TIERS) {
             const values = {
@@ -84,15 +100,22 @@ export const seedPlans = async () => {
                 features: [...tier.features],
                 featureLimits: tier.featureLimits,
                 isActive: true,
+                intervalCount: 1,
+                trialDays: 0,
                 // Not a gateway plan yet — nothing has been purchased.
                 provider: "none" as const,
+                providerPlanId: null,
+                metadata: { tier: tier.name.toLowerCase() },
             };
 
-            if (existingNames.has(tier.name)) {
+            const [existing] = await db.select({ id: plans.id }).from(plans).where(
+                and(eq(plans.name, tier.name), eq(plans.currency, "INR"), eq(plans.interval, "month")),
+            ).limit(1);
+            if (existing) {
                 await db
                     .update(plans)
                     .set(values)
-                    .where(eq(plans.name, tier.name));
+                    .where(eq(plans.id, existing.id));
                 console.log(`  ~ updated "${tier.name}"`);
             } else {
                 await db.insert(plans).values(values);
@@ -149,7 +172,7 @@ export const seedDynamicCategories = async () => {
                         parentName: null,
                     })
                     .onConflictDoUpdate({
-                        target: categories.name, // Requires UNIQUE constraint on 'name'
+                        target: categories.name,
                         set: {
                             name: sql`excluded.name`,
                             // Not overwriting icon/color here so manual DB edits aren't wiped out
@@ -162,7 +185,7 @@ export const seedDynamicCategories = async () => {
                     icon: "📄", // Default child icon
                     color: "#9ca3af", // Default child color
                     userId: null,
-                    parentName: parentName, // Link to the parent we just created
+                    parentName: parentName,
                 }));
 
                 // 3. Upsert Child Categories

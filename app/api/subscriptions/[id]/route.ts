@@ -3,13 +3,15 @@ import { NextResponse } from "next/server";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import { categories, subscriptions, transactions } from "@/db/schema/schema";
+import { subscriptions, transactions } from "@/db/schema/schema";
 import { featureUsage } from "@/db/schema/feature-usage";
 import {
     nextRenewalDate,
     subscriptionEndDate,
     subscriptionSchema,
 } from "../schema";
+import { resolveCategory } from "@/lib/category-access";
+import { canUseFeature } from "@/lib/feature-access";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -89,16 +91,21 @@ export async function PATCH(req: Request, { params }: Params) {
             return NextResponse.json({ error: "Currency cannot be changed for an existing record" }, { status: 400 });
         }
 
-        const categoryResult = await db
-            .select({ id: categories.id })
-            .from(categories)
-            .where(eq(categories.name, data.category));
-
-        const category = categoryResult[0];
+        const category = await resolveCategory(
+            userId,
+            data.category,
+            "subscription",
+        );
         if (!category) {
             return NextResponse.json(
                 { error: "Category not found" },
                 { status: 404 },
+            );
+        }
+        if (category.isCustom && !(await canUseFeature(userId, "customCategories"))) {
+            return NextResponse.json(
+                { error: "Upgrade your plan to use custom categories" },
+                { status: 403 },
             );
         }
 
