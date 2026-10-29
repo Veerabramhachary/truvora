@@ -88,9 +88,15 @@ export function CustomCategoryField({
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ name: categoryName, type }),
             });
-            const category = (await response.json()) as
-                | CustomCategory
-                | { error?: string };
+            const responseText = await response.text();
+            let category: CustomCategory | { error?: string };
+            try {
+                category = JSON.parse(responseText) as CustomCategory | { error?: string };
+            } catch {
+                throw new Error(
+                    responseText || `Could not create category (HTTP ${response.status})`,
+                );
+            }
             if (!response.ok || !("name" in category)) {
                 throw new Error(
                     "error" in category

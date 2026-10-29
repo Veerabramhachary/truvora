@@ -2,7 +2,6 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import type { NextFetchEvent, NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { checkRateLimits, getClientIp, rateLimitHeaders } from "@/lib/rate-limit";
-import { SITE_URL } from "@/lib/site";
 
 // Public routes (marketing pages)
 const isPublicRoute = createRouteMatcher([
@@ -38,14 +37,15 @@ const isPublicRoute = createRouteMatcher([
 
 // API routes
 const isApiRoute = createRouteMatcher(["/api/(.*)"]);
-const APP_ORIGIN = new URL(SITE_URL).origin;
-
 function hasAllowedOrigin(request: NextRequest): boolean {
     const origin = request.headers.get("origin");
     if (!origin) return true; // Server-to-server callers and webhooks.
 
     try {
-        return new URL(origin).origin === APP_ORIGIN;
+        // Validate against the origin serving this request. Comparing against
+        // SITE_URL rejects local and preview deployments whenever their host
+        // differs from the configured canonical marketing URL.
+        return new URL(origin).origin === request.nextUrl.origin;
     } catch {
         return false;
     }
@@ -95,7 +95,7 @@ export async function proxy(req: NextRequest, evt: NextFetchEvent) {
             return new NextResponse(null, {
                 status: 204,
                 headers: {
-                    "Access-Control-Allow-Origin": APP_ORIGIN,
+                    "Access-Control-Allow-Origin": request.nextUrl.origin,
                     "Access-Control-Allow-Credentials": "true",
                     "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
                     "Access-Control-Allow-Headers": "Content-Type, Authorization",
