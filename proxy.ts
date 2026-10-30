@@ -93,6 +93,13 @@ function isSameOrigin(request: NextRequest): boolean {
 }
 
 export async function proxy(req: NextRequest, evt: NextFetchEvent) {
+    // The v0 preview can boot before project secrets are injected. Keep the
+    // public shell renderable in development; production still fails closed
+    // through Clerk when the required secret is absent.
+    if (process.env.NODE_ENV === "development" && !process.env.CLERK_SECRET_KEY) {
+        return NextResponse.next();
+    }
+
     return clerkMiddleware(async (auth, request) => {
         const { userId, redirectToSignIn } = await auth();
 

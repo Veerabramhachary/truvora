@@ -1,6 +1,13 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { config as loadEnv } from "dotenv";
 import { NextConfig } from "next";
+
+// v0 keeps project variables in a shared env file outside the editable
+// workspace. Next.js does not automatically search that path, so load it
+// before Clerk's middleware is evaluated. On Vercel this file is absent and
+// the platform-provided process.env values remain the source of truth.
+loadEnv({ path: "/vercel/share/.env.project", override: true });
 
 const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 
