@@ -8,6 +8,7 @@ import { eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { fromMinorUnits } from "@/lib/money";
+import { updatePlatformDiscountRedemption } from "@/lib/platform-discounts";
 
 type ExpandedInvoice = Stripe.Invoice & {
     subscription: Stripe.Subscription | string;
@@ -70,6 +71,25 @@ export async function POST(req: NextRequest) {
                 event.data.object as Stripe.Checkout.Session,
             );
             break;
+        case "checkout.session.async_payment_succeeded": {
+            const session = event.data.object as Stripe.Checkout.Session;
+            await updatePlatformDiscountRedemption(
+                session.metadata?.discountRedemptionId,
+                session.id,
+                "redeemed",
+            );
+            break;
+        }
+        case "checkout.session.expired":
+        case "checkout.session.async_payment_failed": {
+            const session = event.data.object as Stripe.Checkout.Session;
+            await updatePlatformDiscountRedemption(
+                session.metadata?.discountRedemptionId,
+                session.id,
+                "released",
+            );
+            break;
+        }
         default:
             console.warn(`Unhandled event type ${event.type}`);
     }
@@ -87,6 +107,17 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
         typeof session.customer === "string"
             ? session.customer
             : session.customer?.id;
+
+    if (
+        session.payment_status === "paid" ||
+        session.payment_status === "no_payment_required"
+    ) {
+        await updatePlatformDiscountRedemption(
+            session.metadata?.discountRedemptionId,
+            session.id,
+            "redeemed",
+        );
+    }
 
     if (!userId || !customerId) {
         console.warn(

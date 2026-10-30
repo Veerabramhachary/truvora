@@ -5,6 +5,7 @@ import "./brand-theme.css";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Toaster } from "sonner";
 import { ThemeProvider } from "@/components/theme-provider";
+import ReferralCapture from "@/components/referral-capture";
 import { Suspense } from "react";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
 
@@ -91,7 +92,10 @@ export default function RootLayout({
                           Refine mounts its own, so the extra one was dead
                           weight.
                         */}
-                        <Suspense fallback={null}>{children}</Suspense>
+                        <Suspense fallback={null}>
+                            <ReferralCapture />
+                            {children}
+                        </Suspense>
                     </ThemeProvider>
                     <Toaster />
                 </body>

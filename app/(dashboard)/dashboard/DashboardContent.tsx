@@ -32,9 +32,9 @@ const ChartAreaInteractive = dynamic(
                 </CardHeader>
                 <CardContent
                     className="px-2 pt-4 sm:px-6 sm:pt-6"
-                    style={{ minHeight: "300px" }}
+                    style={{ minHeight: "280px" }}
                 >
-                    <Skeleton className="h-52 w-full rounded-xl" />
+                    <Skeleton className="h-48 w-full rounded-xl" />
                 </CardContent>
             </Card>
         ),
@@ -57,17 +57,19 @@ export default function DashboardContent() {
         <div className="flex flex-1 flex-col">
             <div className="@container/main flex flex-1 flex-col">
                 <div className="flex flex-col gap-6 px-4 py-6 lg:px-6">
-                    <Card className="overflow-hidden border-primary/15 bg-primary text-primary-foreground shadow-lg shadow-primary/10">
+                    <Card className="overflow-hidden">
                         <CardContent className="flex flex-col gap-2 p-6 sm:p-8">
-                            <CardDescription className="text-primary-foreground/70">Total spending this month</CardDescription>
-                            <CardTitle className="text-4xl tracking-tight sm:text-5xl">{formattedTotal}</CardTitle>
-                            <p className="text-sm text-primary-foreground/75">Across expenses and subscriptions</p>
+                            <CardDescription>Total spending this month</CardDescription>
+                            <CardTitle className="text-5xl tracking-tight sm:text-6xl">{formattedTotal}</CardTitle>
+                            <p className="text-sm text-muted-foreground">Across expenses and subscriptions</p>
                         </CardContent>
                     </Card>
 
                     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(300px,0.8fr)] xl:items-start">
                         <ChartAreaInteractive />
-                        <SectionCards />
+                        <div className="min-w-0">
+                            <SectionCards />
+                        </div>
                     </div>
 
                     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.75fr)] xl:items-start">

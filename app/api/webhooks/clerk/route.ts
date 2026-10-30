@@ -3,19 +3,15 @@ import { WebhookEvent } from "@clerk/nextjs/server";
 import { headers } from "next/headers";
 import { db } from "@/db";
 import { users } from "@/db/schema/users";
-import { asc, eq, inArray, or } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { app_subscriptions, plans } from "@/db/schema/plans";
-import { expenses } from "@/db/schema/expenses";
-import { categories, subscriptions, transactions } from "@/db/schema/schema";
-import { featureUsage } from "@/db/schema/feature-usage";
-import { paymentInvoices } from "@/db/schema/appInvoices";
-import { paymentTransactions } from "@/db/schema/appTransactions";
-import { reminderDeliveries } from "@/db/schema/reminder-deliveries";
 import { Resend } from "resend";
 import { WelcomeEmail } from "@/components/welcome-email";
 import { SITE_URL } from "@/lib/site";
 import { platformDiscounts } from "@/db/schema/platform-discounts";
+import { markWebhookDeletion } from "@/lib/account-deletion";
+import { accountDeletions } from "@/db/schema/account-deletions";
 
 export async function POST(req: NextRequest) {
     const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET;
@@ -95,7 +91,15 @@ export async function POST(req: NextRequest) {
               half a sign-up. userId also references users.id, so the user has
               to land first within the same transaction.
             */
-            await db.transaction(async (tx) => {
+            const shouldSendWelcome = await db.transaction(async (tx) => {
+                await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${id}))`);
+                const [deletion] = await tx
+                    .select({ clerkUserId: accountDeletions.clerkUserId })
+                    .from(accountDeletions)
+                    .where(eq(accountDeletions.clerkUserId, id))
+                    .limit(1);
+                if (deletion) return false;
+
                 await tx
                     .insert(users)
                     .values({
@@ -125,7 +129,7 @@ export async function POST(req: NextRequest) {
                     .where(eq(app_subscriptions.userId, id))
                     .limit(1);
 
-                if (existingSubscription.length > 0) return;
+                if (existingSubscription.length > 0) return true;
 
                 // Free tier = cheapest active plan. `price` is a numeric
                 // column, so Drizzle orders it numerically despite returning
@@ -145,7 +149,7 @@ export async function POST(req: NextRequest) {
                         "[clerk-webhook] No active plan found; created user %s without a subscription row.",
                         id,
                     );
-                    return;
+                    return true;
                 }
 
                 const now = new Date();
@@ -163,13 +167,14 @@ export async function POST(req: NextRequest) {
                     createdAt: now,
                     updatedAt: now,
                 });
+                return true;
             });
 
             // Clerk emits user.created after either email verification or
             // successful OAuth registration. Keeping this on the shared
             // webhook path covers both signup methods; retries use a stable
             // idempotency key so they don't send duplicate welcome emails.
-            if (eventType === "user.created") {
+            if (eventType === "user.created" && shouldSendWelcome) {
                 try {
                     const resendKey = process.env.RESEND_API_KEY;
                     const sender = process.env.RENEWAL_EMAIL_FROM;
@@ -201,54 +206,7 @@ export async function POST(req: NextRequest) {
 
         if (eventType === "user.deleted") {
             const { id } = evt.data;
-            if (id) {
-                await db.transaction(async (tx) => {
-                    const billingSubs = await tx.select({ id: app_subscriptions.id }).from(app_subscriptions).where(eq(app_subscriptions.userId, id));
-                    const billingIds = billingSubs.map((row) => row.id);
-                    if (billingIds.length) {
-                        // Retain aggregate billing facts, but sever customer,
-                        // subscription, and provider references and remove invoice details.
-                        await tx.update(paymentTransactions).set({ subscriptionsId: null, invoiceId: null, idempotencyKey: null, providerTransactionId: null, metadata: null, errorMessage: null }).where(eq(paymentTransactions.subscriptionsId, billingIds[0]));
-                        for (const billingId of billingIds.slice(1)) await tx.update(paymentTransactions).set({ subscriptionsId: null, invoiceId: null, idempotencyKey: null, providerTransactionId: null, metadata: null, errorMessage: null }).where(eq(paymentTransactions.subscriptionsId, billingId));
-                        await tx.update(paymentInvoices).set({ subscriptionId: null, providerInvoiceId: null, invoiceNumber: null, lines: null, metadata: null }).where(eq(paymentInvoices.subscriptionId, billingIds[0]));
-                        for (const billingId of billingIds.slice(1)) await tx.update(paymentInvoices).set({ subscriptionId: null, providerInvoiceId: null, invoiceNumber: null, lines: null, metadata: null }).where(eq(paymentInvoices.subscriptionId, billingId));
-                    }
-                    const userSubscriptions = await tx
-                        .select({ id: subscriptions.id })
-                        .from(subscriptions)
-                        .where(eq(subscriptions.userId, id));
-                    const subscriptionIds = userSubscriptions.map((row) => row.id);
-                    const userExpenses = await tx
-                        .select({ id: expenses.id })
-                        .from(expenses)
-                        .where(eq(expenses.userId, id));
-                    const expenseIds = userExpenses.map((row) => row.id);
-
-                    // Delete ledger rows by owner and by their linked source
-                    // records. The relation filters also clean up older rows
-                    // whose stored user_id did not match the Clerk user id.
-                    const transactionFilters = [eq(transactions.userId, id)];
-                    if (expenseIds.length) {
-                        transactionFilters.push(inArray(transactions.expenseId, expenseIds));
-                    }
-                    if (subscriptionIds.length) {
-                        transactionFilters.push(inArray(transactions.subscriptionId, subscriptionIds));
-                    }
-                    await tx.delete(transactions).where(or(...transactionFilters));
-
-                    if (subscriptionIds.length) {
-                        await tx.delete(reminderDeliveries).where(
-                            inArray(reminderDeliveries.subscriptionId, subscriptionIds),
-                        );
-                    }
-                    await tx.delete(expenses).where(eq(expenses.userId, id));
-                    await tx.delete(subscriptions).where(eq(subscriptions.userId, id));
-                    await tx.delete(featureUsage).where(eq(featureUsage.userId, id));
-                    await tx.delete(categories).where(eq(categories.userId, id));
-                    await tx.delete(app_subscriptions).where(eq(app_subscriptions.userId, id));
-                    await tx.delete(users).where(eq(users.id, id));
-                });
-            }
+            if (id) await markWebhookDeletion(id);
         }
     } catch (error) {
         // Logged, and 500 rather than 400 so Clerk retries a transient

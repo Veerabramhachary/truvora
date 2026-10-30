@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import { clerkErrorMessage } from "@/lib/api-error";
+import { REFERRAL_PLATFORM_KEY } from "@/components/referral-capture";
 
 type FieldErrors = {
     name?: string;
@@ -35,6 +36,14 @@ const Page = () => {
     const clearField = (field: keyof FieldErrors) => {
         setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
     };
+
+    const getReferralPlatform = () =>
+        new URLSearchParams(window.location.search)
+            .get("ref")
+            ?.trim()
+            .toLowerCase()
+            .slice(0, 64) ||
+        window.sessionStorage.getItem(REFERRAL_PLATFORM_KEY);
 
     const validate = (): FieldErrors => {
         const next: FieldErrors = {};
@@ -68,7 +77,7 @@ const Page = () => {
 
         setIsLoading(true);
         try {
-            const referralPlatform = new URLSearchParams(window.location.search).get("ref")?.trim().toLowerCase().slice(0, 64);
+            const referralPlatform = getReferralPlatform();
             const result = await signUp.create({
                 firstName: firstName.trim(),
                 emailAddress: email.trim(),
@@ -117,9 +126,13 @@ const Page = () => {
         setFormError(null);
 
         try {
+            const referralPlatform = getReferralPlatform();
             await signUp.authenticateWithRedirect({
                 strategy: provider,
                 legalAccepted: true,
+                ...(referralPlatform
+                    ? { unsafeMetadata: { referralPlatform } }
+                    : {}),
                 redirectUrl: "/sso-callback",
                 redirectUrlComplete: "/dashboard",
             });

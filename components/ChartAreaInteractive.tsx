@@ -259,11 +259,11 @@ export function ChartAreaInteractive() {
             </CardHeader>
             <CardContent
                 className="px-2 pt-4 sm:px-6 sm:pt-6"
-                style={{ minHeight: "300px" }}
+                style={{ minHeight: "280px" }}
             >
                 <ChartContainer
                     config={chartConfig}
-                    className="aspect-auto h-52 w-full"
+                    className="aspect-auto h-48 w-full"
                 >
                     <AreaChart data={transformedData}>
                         <defs>
@@ -309,7 +309,7 @@ export function ChartAreaInteractive() {
                             dataKey="date"
                             tickLine={false}
                             axisLine={false}
-                            tickMargin={8}
+                            tickMargin={4}
                             minTickGap={32}
                             tickFormatter={(value) => {
                                 const date = new Date(value);
@@ -377,9 +377,9 @@ function ChartSkeleton() {
             </CardHeader>
             <CardContent
                 className="px-2 pt-4 sm:px-6 sm:pt-6"
-                style={{ minHeight: "300px" }}
+                style={{ minHeight: "280px" }}
             >
-                <Skeleton className="h-52 w-full rounded-xl" />
+                <Skeleton className="h-48 w-full rounded-xl" />
             </CardContent>
         </Card>
     );

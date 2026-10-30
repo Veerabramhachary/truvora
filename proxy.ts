@@ -16,6 +16,7 @@ const isPublicRoute = createRouteMatcher([
     "/sso-callback(.*)",
     "/api/webhooks/clerk(.*)",
     "/api/webhooks/stripe(.*)",
+    "/api/account/deletion-status(.*)",
     "/api/plans(.*)",
     "/api/stripe/prices(.*)",
     // Cron routes authenticate with the CRON_SECRET bearer token instead of a
