@@ -8,6 +8,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { toPaise } from "@/lib/money";
 import { checkRateLimits, rateLimitResponse } from "@/lib/rate-limit";
+import {
+    attachCheckoutSession,
+    reservePlatformDiscount,
+    updatePlatformDiscountRedemption,
+} from "@/lib/platform-discounts";
 
 const bodySchema = z.object({
     planId: z.string().uuid("planId must be a uuid"),
@@ -123,21 +128,47 @@ export async function POST(request: NextRequest) {
         }
 
         const origin = request.headers.get("origin") ?? request.nextUrl.origin;
-        const metadata = { userId, planId: plan.id };
+        const reservation = await reservePlatformDiscount(userId);
+        const metadata = {
+            userId,
+            planId: plan.id,
+            ...(reservation ? { discountRedemptionId: reservation.id } : {}),
+        };
 
-        const session = await getStripe().checkout.sessions.create({
-            mode: "subscription",
-            line_items: [{ price: plan.providerPlanId, quantity: 1 }],
-            // Reuse the existing Stripe customer so we never create duplicates.
-            ...(existingUser?.stripeCustomerId
-                ? { customer: existingUser.stripeCustomerId }
-                : { customer_email: email }),
-            client_reference_id: userId,
-            metadata,
-            subscription_data: { metadata },
-            success_url: `${origin}/?checkout=success`,
-            cancel_url: `${origin}/?checkout=cancelled`,
-        });
+        let session: Awaited<
+            ReturnType<ReturnType<typeof getStripe>["checkout"]["sessions"]["create"]>
+        >;
+        try {
+            session = await getStripe().checkout.sessions.create({
+                mode: "subscription",
+                line_items: [{ price: plan.providerPlanId, quantity: 1 }],
+                // Reuse the existing Stripe customer so we never create duplicates.
+                ...(existingUser?.stripeCustomerId
+                    ? { customer: existingUser.stripeCustomerId }
+                    : { customer_email: email }),
+                ...(reservation
+                    ? { discounts: [{ coupon: reservation.couponId }] }
+                    : {}),
+                client_reference_id: userId,
+                metadata,
+                subscription_data: { metadata },
+                success_url: `${origin}/?checkout=success`,
+                cancel_url: `${origin}/?checkout=cancelled`,
+            });
+        } catch (error) {
+            if (reservation) {
+                await updatePlatformDiscountRedemption(
+                    reservation.id,
+                    null,
+                    "released",
+                );
+            }
+            throw error;
+        }
+
+        if (reservation) {
+            await attachCheckoutSession(reservation.id, session.id);
+        }
 
         return NextResponse.json({ url: session.url });
     } catch (error) {

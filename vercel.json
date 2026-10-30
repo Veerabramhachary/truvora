@@ -3,6 +3,10 @@
         {
             "path": "/api/crons/subscriptionsTC",
             "schedule": "0 0 * * *"
+        },
+        {
+            "path": "/api/crons/account-deletions",
+            "schedule": "0 0 * * *"
         }
     ],
     "headers": [

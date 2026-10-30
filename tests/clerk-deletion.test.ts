@@ -8,7 +8,7 @@ import { subscriptions } from "@/db/schema/schema";
 import { reminderDeliveries } from "@/db/schema/reminder-deliveries";
 import { users } from "@/db/schema/users";
 
-const mocks = vi.hoisted(() => ({ event: null as unknown }));
+const mocks = vi.hoisted(() => ({ event: null as unknown, verificationFails: false }));
 
 vi.mock("svix", () => ({
     Webhook: vi.fn().mockImplementation(() => ({
@@ -25,7 +25,22 @@ vi.mock("next/headers", () => ({
 }));
 
 vi.mock("@/db", () => ({
-    db: { transaction: vi.fn() },
+    db: {
+        transaction: vi.fn(),
+        insert: vi.fn(() => ({
+            values: () => ({ onConflictDoUpdate: async () => [] }),
+        })),
+        update: vi.fn(() => ({
+            set: () => ({ where: async () => [] }),
+        })),
+        select: vi.fn(() => ({
+            from: () => ({
+                where: () => ({
+                    limit: async () => mocks.verificationFails ? [{ id: USER_ID }] : [],
+                }),
+            }),
+        })),
+    },
 }));
 
 const USER_ID = "user_deleted";
@@ -44,6 +59,7 @@ function createTransactionMock(options?: { failReminderDelete?: boolean }) {
     const selectionConditions: Array<{ table: unknown; condition: unknown }> = [];
 
     const tx = {
+        execute: vi.fn(async () => []),
         select: vi.fn(() => ({
             from: (table: unknown) => ({
                 where: async (condition: unknown) => {
@@ -91,6 +107,7 @@ afterEach(() => {
     if (vi.isMockFunction(console.error)) {
         vi.mocked(console.error).mockRestore();
     }
+    mocks.verificationFails = false;
     vi.clearAllMocks();
 });
 
@@ -143,5 +160,17 @@ describe("Clerk account deletion cleanup", () => {
 
         expect(response.status).toBe(500);
         expect(deleteCalls.some(({ table }) => table === users)).toBe(false);
+    });
+
+    it("does not acknowledge deletion when post-cleanup verification finds remaining data", async () => {
+        process.env.CLERK_WEBHOOK_SECRET = "whsec_test";
+        mocks.event = deletionEvent();
+        mocks.verificationFails = true;
+        createTransactionMock();
+        vi.spyOn(console, "error").mockImplementation(() => {});
+
+        const response = await sendDeletionWebhook();
+
+        expect(response.status).toBe(500);
     });
 });

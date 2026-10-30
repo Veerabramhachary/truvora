@@ -9,6 +9,8 @@ export default function SettingsContent() {
     const router = useRouter();
     const [deleting, setDeleting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [deletionStatusToken, setDeletionStatusToken] = useState<string | null>(null);
+    const [deletionPending, setDeletionPending] = useState(false);
 
     async function deleteAccount() {
         if (!window.confirm("Delete your Truvora account and personal financial data? This cannot be undone.")) return;
@@ -16,10 +18,40 @@ export default function SettingsContent() {
         setError(null);
         try {
             const response = await fetch("/api/account", { method: "DELETE" });
-            if (!response.ok) throw new Error("Could not delete your account. Please contact support.");
-            router.replace("/");
+            const result = await response.json() as { status?: string; statusToken?: string; error?: string };
+            if (!response.ok) throw new Error(result.error ?? "Could not delete your account. Please contact support.");
+            if (!result.statusToken) throw new Error("Deletion status could not be verified. Please contact support.");
+            if (result.status === "completed") {
+                router.replace("/");
+                return;
+            }
+            setDeletionStatusToken(result.statusToken);
+            setDeletionPending(true);
         } catch (cause) {
             setError(cause instanceof Error ? cause.message : "Could not delete your account.");
+        } finally {
+            setDeleting(false);
+        }
+    }
+
+    async function checkDeletionStatus() {
+        if (!deletionStatusToken) return;
+        setDeleting(true);
+        setError(null);
+        try {
+            const response = await fetch("/api/account/deletion-status", {
+                headers: { Authorization: `Bearer ${deletionStatusToken}` },
+            });
+            if (!response.ok) throw new Error("Could not check deletion status. Please try again.");
+            const result = await response.json() as { status?: string };
+            if (result.status === "completed") {
+                router.replace("/");
+                return;
+            }
+            setDeletionPending(true);
+        } catch (cause) {
+            setError(cause instanceof Error ? cause.message : "Could not check deletion status.");
+        } finally {
             setDeleting(false);
         }
     }
@@ -29,9 +61,10 @@ export default function SettingsContent() {
         <div className="rounded-lg border p-6">
             <h2 className="text-lg font-medium">Delete account</h2>
             <p className="mt-2 text-sm text-muted-foreground">This permanently removes your account, financial records and usage data. Limited billing totals may be retained without account or provider identifiers where required.</p>
+            {deletionPending && <p role="status" className="mt-3 text-sm text-muted-foreground">Deletion is still processing. Cleanup will retry automatically; check again to confirm when it is complete.</p>}
             {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}{process.env.NEXT_PUBLIC_SUPPORT_EMAIL && <> <a className="underline" href={`mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL}`}>Contact support.</a></>}</p>}
-            <Button variant="destructive" className="mt-4" onClick={deleteAccount} disabled={deleting}>
-                <Trash2 />{deleting ? "Deleting…" : "Delete my account"}
+            <Button variant="destructive" className="mt-4" onClick={deletionStatusToken ? checkDeletionStatus : deleteAccount} disabled={deleting}>
+                <Trash2 />{deleting ? "Deleting…" : deletionStatusToken ? "Check deletion status" : "Delete my account"}
             </Button>
         </div>
     </section>;
