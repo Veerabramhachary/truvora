@@ -105,7 +105,15 @@ export const POST = async (req: Request) => {
             return NextResponse.json({error:"Unauthorized"}, { status: 401 });
         }
 
-        const body = await req.json();
+        let body: unknown;
+        try {
+            body = await req.json();
+        } catch {
+            return NextResponse.json(
+                { success: false, error: "Invalid JSON body" },
+                { status: 400 },
+            );
+        }
         const data = expenseSchema.parse(body);
         if (data.currency !== "INR") {
             return NextResponse.json({ error: "New financial records must use INR" }, { status: 400 });

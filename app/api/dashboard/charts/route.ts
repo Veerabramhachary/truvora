@@ -6,6 +6,7 @@ import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import z from "zod";
 import { toPaise } from "@/lib/money";
+import { getFeatureLimit } from "@/lib/feature-access";
 
 const querySchema = z.object({
     startDate: z.string().datetime(),
@@ -17,6 +18,14 @@ export const GET = async (request: NextRequest) => {
     const { userId } = await auth();
     if (!userId) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const chartTier = await getFeatureLimit(userId, "charts");
+    if (chartTier !== "comparative" && chartTier !== "advanced") {
+        return NextResponse.json(
+            { error: "Charts are available on Starter and Pro plans" },
+            { status: 403 },
+        );
     }
 
     const { searchParams } = request.nextUrl;

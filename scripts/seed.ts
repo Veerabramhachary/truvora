@@ -26,14 +26,12 @@ const PLAN_TIERS = [
         featureLimits: {
             exports: { limit: 10, interval: "month" as const },
             subscriptions: { limit: 10 },
-            charts: "basic" as const,
             reminders: "email" as const,
             exportFormats: { csv: true, pdf: false, pdfLevel: "none" as const, xlsx: false },
             customCategories: false,
         },
         features: [
             "Track up to 10 subscriptions",
-            "Basic recurring-spend chart",
             "10 CSV exports per month",
             "Renewal reminders",
         ],

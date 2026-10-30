@@ -37,15 +37,33 @@ const isPublicRoute = createRouteMatcher([
 
 // API routes
 const isApiRoute = createRouteMatcher(["/api/(.*)"]);
+
+function getAllowedRequestOrigins(request: NextRequest): Set<string> {
+    const origins = new Set([request.nextUrl.origin]);
+    const host =
+        request.headers.get("x-forwarded-host")?.split(",")[0]?.trim() ??
+        request.headers.get("host");
+
+    if (host) {
+        const protocol =
+            request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() ??
+            request.nextUrl.protocol.slice(0, -1);
+        try {
+            origins.add(new URL(`${protocol}://${host}`).origin);
+        } catch {
+            // Ignore malformed forwarded headers; the request origin remains valid.
+        }
+    }
+
+    return origins;
+}
+
 function hasAllowedOrigin(request: NextRequest): boolean {
     const origin = request.headers.get("origin");
     if (!origin) return true; // Server-to-server callers and webhooks.
 
     try {
-        // Validate against the origin serving this request. Comparing against
-        // SITE_URL rejects local and preview deployments whenever their host
-        // differs from the configured canonical marketing URL.
-        return new URL(origin).origin === request.nextUrl.origin;
+        return getAllowedRequestOrigins(request).has(new URL(origin).origin);
     } catch {
         return false;
     }
@@ -66,19 +84,12 @@ const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 function isSameOrigin(request: NextRequest): boolean {
     const site = request.headers.get("sec-fetch-site");
-    if (site) return site === "same-origin";
+    if (site === "same-origin") return true;
 
     const origin = request.headers.get("origin");
+    if (site) return origin !== null && hasAllowedOrigin(request);
     if (!origin) return true;
-
-    const host = request.headers.get("host");
-    if (!host) return false;
-
-    try {
-        return new URL(origin).host === host;
-    } catch {
-        return false;
-    }
+    return hasAllowedOrigin(request);
 }
 
 export async function proxy(req: NextRequest, evt: NextFetchEvent) {
@@ -87,7 +98,17 @@ export async function proxy(req: NextRequest, evt: NextFetchEvent) {
 
         // Enforce the canonical app origin for browser API requests, including
         // read-only routes. Originless server-to-server requests remain valid.
-        if (isApiRoute(request) && !hasAllowedOrigin(request)) {
+        // Fetch Metadata is the browser's direct same-origin signal. Trust it
+        // here as well as in the mutation guard below; otherwise an internal
+        // proxy host in `nextUrl.origin` can reject a same-origin browser POST
+        // before `isSameOrigin` gets a chance to allow it.
+        const sameOriginFetch =
+            request.headers.get("sec-fetch-site") === "same-origin";
+        if (
+            isApiRoute(request) &&
+            !sameOriginFetch &&
+            !hasAllowedOrigin(request)
+        ) {
             return new NextResponse("Cross-origin request rejected", { status: 403 });
         }
 
@@ -95,7 +116,8 @@ export async function proxy(req: NextRequest, evt: NextFetchEvent) {
             return new NextResponse(null, {
                 status: 204,
                 headers: {
-                    "Access-Control-Allow-Origin": request.nextUrl.origin,
+                    "Access-Control-Allow-Origin":
+                        request.headers.get("origin") ?? request.nextUrl.origin,
                     "Access-Control-Allow-Credentials": "true",
                     "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
                     "Access-Control-Allow-Headers": "Content-Type, Authorization",
