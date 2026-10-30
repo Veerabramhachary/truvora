@@ -1,11 +1,16 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useCustom } from "@refinedev/core";
 import SectionCards from "@/components/SectionCards";
+import { CategoryExpenseChart } from "@/components/CategoryExpenseChart";
+import { RecentTransactions } from "@/components/RecentTransactions";
 import {
     Card,
     CardContent,
     CardHeader,
+    CardTitle,
+    CardDescription,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -42,15 +47,32 @@ const ChartAreaInteractive = dynamic(
   <main> is invalid HTML and doubled the inset padding.
 */
 export default function DashboardContent() {
+    const { result } = useCustom<{ totalSpend: number }>({ url: "/api/dashboard/stats", method: "get" });
+    const totalSpend = result?.data?.totalSpend;
+    const formattedTotal = totalSpend === undefined
+        ? "—"
+        : new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(totalSpend);
+
     return (
         <div className="flex flex-1 flex-col">
-            <div className="@container/main flex flex-1 flex-col gap-2">
-                <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-                    <div className="px-4 lg:px-6">
+            <div className="@container/main flex flex-1 flex-col">
+                <div className="flex flex-col gap-6 px-4 py-6 lg:px-6">
+                    <Card className="overflow-hidden border-primary/15 bg-primary text-primary-foreground shadow-lg shadow-primary/10">
+                        <CardContent className="flex flex-col gap-2 p-6 sm:p-8">
+                            <CardDescription className="text-primary-foreground/70">Total spending this month</CardDescription>
+                            <CardTitle className="text-4xl tracking-tight sm:text-5xl">{formattedTotal}</CardTitle>
+                            <p className="text-sm text-primary-foreground/75">Across expenses and subscriptions</p>
+                        </CardContent>
+                    </Card>
+
+                    <div className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(300px,0.8fr)] xl:items-start">
+                        <ChartAreaInteractive />
                         <SectionCards />
                     </div>
-                    <div className="px-4 lg:px-6">
-                        <ChartAreaInteractive />
+
+                    <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.75fr)] xl:items-start">
+                        <RecentTransactions />
+                        <CategoryExpenseChart />
                     </div>
                 </div>
             </div>

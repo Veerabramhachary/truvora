@@ -53,17 +53,16 @@ const SectionCards = () => {
     }
 
     const {
-        totalSpend = 0,
-        activeSubscriptions = 0,
+            activeSubscriptions = 0,
         totalIncome = 0,
         growth = {},
     } = data;
 
     const cards = [
         {
-            label: "Total Spend",
-            value: totalSpend,
-            growth: growth.totalSpend,
+            label: "Income",
+            value: totalIncome,
+            growth: growth.income,
             isMonetary: true,
         },
         {
@@ -73,10 +72,10 @@ const SectionCards = () => {
             isMonetary: false,
         },
         {
-            label: "Income",
-            value: totalIncome,
-            growth: growth.income,
-            isMonetary: true,
+            label: "Spend change",
+            value: growth.totalSpend ?? 0,
+            growth: growth.totalSpend,
+            isMonetary: false,
         },
     ];
 
@@ -104,7 +103,9 @@ const SectionCards = () => {
                                         style: "currency",
                                         currency: currency,
                                     })
-                                    : format(card.value) // plain number with locale grouping
+                                    : card.label === "Spend change"
+                                        ? `${card.value.toFixed(1)}%`
+                                        : format(card.value)
                             }
                         </CardTitle>
                         <CardAction>
@@ -115,7 +116,9 @@ const SectionCards = () => {
                         <p className="text-sm text-muted-foreground">
                             {card.growth !== undefined
                                 ? `vs last month ${card.growth > 0 ? "▲" : "▼"}`
-                                : "No previous data"}
+                                : card.label === "Spend change"
+                                    ? "vs last month"
+                                    : "No previous data"}
                         </p>
                     </CardContent>
                 </Card>
