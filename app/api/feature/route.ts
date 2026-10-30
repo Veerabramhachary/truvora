@@ -69,6 +69,12 @@ export async function GET(req: NextRequest) {
 
         const consume = consumeParam === "true";
 
+        if (feature === "charts") {
+            const limit = await getFeatureLimit(userId, "charts");
+            const allowed = limit === "comparative" || limit === "advanced";
+            return NextResponse.json({ allowed, limit: allowed ? limit : null });
+        }
+
         // 3. Get subscription gate to access limits (optional – we can directly call canUseFeature/tryConsumeFeature)
         // The helper functions already get the gate internally. We'll just call them.
         let allowed: boolean;
@@ -76,11 +82,6 @@ export async function GET(req: NextRequest) {
             allowed = await tryConsumeFeature(userId, feature, quantity);
         } else {
             allowed = await canUseFeature(userId, feature, quantity, false);
-        }
-
-        if (feature === "charts") {
-            const limit = await getFeatureLimit(userId, "charts");
-            return NextResponse.json({ allowed: limit !== null, limit });
         }
 
         if (feature === "subscriptions") {

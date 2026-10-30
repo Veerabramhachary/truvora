@@ -68,6 +68,28 @@ export async function upgradeSubscription(params: {
 
         const now = new Date();
         const currentPeriodEnd = sub.currentPeriodEnd;
+        // Clerk provisions the free plan with a far-future end date to model
+        // a non-expiring tier. Once upgraded, start a real billing period for
+        // the selected plan instead of carrying that placeholder forward.
+        const hasNonExpiringPeriod =
+            currentPeriodEnd.getTime() - now.getTime() > 10 * 365 * 24 * 60 * 60 * 1000;
+        const upgradedPeriodStart = hasNonExpiringPeriod
+            ? now
+            : sub.currentPeriodStart;
+        const upgradedPeriodEnd = hasNonExpiringPeriod
+            ? new Date(now)
+            : currentPeriodEnd;
+        if (hasNonExpiringPeriod) {
+            if (newPlan.interval === "year") {
+                upgradedPeriodEnd.setFullYear(
+                    upgradedPeriodEnd.getFullYear() + newPlan.intervalCount,
+                );
+            } else {
+                upgradedPeriodEnd.setMonth(
+                    upgradedPeriodEnd.getMonth() + newPlan.intervalCount,
+                );
+            }
+        }
 
         // If the new plan is more expensive and we need to charge prorated amount
         const currentPricePaise = toPaise(String(sub.planSnapshot.price));
@@ -128,7 +150,8 @@ export async function upgradeSubscription(params: {
                     interval: newPlan.interval,
                     intervalCount: newPlan.intervalCount,
                 },
-                // Optionally keep same period end or reset? Typically keep same period end.
+                currentPeriodStart: upgradedPeriodStart,
+                currentPeriodEnd: upgradedPeriodEnd,
                 updatedAt: now,
             })
             .where(

@@ -1,19 +1,10 @@
 "use client"
 
 import * as React from "react"
-import {
-
-  BookOpen,
-  ChartNoAxesColumn,
-  HandCoins,
-  History,
-  HomeIcon,
-  Settings2,
-  
-} from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
+import { dashboardNavItems } from "@/components/dashboard-nav-items"
 
 import {
   Sidebar,
@@ -21,49 +12,13 @@ import {
   SidebarFooter,
   SidebarHeader,
   SidebarRail,
+  useSidebar,
 } from "@/components/ui/sidebar"
 import { useUser } from "@clerk/nextjs"
 
-
-//This is sample data.
-const data = {
-  navMain: [
-    {
-      title: "Dashboard",
-      url: "/dashboard",
-      icon: HomeIcon,
-    },
-    {
-      title: "Expenses",
-      url: "/expenses",
-      icon: HandCoins,
-    },
-    {
-      title: "Subscriptions",
-      url: "/subscriptions",
-      icon: BookOpen,
-    },
-    {
-      title: "Reports & Insights",
-      url: "/reports",
-      icon: ChartNoAxesColumn
-    },
-    {
-      title: "Transactions",
-      url: "/transactions",
-      icon: History
-    },
-    {
-      title: "Settings",
-      url: "/settings",
-      icon: Settings2,
-    },
-  ],
-}
-
 function SidebarSkeleton() {
   return (
-    <div className="w-(--sidebar-width) h-screen bg-sidebar animate-pulse p-4 flex flex-col gap-4">
+    <div className="hidden w-(--sidebar-width) h-screen bg-sidebar animate-pulse p-4 flex-col gap-4 md:flex">
       <div className="h-8 w-32 bg-sidebar-accent rounded" /> {/* Header placeholder */}
       <div className="flex-1 space-y-4">
         {[1, 2, 3, 4, 5].map((i) => (
@@ -77,9 +32,10 @@ function SidebarSkeleton() {
 
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-
-  const {user, isLoaded} = useUser();
-  if(!isLoaded) return <SidebarSkeleton />;
+  const { isMobile } = useSidebar()
+  const { user, isLoaded } = useUser()
+  if (isMobile) return null
+  if (!isLoaded) return <SidebarSkeleton />
   
   const userData = {
     name: user?.firstName?? "User",
@@ -92,7 +48,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         Truvora
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
+        <NavMain items={dashboardNavItems} />
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={userData} />

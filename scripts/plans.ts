@@ -10,7 +10,6 @@ const planData: PlanData[] = [
         price: "0.00",
         featureLimits: {
             subscriptions: { limit: 10 },
-            charts: "basic",
             exports: { limit: 10, interval: "month" },
             reminders: "email",
             exportFormats: { csv: true, pdf: false, pdfLevel: "none", xlsx: false },
@@ -18,7 +17,6 @@ const planData: PlanData[] = [
         },
         features: [
             "Track up to 10 subscriptions",
-            "Basic recurring-spend chart",
             "10 CSV exports per month",
             "Renewal reminders",
         ],

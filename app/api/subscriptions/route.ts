@@ -198,6 +198,73 @@ export async function POST(req: Request) {
 
         // Transaction: lock active subscriptions and insert new one if under limit
         const result = await db.transaction(async (tx) => {
+            // Names are encrypted at rest, so find a same-name card after
+            // selecting this user's rows (the database cannot compare them).
+            // Prefer an active card, then the most recently edited matching one.
+            await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${userId}))`);
+            const existingRows = await tx
+                .select({ id: subscriptions.id, name: subscriptions.name, active: subscriptions.active, updatedAt: subscriptions.updatedAt })
+                .from(subscriptions)
+                .where(eq(subscriptions.userId, userId));
+            const normalizedName = data.name.trim().toLocaleLowerCase();
+            const existing = existingRows
+                .filter((row) => row.name?.trim().toLocaleLowerCase() === normalizedName)
+                .sort((a, b) => Number(b.active) - Number(a.active) || (b.updatedAt?.getTime() ?? 0) - (a.updatedAt?.getTime() ?? 0))[0];
+
+            // Re-adding a known service revives/edits its card instead of
+            // creating a second card. Record the new charge as transaction history.
+            if (existing) {
+                const today = new Date();
+                const endDate = subscriptionEndDate(data.endDate);
+                const [updated] = await tx.update(subscriptions).set({
+                    name: data.name,
+                    price: data.price,
+                    currency: data.currency,
+                    interval: data.interval,
+                    intervalCount: data.intervalCount || 1,
+                    startDate: today,
+                    endDate,
+                    nextDate: nextRenewalDate(today, data.interval, data.intervalCount),
+                    categoryId: category.id,
+                    note: data.note || null,
+                    active: endDate >= today,
+                    deactivatedAt: endDate < today ? endDate : null,
+                    updatedAt: today,
+                }).where(eq(subscriptions.id, existing.id)).returning({ id: subscriptions.id });
+
+                await tx.insert(transactions).values({
+                    title: data.name,
+                    description: data.note,
+                    amount: data.price,
+                    date: today,
+                    type: "subscription",
+                    userId,
+                    categoryId: category.id,
+                    subscriptionId: existing.id,
+                    action: "created",
+                    currency: data.currency,
+                    createdAt: today,
+                });
+                const [usage] = await tx
+                    .select({ count: sql<number>`count(*)::int` })
+                    .from(subscriptions)
+                    .where(sql`${subscriptions.userId} = ${userId}
+                        AND ${subscriptions.active} = TRUE
+                        AND ${subscriptions.startDate} <= NOW()
+                        AND ${subscriptions.endDate} >= NOW()
+                        AND ${subscriptions.deactivatedAt} IS NULL`);
+                await tx.insert(featureUsage).values({
+                    userId,
+                    feature: "subscriptions",
+                    period: "active",
+                    count: usage?.count ?? 0,
+                }).onConflictDoUpdate({
+                    target: [featureUsage.userId, featureUsage.feature, featureUsage.period],
+                    set: { count: usage?.count ?? 0, updatedAt: today },
+                });
+                return { ...updated, reused: true };
+            }
+
             if (!unlimited) {
                 // Serialize cap checks per user, including the empty-list case
                 // where SELECT ... FOR UPDATE has no row to lock.
@@ -280,10 +347,10 @@ export async function POST(req: Request) {
                 currency: data.currency,
                 createdAt: new Date(),
             });
-            return created;
+            return { ...created, reused: false };
         });
 
-        return NextResponse.json(result, { status: 201 });
+        return NextResponse.json(result, { status: result.reused ? 200 : 201 });
     } catch (error) {
         console.error("Subscription creation error:", error);
         if (error instanceof Error && (error.message === "Subscription limit exceeded" || error.message === "Your plan does not allow subscriptions")) {

@@ -197,27 +197,32 @@ export async function DELETE(_req: Request, { params }: Params) {
             );
         }
 
-        // `transactions.subscription_id` is a foreign key onto subscriptions,
-        // so the ledger rows have to go first.
-        const ledgerRows = await db
-            .delete(transactions)
-            .where(
-                and(
-                    eq(transactions.subscriptionId, id),
-                    eq(transactions.userId, userId),
-                ),
-            )
-            .returning({ id: transactions.id });
+        // `transactions.subscription_id` references subscriptions, so remove
+        // ledger entries first. Keep both deletes atomic to avoid losing the
+        // ledger if deleting the parent row fails.
+        const { ledgerRows, deleted } = await db.transaction(async (tx) => {
+            const removedLedgerRows = await tx
+                .delete(transactions)
+                .where(
+                    and(
+                        eq(transactions.subscriptionId, id),
+                        eq(transactions.userId, userId),
+                    ),
+                )
+                .returning({ id: transactions.id });
 
-        const deleted = await db
-            .delete(subscriptions)
-            .where(
-                and(
-                    eq(subscriptions.id, id),
-                    eq(subscriptions.userId, userId),
-                ),
-            )
-            .returning({ id: subscriptions.id });
+            const removedSubscriptions = await tx
+                .delete(subscriptions)
+                .where(
+                    and(
+                        eq(subscriptions.id, id),
+                        eq(subscriptions.userId, userId),
+                    ),
+                )
+                .returning({ id: subscriptions.id });
+
+            return { ledgerRows: removedLedgerRows, deleted: removedSubscriptions };
+        });
 
         if (deleted.length === 0) {
             return NextResponse.json(
