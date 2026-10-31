@@ -63,3 +63,8 @@ tmp/
 # clerk configuration (can include secrets)
 /.clerk/
 .env*
+
+# Local-only tooling: psql-less SQL runners, rollout diagnostics, and the
+# backup of deleted rows (contains user data — never commit).
+.tmp-*
+orphan-backup-transactions.json
