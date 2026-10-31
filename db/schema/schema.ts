@@ -42,7 +42,10 @@ export const categories = pgTable(
         icon: text("icon"),
         color: text("color"),
         userId: text("user_id"),
-        // NULL for built-in categories (global); set for custom ones.
+        // NULL for built-in categories (global); set for custom ones. The
+        // ledger mirrors that: only custom categories are ledger-scoped, so
+        // this stays nullable while expenses/subscriptions/transactions
+        // went NOT NULL in step 4 (built-ins would have no owner ledger).
         ledgerId: uuid("ledger_id").references(() => ledgers.id),
         categoryType: customCategoryTypeEnum("category_type"),
         displayName: text("display_name"),
@@ -66,8 +69,9 @@ export const categories = pgTable(
 export const transactions = pgTable("transactions", {
     id: uuid("id").primaryKey().defaultRandom(),
     userId: text("user_id").notNull(),
-    // Nullable during the expand phase; becomes NOT NULL after backfill.
-    ledgerId: uuid("ledger_id").references(() => ledgers.id),
+    // NOT NULL from step 4 of the rollout: every ledger-scoped row names its
+    // ledger (01_backfill + 02_verify already proved no row is left NULL).
+    ledgerId: uuid("ledger_id").notNull().references(() => ledgers.id),
     title:  encryptedText("title").notNull().default('untitled'),
     categoryId: uuid("category_id").references(() => categories.id),
     amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
@@ -87,8 +91,9 @@ export const transactions = pgTable("transactions", {
 export const subscriptions = pgTable("subscriptions", {
     id: uuid("id").primaryKey().defaultRandom(),
     userId: text("user_id").notNull(),
-    // Nullable during the expand phase; becomes NOT NULL after backfill.
-    ledgerId: uuid("ledger_id").references(() => ledgers.id),
+    // NOT NULL from step 4 of the rollout: every ledger-scoped row names its
+    // ledger (01_backfill + 02_verify already proved no row is left NULL).
+    ledgerId: uuid("ledger_id").notNull().references(() => ledgers.id),
     categoryId: uuid("category_id").references(() => categories.id),
     name: encryptedText("name").notNull(),
     note: encryptedText("note"),

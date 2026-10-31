@@ -10,7 +10,7 @@ export const expenses = pgTable("expenses", {
     id: uuid('id').primaryKey().defaultRandom(),
     userId: text('user_id').notNull(),
     // Nullable during the expand phase; becomes NOT NULL after backfill.
-    ledgerId: uuid('ledger_id').references(() => ledgers.id),
+    ledgerId: uuid('ledger_id').notNull().references(() => ledgers.id),
     title: encryptedText('title').notNull(),
     note: encryptedText('note'),
     amount: decimal('amount',{ precision: 10, scale: 2 }).notNull(),
