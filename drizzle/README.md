@@ -45,6 +45,29 @@ resulting `.sql` file **and** the `drizzle/meta/` snapshots.
 npm run db:generate -- --name <change_description>
 ```
 
+## If `db:migrate` fails on an existing database
+
+`push` writes nothing to `drizzle.__drizzle_migrations`, so a database that was
+reconciled with `push` has an **empty journal**. `npm run db:migrate` then
+treats `0000_baseline` as unapplied, replays it on top of live tables, and dies
+on the first `CREATE TABLE` (`relation "users" already exists`). The run is one
+transaction, so nothing is damaged — but nothing is applied either, and the
+only output you see is drizzle-kit's driver warning.
+
+Mark the migrations the database already reflects, then migrate again; only
+the pending ones run:
+
+```bash
+npm run db:journal-backfill -- --dry-run    # shows exactly what it would insert
+npm run db:journal-backfill -- --up-to 0010_tense_supreme_intelligence
+npm run db:migrate
+```
+
+`--up-to` must name the last migration already **in the database**. Naming the
+newest journal entry would mark an unapplied migration as done, after which
+`db:migrate` silently applies nothing — the script refuses to do that. Confirm
+afterwards with `SELECT count(*) FROM drizzle.__drizzle_migrations;`.
+
 ## Note on `ENCRYPTION_PASSPHRASE` / `ENCRYPTION_SALT`
 
 The schema imports `db/utils/encryption.ts`, which derives its key lazily. It

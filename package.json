@@ -14,6 +14,7 @@
         "db:migrate": "drizzle-kit migrate",
         "db:push": "drizzle-kit push",
         "db:studio": "drizzle-kit studio",
+    "db:journal-backfill": "node scripts/backfill-migration-journal.mjs",
         "insert-seed": "tsx scripts/seed.ts",
         "insert-db": "tsx scripts/expense.ts",
         "insert-sub": "tsx scripts/subscription.ts",

@@ -12,3 +12,20 @@ Order of operations for step 1 (expand). Rehearse on a Neon branch first.
 
 Re-run 01 and 02 immediately before step 4 (NOT NULL), because the current app
 code does not set `ledger_id` yet, so rows created in the meantime stay NULL.
+
+## Status — executed 2026-10-31 (complete)
+
+| Step | Result |
+| --- | --- |
+| 1. `00_orphan_check.sql` | 5 ownerless `transactions` across 2 deleted users found, backed up, then deleted; all counts 0 |
+| 2. `db:generate -- --name add_ledgers` + `db:migrate` | `drizzle/0011_add_ledgers.sql` — needed `npm run db:journal-backfill` first (empty journal on a push-built DB, see `drizzle/README.md`) |
+| 3. `01_backfill.sql` | 2 personal ledgers; expenses, subscriptions, transactions and custom categories attached |
+| 4. `02_verify.sql` | all 11 checks 0 (re-run immediately before the NOT NULL migration, per the note above) |
+| NOT NULL migration | `drizzle/0012_ledger_id_not_null.sql` on `expenses`, `subscriptions`, `transactions`. `categories.ledger_id` **stays nullable**: built-in categories are global (`user_id` NULL) and own no ledger — `02_verify` enforces that with "built-in categories wrongly scoped" |
+
+App code now resolves a ledger before every insert (`lib/ledger.ts`
+`getPersonalLedgerId`, wired into the expense/subscription/category routes, the
+Clerk webhook, the checkout route, and the `insert-db`/`insert-sub` seeds), so
+rows written from step 4 on can never be NULL. Verification after `0012`:
+`02_verify` all 0, `00_orphan_check` all 0, `ledger_id` is `NOT NULL` on the
+three tables and still nullable on `categories`.
