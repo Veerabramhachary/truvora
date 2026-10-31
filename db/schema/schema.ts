@@ -15,6 +15,7 @@ import {
 import { sql } from "drizzle-orm";
 import { encryptedText } from "./custom-types";
 import { expenses } from "./expenses";
+import { ledgers } from "./ledgers";
 
 export const transactionTypeEnum = pgEnum("transaction_type", [
     "expense",
@@ -41,6 +42,8 @@ export const categories = pgTable(
         icon: text("icon"),
         color: text("color"),
         userId: text("user_id"),
+        // NULL for built-in categories (global); set for custom ones.
+        ledgerId: uuid("ledger_id").references(() => ledgers.id),
         categoryType: customCategoryTypeEnum("category_type"),
         displayName: text("display_name"),
         parentName: text("parent_name"),
@@ -53,6 +56,7 @@ export const categories = pgTable(
         }).onDelete("cascade"),
 
         userIndex: index("category_user_idx").on(table.userId),
+        ledgerIndex: index("category_ledger_idx").on(table.ledgerId),
         customCategoryNameUnique: uniqueIndex("categories_custom_owner_name_unique")
             .on(table.userId, table.categoryType, sql`lower(${table.displayName})`)
             .where(sql`${table.userId} IS NOT NULL AND ${table.categoryType} IS NOT NULL AND ${table.displayName} IS NOT NULL`),
@@ -62,6 +66,8 @@ export const categories = pgTable(
 export const transactions = pgTable("transactions", {
     id: uuid("id").primaryKey().defaultRandom(),
     userId: text("user_id").notNull(),
+    // Nullable during the expand phase; becomes NOT NULL after backfill.
+    ledgerId: uuid("ledger_id").references(() => ledgers.id),
     title:  encryptedText("title").notNull().default('untitled'),
     categoryId: uuid("category_id").references(() => categories.id),
     amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
@@ -74,11 +80,15 @@ export const transactions = pgTable("transactions", {
     currency: text("currency").notNull().default("INR"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => [
+    index("transactions_ledger_date_idx").on(table.ledgerId, table.date),
+]);
 
 export const subscriptions = pgTable("subscriptions", {
     id: uuid("id").primaryKey().defaultRandom(),
     userId: text("user_id").notNull(),
+    // Nullable during the expand phase; becomes NOT NULL after backfill.
+    ledgerId: uuid("ledger_id").references(() => ledgers.id),
     categoryId: uuid("category_id").references(() => categories.id),
     name: encryptedText("name").notNull(),
     note: encryptedText("note"),
@@ -94,5 +104,6 @@ export const subscriptions = pgTable("subscriptions", {
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
+    index("subscriptions_ledger_idx").on(table.ledgerId),
     check("subscriptions_interval_count_positive", sql`${table.intervalCount} > 0`),
 ]);

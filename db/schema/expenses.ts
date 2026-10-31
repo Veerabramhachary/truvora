@@ -1,5 +1,6 @@
-import { decimal, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { decimal, index, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { categories } from "./schema";
+import { ledgers } from "./ledgers";
 import { encryptedText } from "./custom-types";
 export const expenseType = pgEnum('expense_type', [
     'income',
@@ -8,6 +9,8 @@ export const expenseType = pgEnum('expense_type', [
 export const expenses = pgTable("expenses", {
     id: uuid('id').primaryKey().defaultRandom(),
     userId: text('user_id').notNull(),
+    // Nullable during the expand phase; becomes NOT NULL after backfill.
+    ledgerId: uuid('ledger_id').references(() => ledgers.id),
     title: encryptedText('title').notNull(),
     note: encryptedText('note'),
     amount: decimal('amount',{ precision: 10, scale: 2 }).notNull(),
@@ -17,5 +20,7 @@ export const expenses = pgTable("expenses", {
     categoryId: uuid('category_id').references(() => categories.id),
     createdAt: timestamp('created_at').defaultNow(),
     updatedAt: timestamp('updated_at').defaultNow()
-});
+}, (table) => [
+    index('expenses_ledger_date_idx').on(table.ledgerId, table.date),
+]);
 
