@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { expenses } from "@/db/schema/expenses";
 import { categories, transactions } from "@/db/schema/schema";
 import { inArray } from "drizzle-orm";
+import { getPersonalLedgerId } from "@/lib/ledger";
 
 export const Post = async () => {
     const rawData = [
@@ -74,6 +75,10 @@ export const Post = async () => {
         dbCategories.map((c) => [c.name, c.id]),
     );
 
+    // Expenses and their transactions are ledger-scoped; resolve DEV_ID's
+    // personal ledger once for the whole batch.
+    const ledgerId = await getPersonalLedgerId(process.env.DEV_ID!);
+
     const expenseData = rawData.map((item) => {
         const categoryId = categoryMap[item.categoryName];
         if (!categoryId) {
@@ -87,7 +92,7 @@ export const Post = async () => {
         // expected rather than an oversight.
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { categoryName, ...rest } = item;
-        return { ...rest, categoryId };
+        return { ...rest, categoryId, ledgerId };
     });
 
     const res = await db.transaction(async (tx) => {
@@ -111,6 +116,7 @@ export const Post = async () => {
                 action: "created",
                 currency: "INR",
                 createdAt: new Date(),
+                ledgerId,
             });
 
             return insertedExpenses;

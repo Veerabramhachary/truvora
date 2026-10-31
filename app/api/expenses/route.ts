@@ -8,6 +8,7 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { resolveCategory } from "@/lib/category-access";
 import { canUseFeature } from "@/lib/feature-access";
+import { getPersonalLedgerId } from "@/lib/ledger";
 
 /**
  * `@refinedev/simple-rest` sends `_start`/`_end`/`_sort`/`_order` and reads the
@@ -138,6 +139,9 @@ export const POST = async (req: Request) => {
         }
 
         await db.transaction(async (tx) => {
+            // Ledger-scoped writes must carry ledger_id (NOT NULL in step 4).
+            const ledgerId = await getPersonalLedgerId(userId, tx);
+
             const [expense] = await tx.insert(expenses).values({
                 title: data.title,
                 note: data.note,
@@ -147,6 +151,7 @@ export const POST = async (req: Request) => {
                 categoryId: category.id,
                 userId: userId,
                 currency: data.currency,
+                ledgerId,
             }).returning({ id: expenses.id });
 
             await tx.insert(transactions).values({
@@ -161,6 +166,7 @@ export const POST = async (req: Request) => {
                 action: "created",
                 currency: data.currency,
                 createdAt: new Date(),
+                ledgerId,
             });
         });
 

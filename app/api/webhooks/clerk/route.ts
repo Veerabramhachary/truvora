@@ -12,6 +12,7 @@ import { SITE_URL } from "@/lib/site";
 import { platformDiscounts } from "@/db/schema/platform-discounts";
 import { markWebhookDeletion } from "@/lib/account-deletion";
 import { accountDeletions } from "@/db/schema/account-deletions";
+import { getPersonalLedgerId } from "@/lib/ledger";
 
 export async function POST(req: NextRequest) {
     const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET;
@@ -122,6 +123,13 @@ export async function POST(req: NextRequest) {
                             updatedAt: new Date(),
                         },
                     });
+
+                // Every user owns exactly one personal ledger. The step-1
+                // backfill covered pre-rollout users; this covers everyone
+                // from here on, so `02_verify`'s "users without personal
+                // ledger" stays 0 and every ledger-scoped insert can resolve
+                // its ledger_id (NOT NULL from step 4).
+                await getPersonalLedgerId(id, tx);
 
                 const existingSubscription = await tx
                     .select({ id: app_subscriptions.id })

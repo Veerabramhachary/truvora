@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { toPaise } from "@/lib/money";
 import { checkRateLimits, rateLimitResponse } from "@/lib/rate-limit";
+import { getPersonalLedgerId } from "@/lib/ledger";
 import {
     attachCheckoutSession,
     reservePlatformDiscount,
@@ -126,6 +127,11 @@ export async function POST(request: NextRequest) {
                 imageUrl: clerkUser?.imageUrl ?? null,
             });
         }
+
+        // Guarantee the personal ledger exists for anyone reaching checkout,
+        // including user rows created by a build that predates the ledger
+        // rollout. Idempotent: a single indexed SELECT once it exists.
+        await getPersonalLedgerId(userId);
 
         const origin = request.headers.get("origin") ?? request.nextUrl.origin;
         const reservation = await reservePlatformDiscount(userId);

@@ -9,6 +9,7 @@ import {
 import { asc, and, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { getPersonalLedgerId } from "@/lib/ledger";
 
 const categoryTypeSchema = z.enum(["expense", "subscription"]);
 const createCategorySchema = z
@@ -119,6 +120,9 @@ export async function POST(req: Request) {
 
     let category: { id: string; name: string | null } | undefined;
     try {
+        // Custom categories are ledger-scoped; built-in ones (user_id NULL)
+        // deliberately stay ledger-less.
+        const ledgerId = await getPersonalLedgerId(userId);
         [category] = await db
             .insert(categories)
             .values({
@@ -126,6 +130,7 @@ export async function POST(req: Request) {
                 displayName: name,
                 userId,
                 categoryType: type,
+                ledgerId,
             })
             .onConflictDoNothing()
             .returning({ id: categories.id, name: categories.displayName });

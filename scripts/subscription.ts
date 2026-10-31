@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { categories, subscriptions, transactions } from "@/db/schema/schema";
 import { eq } from "drizzle-orm";
+import { getPersonalLedgerId } from "@/lib/ledger";
 
 export const Post = async () => {
     const [getCategory] = await db
@@ -11,12 +12,15 @@ export const Post = async () => {
     if (!getCategory) {
         throw new Error("Category 'Entertaiment' not found");
     }
+    // Ledger-scoped rows need ledger_id; resolve it once for both inserts.
+    const ledgerId = await getPersonalLedgerId(process.env.DEV_ID!);
     const res = await db.transaction(async (tx) => {
         try {
             const [subscription] = await tx
                 .insert(subscriptions)
                 .values({
                     userId: process.env.DEV_ID!,
+                    ledgerId,
                     name: "Netflix",
                     note: "Standard HD plan",
                     price: "15.49",
@@ -44,6 +48,7 @@ export const Post = async () => {
                 action: "created",
                 currency: "INR",
                 createdAt: new Date(),
+                ledgerId,
             });
 
             return subscription;

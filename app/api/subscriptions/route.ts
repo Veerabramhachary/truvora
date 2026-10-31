@@ -13,6 +13,7 @@ import {
 } from "./schema";
 import { resolveCategory } from "@/lib/category-access";
 import { canUseFeature } from "@/lib/feature-access";
+import { getPersonalLedgerId } from "@/lib/ledger";
 
 /**
  * `@refinedev/simple-rest` sends `_start`/`_end`/`_sort`/`_order` and reads the
@@ -202,6 +203,9 @@ export async function POST(req: Request) {
             // selecting this user's rows (the database cannot compare them).
             // Prefer an active card, then the most recently edited matching one.
             await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${userId}))`);
+            // Resolved once per request: both the insert below and the
+            // reuse branch write ledger-scoped rows.
+            const ledgerId = await getPersonalLedgerId(userId, tx);
             const existingRows = await tx
                 .select({ id: subscriptions.id, name: subscriptions.name, active: subscriptions.active, updatedAt: subscriptions.updatedAt })
                 .from(subscriptions)
@@ -226,6 +230,8 @@ export async function POST(req: Request) {
                     endDate,
                     nextDate: nextRenewalDate(today, data.interval, data.intervalCount),
                     categoryId: category.id,
+                    // Repairs a card whose ledger_id predates the rollout.
+                    ledgerId,
                     note: data.note || null,
                     active: endDate >= today,
                     deactivatedAt: endDate < today ? endDate : null,
@@ -244,6 +250,7 @@ export async function POST(req: Request) {
                     action: "created",
                     currency: data.currency,
                     createdAt: today,
+                    ledgerId,
                 });
                 const [usage] = await tx
                     .select({ count: sql<number>`count(*)::int` })
@@ -290,6 +297,7 @@ export async function POST(req: Request) {
                 .insert(subscriptions)
                 .values({
                     userId,
+                    ledgerId,
                     name: data.name,
                     price: data.price,
                     currency: data.currency,
@@ -346,6 +354,7 @@ export async function POST(req: Request) {
                 action: "created",
                 currency: data.currency,
                 createdAt: new Date(),
+                ledgerId,
             });
             return { ...created, reused: false };
         });
