@@ -9,6 +9,7 @@ import Providers from "./Providers";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Separator } from "@/components/ui/separator";
 import SiteHeader from "@/components/site-header";
+import { LedgerSwitcher } from "@/components/ledger-switcher";
 import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 
 export default function DashboardShell({
@@ -29,6 +30,7 @@ export default function DashboardShell({
                                     orientation="vertical"
                                     className="mr-2 hidden data-[orientation=vertical]:h-4 md:block"
                                 />
+                                <LedgerSwitcher />
                                 <SiteHeader />
                             </div>
                         </header>

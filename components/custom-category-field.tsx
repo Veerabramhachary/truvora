@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiErrorMessage } from "@/lib/api-error";
+import { ledgerFetch } from "@/lib/ledger-client";
 
 type CategoryType = "expense" | "subscription";
 type CustomCategory = { id: string; name: string };
@@ -36,7 +37,7 @@ export function CustomCategoryField({
         async function load() {
             try {
                 const [categoriesResponse, featureResponse] = await Promise.all([
-                    fetch(`/api/categories?type=${type}`),
+                    ledgerFetch(`/api/categories?type=${type}`),
                     fetch("/api/feature?feature=customCategories"),
                 ]);
                 if (!featureResponse.ok) {
@@ -83,7 +84,7 @@ export function CustomCategoryField({
 
         setSaving(true);
         try {
-            const response = await fetch("/api/categories", {
+            const response = await ledgerFetch("/api/categories", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ name: categoryName, type }),

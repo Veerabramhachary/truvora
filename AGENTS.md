@@ -13,9 +13,11 @@ npx tsc --noEmit       # typecheck only (no `typecheck` script)
 npm run lint           # bare `eslint` with flat config (eslint.config.mjs)
 ```
 
-There is **no test suite** and **no typecheck npm script**. After non-trivial TS changes, run `npx tsc --noEmit` and `npm run lint`. Prefer order: `lint → tsc → build`.
+There is a **Vitest suite** in `tests/` (`npm test`) but no `typecheck` npm script. After non-trivial TS changes, run `npm test`, `npx tsc --noEmit` and `npm run lint`. Prefer order: `test → lint → tsc → build`. Note `next build`'s TS step can miss errors a stale cache hides — trust `npx tsc --noEmit`.
 
 Package manager is **npm** (`package-lock.json`, lockfileVersion 3). Do not switch to pnpm/yarn unless asked.
+
+**CI runs `npm ci` on Node 22 (npm 10).** Local npm 11 records the optional WASM deps (`@emnapi/*`, pulled by `@img/sharp-wasm32` and `@tailwindcss/oxide-wasm32-wasi`) differently, so an `npm install` with npm 11 leaves the lockfile out of sync for npm 10 and CI fails with ``Missing: @emnapi/runtime@… from lock file``. After adding any dependency, run `npx -y npm@10 install --package-lock-only` and confirm `npx -y npm@10 ci --dry-run` passes before pushing.
 
 ```bash
 npm run db:generate    # drizzle-kit generate → commit drizzle/*.sql + drizzle/meta/
