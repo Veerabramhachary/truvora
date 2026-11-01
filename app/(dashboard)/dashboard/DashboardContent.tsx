@@ -58,9 +58,9 @@ export default function DashboardContent() {
             <div className="@container/main flex flex-1 flex-col">
                 <div className="flex flex-col gap-6 px-4 py-6 lg:px-6">
                     <Card className="overflow-hidden">
-                        <CardContent className="flex flex-col gap-2 p-6 sm:p-8">
+                        <CardContent className="flex flex-col gap-1 p-4 sm:p-5">
                             <CardDescription>Total spending this month</CardDescription>
-                            <CardTitle className="text-5xl tracking-tight sm:text-6xl">{formattedTotal}</CardTitle>
+                            <CardTitle className="text-3xl tracking-tight sm:text-4xl">{formattedTotal}</CardTitle>
                             <p className="text-sm text-muted-foreground">Across expenses and subscriptions</p>
                         </CardContent>
                     </Card>

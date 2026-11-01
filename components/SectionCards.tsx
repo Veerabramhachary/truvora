@@ -17,6 +17,8 @@ const SectionCards = () => {
         totalSpend: number;
         activeSubscriptions: number;
         totalIncome: number;
+        upcomingSubscriptions?: number;
+        nextRenewal?: { name: string; date: string } | null;
         growth: {
             totalSpend?: number;
             activeSubscriptions?: number;
@@ -31,6 +33,12 @@ const SectionCards = () => {
 
     const format = (value: number, opts?: Intl.NumberFormatOptions) =>
         new Intl.NumberFormat("en-IN", opts).format(value);
+
+    const formatDate = (value: string | Date) =>
+        new Intl.DateTimeFormat("en-IN", {
+            day: "numeric",
+            month: "short",
+        }).format(new Date(value));
 
     if (isLoading) {
         return (
@@ -53,29 +61,42 @@ const SectionCards = () => {
     }
 
     const {
-            activeSubscriptions = 0,
+        activeSubscriptions = 0,
         totalIncome = 0,
+        upcomingSubscriptions = 0,
+        nextRenewal = null,
         growth = {},
     } = data;
 
     const cards = [
         {
             label: "Income",
-            value: totalIncome,
+            value: format(totalIncome, {
+                style: "currency",
+                currency: currency,
+            }),
             growth: growth.income,
-            isMonetary: true,
+            note:
+                growth.income !== undefined
+                    ? `vs last month ${growth.income > 0 ? "▲" : "▼"}`
+                    : "No previous data",
         },
         {
             label: "Active Subscriptions",
-            value: activeSubscriptions,
+            value: format(activeSubscriptions),
             growth: growth.activeSubscriptions,
-            isMonetary: false,
+            note:
+                growth.activeSubscriptions !== undefined
+                    ? `vs last month ${growth.activeSubscriptions > 0 ? "▲" : "▼"}`
+                    : "No previous data",
         },
         {
-            label: "Spend change",
-            value: growth.totalSpend ?? 0,
-            growth: growth.totalSpend,
-            isMonetary: false,
+            label: "Upcoming subscriptions",
+            value: format(upcomingSubscriptions),
+            growth: undefined,
+            note: nextRenewal
+                ? `Next: ${nextRenewal.name} · ${formatDate(nextRenewal.date)}`
+                : "No renewals in the next 7 days",
         },
     ];
 
@@ -96,29 +117,14 @@ const SectionCards = () => {
                 <Card key={index} className="@container/card hover:bg-accent">
                     <CardHeader>
                         <CardDescription>{card.label}</CardDescription>
-                        <CardTitle>
-                            {
-                                card.isMonetary
-                                    ? format(card.value, {
-                                        style: "currency",
-                                        currency: currency,
-                                    })
-                                    : card.label === "Spend change"
-                                        ? `${card.value.toFixed(1)}%`
-                                        : format(card.value)
-                            }
-                        </CardTitle>
+                        <CardTitle>{card.value}</CardTitle>
                         <CardAction>
                             {renderGrowthBadge(card.growth)}
                         </CardAction>
                     </CardHeader>
                     <CardContent>
                         <p className="text-sm text-muted-foreground">
-                            {card.growth !== undefined
-                                ? `vs last month ${card.growth > 0 ? "▲" : "▼"}`
-                                : card.label === "Spend change"
-                                    ? "vs last month"
-                                    : "No previous data"}
+                            {card.note}
                         </p>
                     </CardContent>
                 </Card>
