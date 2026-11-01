@@ -92,6 +92,13 @@
       "when": 1793458108738,
       "tag": "0012_ledger_id_not_null",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793544508738,
+      "tag": "0013_subscription_cycle_unique",
+      "breakpoints": true
     }
   ]
 }

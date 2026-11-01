@@ -43,7 +43,7 @@ Copy `.env.example` → `.env` and fill every value. The load-bearing ones:
 | `CLERK_WEBHOOK_SECRET`, `STRIPE_WEBHOOK_SECRET` | Regenerate when you change webhook URLs (§7) |
 | `CRON_SECRET` | Pick any long random string; used by both the app and the cron caller (§6) |
 | `UPSTASH_REDIS_REST_URL/TOKEN` | Optional — without it rate limits are bypassed with a logged warning |
-| `RESEND_API_KEY`, `RENEWAL_EMAIL_FROM` | Reminder emails (cron `subscriptionsTC`) |
+| `RESEND_API_KEY`, `RENEWAL_EMAIL_FROM` | Reminder emails (cron `subscriptionsTC`). The renewal job (`subscription-renewals`) needs only `CRON_SECRET` |
 
 ## 3. Database
 
@@ -108,7 +108,7 @@ Caddy equivalent: it sets these by default (`reverse_proxy 127.0.0.1:3000`).
 
 ## 6. Cron (replaces vercel.json)
 
-Two daily jobs at 00:00 UTC, now triggered by any scheduler:
+Three daily jobs, now triggered by any scheduler: `subscription-renewals` at 00:00 UTC (records renewal charges and advances `nextDate`), `subscriptionsTC` reminders at 00:30 UTC (after renewals, so it sees the new dates), and `account-deletions` at 00:00 UTC:
 
 ```bash
 mkdir -p /etc/truvora
@@ -121,14 +121,22 @@ chmod 600 /etc/truvora/cron.env
 crontab -e   # paste from deploy/crontab.example
 ```
 
-Manual test (exit code 0 = both endpoints returned 200):
+Manual test (exit code 0 = every endpoint returned 200; `all` runs renewals before reminders):
 
 ```bash
 TRUVORA_BASE_URL=... CRON_SECRET=... ./deploy/trigger-cron.sh
 # Windows: .\deploy\trigger-cron.ps1 -BaseUrl https://app.example.com -CronSecret ...
 ```
 
-Failures are expected to be loud: `CRON_SECRET` unset → 503, wrong → 401, Resend unconfigured → 503.
+Failures are expected to be loud: `CRON_SECRET` unset → 503, wrong → 401, Resend unconfigured → 503 (reminders only), and any subscription the renewal job could not process → 500 (the rest are still processed; the failed ones retry next run).
+
+Before the FIRST renewal run, preview it — nothing is written:
+
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" "$TRUVORA_BASE_URL/api/crons/subscription-renewals?dryRun=1"
+```
+
+Existing subscriptions never had `nextDate` advanced, so the first real run catches every one of them up (up to 120 cycles each per run) and will add many `subscription` rows to transaction history and exports.
 
 ## 7. Webhooks
 

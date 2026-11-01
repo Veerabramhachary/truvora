@@ -6,7 +6,7 @@
 param(
     [string]$BaseUrl = $env:TRUVORA_BASE_URL,
     [string]$CronSecret = $env:CRON_SECRET,
-    [ValidateSet("all", "subscriptionsTC", "account-deletions")]
+    [ValidateSet("all", "subscription-renewals", "subscriptionsTC", "account-deletions")]
     [string]$Target = "all"
 )
 
@@ -15,7 +15,7 @@ if (-not $BaseUrl) { throw "pass -BaseUrl or set TRUVORA_BASE_URL" }
 if (-not $CronSecret) { throw "pass -CronSecret or set CRON_SECRET" }
 
 $paths = if ($Target -eq "all") {
-    @("/api/crons/subscriptionsTC", "/api/crons/account-deletions")
+    @("/api/crons/subscription-renewals", "/api/crons/subscriptionsTC", "/api/crons/account-deletions")
 } else {
     @("/api/crons/$Target")
 }
