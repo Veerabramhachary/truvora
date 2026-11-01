@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation"
 import { MoreHorizontal } from "lucide-react"
 
 import { dashboardNavItems } from "@/components/dashboard-nav-items"
-import { Button } from "@/components/ui/button"
 import {
   Sheet,
   SheetContent,
@@ -23,6 +22,14 @@ const primaryItems = dashboardNavItems.filter((item) =>
 const moreItems = dashboardNavItems.filter((item) =>
   ["/subscriptions", "/settings"].includes(item.url)
 )
+
+/*
+  One shared style for every bottom-nav target, including the "More" sheet
+  trigger — previously the trigger was a ghost <Button> with enough overrides
+  to read as a sixth, one-off button style.
+*/
+const navItemClass =
+  "group flex min-h-14 w-full flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-medium leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 
 function isItemActive(pathname: string, url: string) {
   return pathname === url || pathname.startsWith(`${url}/`)
@@ -48,7 +55,7 @@ export function MobileBottomNav() {
                 aria-label={item.title}
                 aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "group flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-medium leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  navItemClass,
                   isActive
                     ? "text-primary"
                     : "text-muted-foreground active:text-foreground"
@@ -70,11 +77,12 @@ export function MobileBottomNav() {
         <li>
           <Sheet>
             <SheetTrigger asChild>
-              <Button
-                variant="ghost"
+              <button
+                type="button"
                 aria-label="More navigation options"
                 className={cn(
-                  "group flex h-auto min-h-14 w-full flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-medium leading-none text-muted-foreground hover:bg-transparent hover:text-foreground",
+                  navItemClass,
+                  "text-muted-foreground active:text-foreground",
                   moreIsActive && "text-primary"
                 )}
               >
@@ -87,7 +95,7 @@ export function MobileBottomNav() {
                   <MoreHorizontal aria-hidden="true" />
                 </span>
                 <span>More</span>
-              </Button>
+              </button>
             </SheetTrigger>
             <SheetContent side="bottom" className="rounded-t-3xl px-4 pb-8">
               <SheetHeader className="text-left">
