@@ -26,6 +26,10 @@ export const transactionTypeEnum = pgEnum("transaction_type", [
 export const transactionActionEnum = pgEnum("trasaction_action", [
     "created",
     "updated",
+    // DEPRECATED: nothing writes or reads "deleted" any more (deleting a
+    // subscription removes its rows). Postgres cannot drop a single enum
+    // value without rebuilding the type, so it stays in the type; do not
+    // add new logic that depends on it.
     "deleted",
 ])
 

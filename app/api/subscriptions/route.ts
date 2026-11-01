@@ -2,7 +2,6 @@ import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db";
 import { asc, desc, eq, sql } from "drizzle-orm";
 import { categories, subscriptions, transactions } from "@/db/schema/schema";
-import { featureUsage } from "@/db/schema/feature-usage";
 import { NextRequest, NextResponse } from "next/server";
 import { getSubscriptionGate } from "@/lib/subscription";
 import z from "zod";
@@ -14,6 +13,11 @@ import {
 import { resolveCategory } from "@/lib/category-access";
 import { canUseFeature } from "@/lib/feature-access";
 import { ledgerErrorResponse, requireLedger } from "@/lib/ledger";
+import {
+    activeSubscriptionFlag,
+    countActiveSubscriptions,
+    syncActiveSubscriptionUsage,
+} from "@/lib/active-subscription";
 
 /**
  * `@refinedev/simple-rest` sends `_start`/`_end`/`_sort`/`_order` and reads the
@@ -83,12 +87,7 @@ export async function GET(req: NextRequest) {
             .select({
                 id: subscriptions.id,
                 title: subscriptions.name,
-                active: sql<boolean>`CASE
-                    WHEN ${subscriptions.active} = TRUE
-                        AND ${subscriptions.deactivatedAt} IS NULL
-                        AND ${subscriptions.startDate} <= NOW()
-                        AND ${subscriptions.endDate} >= NOW()
-                    THEN TRUE ELSE FALSE END`,
+                active: activeSubscriptionFlag(now),
                 amount: subscriptions.price,
                 date: subscriptions.startDate,
                 description: subscriptions.note,
@@ -201,26 +200,49 @@ export async function POST(req: Request) {
         // If the plan allows unlimited subscriptions (limit === -1), skip further checks
         const unlimited = maxSubscriptions === -1;
 
-        // Transaction: lock active subscriptions and insert new one if under limit
+        // Everything below runs under one per-user advisory lock, so two
+        // concurrent requests cannot both pass the plan-limit check.
         const result = await db.transaction(async (tx) => {
-            // Names are encrypted at rest, so find a same-name card after
-            // selecting this user's rows (the database cannot compare them).
-            // Prefer an active card, then the most recently edited matching one.
             await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${userId}))`);
+            const now = new Date();
+
+            // Throws when one more active subscription would exceed the plan.
+            const assertRoomForOneMore = async () => {
+                if (unlimited) return;
+                const current = await countActiveSubscriptions(tx, userId, now);
+                if (current + 1 > maxSubscriptions) {
+                    throw new Error("Subscription limit exceeded");
+                }
+            };
+
+            // Names are encrypted at rest, so find a same-name card after
+            // selecting this ledger's rows (the database cannot compare them).
+            // Prefer an active card, then the most recently edited matching one.
             const existingRows = await tx
-                .select({ id: subscriptions.id, name: subscriptions.name, active: subscriptions.active, updatedAt: subscriptions.updatedAt })
+                .select({
+                    id: subscriptions.id,
+                    name: subscriptions.name,
+                    isActive: activeSubscriptionFlag(now),
+                    updatedAt: subscriptions.updatedAt,
+                })
                 .from(subscriptions)
                 .where(eq(subscriptions.ledgerId, ledger.id));
             const normalizedName = data.name.trim().toLocaleLowerCase();
             const existing = existingRows
                 .filter((row) => row.name?.trim().toLocaleLowerCase() === normalizedName)
-                .sort((a, b) => Number(b.active) - Number(a.active) || (b.updatedAt?.getTime() ?? 0) - (a.updatedAt?.getTime() ?? 0))[0];
+                .sort((a, b) => Number(b.isActive) - Number(a.isActive) || (b.updatedAt?.getTime() ?? 0) - (a.updatedAt?.getTime() ?? 0))[0];
 
             // Re-adding a known service revives/edits its card instead of
             // creating a second card. Record the new charge as transaction history.
             if (existing) {
-                const today = new Date();
+                const today = now;
                 const endDate = subscriptionEndDate(data.endDate);
+                const willBeActive = endDate >= today;
+                // Reviving an inactive card makes it count against the plan
+                // again, so it needs the same limit check as a new card.
+                if (willBeActive && !existing.isActive) {
+                    await assertRoomForOneMore();
+                }
                 const [updated] = await tx.update(subscriptions).set({
                     name: data.name,
                     price: data.price,
@@ -232,8 +254,8 @@ export async function POST(req: Request) {
                     nextDate: nextRenewalDate(today, data.interval, data.intervalCount),
                     categoryId: category.id,
                     note: data.note || null,
-                    active: endDate >= today,
-                    deactivatedAt: endDate < today ? endDate : null,
+                    active: willBeActive,
+                    deactivatedAt: willBeActive ? null : endDate,
                     updatedAt: today,
                 }).where(eq(subscriptions.id, existing.id)).returning({ id: subscriptions.id });
 
@@ -251,45 +273,11 @@ export async function POST(req: Request) {
                     currency: data.currency,
                     createdAt: today,
                 });
-                const [usage] = await tx
-                    .select({ count: sql<number>`count(*)::int` })
-                    .from(subscriptions)
-                    .where(sql`${subscriptions.userId} = ${userId}
-                        AND ${subscriptions.active} = TRUE
-                        AND ${subscriptions.startDate} <= NOW()
-                        AND ${subscriptions.endDate} >= NOW()
-                        AND ${subscriptions.deactivatedAt} IS NULL`);
-                await tx.insert(featureUsage).values({
-                    userId,
-                    feature: "subscriptions",
-                    period: "active",
-                    count: usage?.count ?? 0,
-                }).onConflictDoUpdate({
-                    target: [featureUsage.userId, featureUsage.feature, featureUsage.period],
-                    set: { count: usage?.count ?? 0, updatedAt: today },
-                });
+                await syncActiveSubscriptionUsage(tx, userId, today);
                 return { ...updated, reused: true };
             }
 
-            if (!unlimited) {
-                // Serialize cap checks per user, including the empty-list case
-                // where SELECT ... FOR UPDATE has no row to lock.
-                await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${userId}))`);
-                const locked = await tx.execute(sql`
-                    SELECT id FROM ${subscriptions}
-                    WHERE ${subscriptions.userId} = ${userId}
-                    AND ${subscriptions.active} = TRUE
-                    AND ${subscriptions.startDate} <= NOW()
-                    AND ${subscriptions.endDate} >= NOW()
-                    AND ${subscriptions.deactivatedAt} IS NULL
-                    FOR UPDATE
-                `);
-                const currentCount = locked.rows.length;
-
-                if (currentCount + 1 > maxSubscriptions) {
-                    throw new Error("Subscription limit exceeded");
-                }
-            }
+            await assertRoomForOneMore();
 
             // Insert the new subscription
             const [created] = await tx
@@ -315,33 +303,19 @@ export async function POST(req: Request) {
                     note: data.note || null,
                     // Keep future-dated subscriptions eligible to become
                     // active automatically when their start date arrives.
-                    active: subscriptionEndDate(data.endDate) >= new Date(),
+                    active: subscriptionEndDate(data.endDate) >= now,
                     deactivatedAt:
-                        subscriptionEndDate(data.endDate) < new Date()
+                        subscriptionEndDate(data.endDate) < now
                             ? subscriptionEndDate(data.endDate)
                             : null,
                 })
                 .returning({ id: subscriptions.id });
 
-            const [usage] = await tx
-                .select({ count: sql<number>`count(*)::int` })
-                .from(subscriptions)
-                .where(sql`${subscriptions.userId} = ${userId}
-                    AND ${subscriptions.active} = TRUE
-                    AND ${subscriptions.startDate} <= NOW()
-                    AND ${subscriptions.endDate} >= NOW()
-                    AND ${subscriptions.deactivatedAt} IS NULL`);
+            await syncActiveSubscriptionUsage(tx, userId, now);
 
-            await tx.insert(featureUsage).values({
-                userId,
-                feature: "subscriptions",
-                period: "active",
-                count: usage?.count ?? 0,
-            }).onConflictDoUpdate({
-                target: [featureUsage.userId, featureUsage.feature, featureUsage.period],
-                set: { count: usage?.count ?? 0, updatedAt: new Date() },
-            });
-
+            // Link the first charge to its subscription (F-04). Without
+            // `subscriptionId` this row was orphaned: deleting the subscription
+            // left it behind and renewal de-duplication could not see it.
             await tx.insert(transactions).values({
                 title: data.name,
                 description: data.note,
@@ -351,9 +325,10 @@ export async function POST(req: Request) {
                 userId,
                 ledgerId: ledger.id,
                 categoryId: category.id,
+                subscriptionId: created.id,
                 action: "created",
                 currency: data.currency,
-                createdAt: new Date(),
+                createdAt: now,
             });
             return { ...created, reused: false };
         });

@@ -4,6 +4,7 @@ import { addDays, startOfDay } from "date-fns";
 import { subscriptions } from "@/db/schema/schema";
 import { users } from "@/db/schema/users";
 import { app_subscriptions, plans } from "@/db/schema/plans";
+import { activeSubscriptionNow } from "@/lib/active-subscription";
 
 export async function SubscriptionsDue() {
     const today = startOfDay(new Date());
@@ -39,7 +40,7 @@ export async function SubscriptionsDue() {
         nextDate: subscriptions.nextDate,
         userId: subscriptions.userId,
     }).from(subscriptions).where(and(
-        eq(subscriptions.active, true),
+        activeSubscriptionNow(now),
         dueOnOneOfTheseDays,
         exists(paidPlanSubscription),
     ))
