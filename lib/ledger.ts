@@ -4,8 +4,9 @@ import { z } from "zod";
 import { db } from "@/db";
 import { ledgers, type Ledger } from "@/db/schema/ledgers";
 
-/** Header the client sends to say which ledger a request is for. */
-export const LEDGER_HEADER = "x-ledger-id";
+import { LEDGER_HEADER } from "@/lib/ledger-header";
+
+export { LEDGER_HEADER };
 
 const ledgerIdSchema = z.string().uuid();
 

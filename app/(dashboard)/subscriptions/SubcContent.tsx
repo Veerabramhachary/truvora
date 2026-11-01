@@ -12,6 +12,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { FeatureGate } from "@/lib/feature-gate";
 import { useDelete, useList } from "@refinedev/core";
+import { ledgerFetch } from "@/lib/ledger-client";
 import { useRefreshAll } from "@/lib/use-refresh";
 import { format, isValid } from "date-fns";
 import { useEffect, useState } from "react";
@@ -47,7 +48,7 @@ const SubscContent = () => {
     const handleExport = async () => {
         setExporting(true);
         try {
-            const response = await fetch("/api/export?type=subscriptions");
+            const response = await ledgerFetch("/api/export?type=subscriptions");
             if (!response.ok) {
                 // Surface the server's reason instead of a console-only 404.
                 throw response;

@@ -13,6 +13,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { FeatureGate } from "@/lib/feature-gate";
 import { useDelete, useList } from "@refinedev/core";
+import { ledgerFetch } from "@/lib/ledger-client";
 import { useRefreshAll } from "@/lib/use-refresh";
 import { format, isValid } from "date-fns";
 import FormExpense from "./FormExpense";
@@ -52,7 +53,7 @@ const ExpenseContent = () => {
     const handleExport = async () => {
         setExporting(true);
         try {
-            const response = await fetch("/api/export?type=expenses");
+            const response = await ledgerFetch("/api/export?type=expenses");
             if (!response.ok) {
                 throw response;
             }

@@ -11,6 +11,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { useTable } from "@refinedev/core";
+import { ledgerFetch } from "@/lib/ledger-client";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/currencies";
 
@@ -58,7 +59,7 @@ const TransContent = () => {
     const handleExport = async () => {
         try {
             // The whole ledger, not just this page — the server does the CSV.
-            const response = await fetch("/api/export?type=transactions");
+            const response = await ledgerFetch("/api/export?type=transactions");
             if (!response.ok) {
                 throw response;
             }
