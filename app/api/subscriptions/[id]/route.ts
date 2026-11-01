@@ -12,6 +12,7 @@ import {
 } from "../schema";
 import { resolveCategory } from "@/lib/category-access";
 import { canUseFeature } from "@/lib/feature-access";
+import { ledgerErrorResponse, requireLedger } from "@/lib/ledger";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -24,6 +25,7 @@ export async function PATCH(req: Request, { params }: Params) {
         if (!userId) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
+        const ledger = await requireLedger(req, userId);
 
         const id = (await params).id;
         if (!idSchema.safeParse(id).success) {
@@ -51,7 +53,7 @@ export async function PATCH(req: Request, { params }: Params) {
                     endDate: subscriptions.endDate,
                 })
                 .from(subscriptions)
-                .where(and(eq(subscriptions.id, id), eq(subscriptions.userId, userId)))
+                .where(and(eq(subscriptions.id, id), eq(subscriptions.ledgerId, ledger.id)))
                 .limit(1);
             if (!existing) {
                 return NextResponse.json({ error: "Subscription not found" }, { status: 404 });
@@ -69,7 +71,7 @@ export async function PATCH(req: Request, { params }: Params) {
                 active: statusUpdate.data.active,
                 deactivatedAt: statusUpdate.data.active ? null : now,
                 updatedAt: now,
-            }).where(and(eq(subscriptions.id, id), eq(subscriptions.userId, userId)));
+            }).where(and(eq(subscriptions.id, id), eq(subscriptions.ledgerId, ledger.id)));
             await syncActiveSubscriptionUsage(userId);
             return NextResponse.json({ success: true, data: { id, active: statusUpdate.data.active } });
         }
@@ -82,7 +84,7 @@ export async function PATCH(req: Request, { params }: Params) {
             deactivatedAt: subscriptions.deactivatedAt,
         })
             .from(subscriptions)
-            .where(and(eq(subscriptions.id, id), eq(subscriptions.userId, userId)))
+            .where(and(eq(subscriptions.id, id), eq(subscriptions.ledgerId, ledger.id)))
             .limit(1);
         if (!existingSubscription) {
             return NextResponse.json({ error: "Subscription not found" }, { status: 404 });
@@ -92,7 +94,7 @@ export async function PATCH(req: Request, { params }: Params) {
         }
 
         const category = await resolveCategory(
-            userId,
+            ledger.id,
             data.category,
             "subscription",
         );
@@ -149,7 +151,7 @@ export async function PATCH(req: Request, { params }: Params) {
             .where(
                 and(
                     eq(subscriptions.id, id),
-                    eq(subscriptions.userId, userId),
+                    eq(subscriptions.ledgerId, ledger.id),
                 ),
             )
             .returning({ id: subscriptions.id });
@@ -165,6 +167,8 @@ export async function PATCH(req: Request, { params }: Params) {
 
         return NextResponse.json({ success: true, data: updated[0] });
     } catch (error) {
+        const ledgerResponse = ledgerErrorResponse(error);
+        if (ledgerResponse) return ledgerResponse;
         if (error instanceof z.ZodError) {
             return NextResponse.json(
                 {
@@ -182,12 +186,13 @@ export async function PATCH(req: Request, { params }: Params) {
     }
 }
 
-export async function DELETE(_req: Request, { params }: Params) {
+export async function DELETE(req: Request, { params }: Params) {
     try {
         const { userId } = await auth();
         if (!userId) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
+        const ledger = await requireLedger(req, userId);
 
         const id = (await params).id;
         if (!idSchema.safeParse(id).success) {
@@ -206,7 +211,7 @@ export async function DELETE(_req: Request, { params }: Params) {
                 .where(
                     and(
                         eq(transactions.subscriptionId, id),
-                        eq(transactions.userId, userId),
+                        eq(transactions.ledgerId, ledger.id),
                     ),
                 )
                 .returning({ id: transactions.id });
@@ -216,7 +221,7 @@ export async function DELETE(_req: Request, { params }: Params) {
                 .where(
                     and(
                         eq(subscriptions.id, id),
-                        eq(subscriptions.userId, userId),
+                        eq(subscriptions.ledgerId, ledger.id),
                     ),
                 )
                 .returning({ id: subscriptions.id });
@@ -238,6 +243,8 @@ export async function DELETE(_req: Request, { params }: Params) {
             data: { ...deleted[0], ledgerRowsRemoved: ledgerRows.length },
         });
     } catch (error) {
+        const ledgerResponse = ledgerErrorResponse(error);
+        if (ledgerResponse) return ledgerResponse;
         console.error("Subscription delete failed:", error);
         return NextResponse.json(
             { error: "Could not delete the subscription" },

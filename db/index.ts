@@ -7,6 +7,7 @@ import {subscriptions, transactions, categories } from './schema/schema'
 import { paymentTransactions } from "./schema/appTransactions";
 import { accountDeletions } from "./schema/account-deletions";
 import { platformDiscountRedemptions } from "./schema/platform-discounts";
+import { ledgers } from "./schema/ledgers";
 
 loadEnvConfig(process.cwd());
 
@@ -19,6 +20,7 @@ export const schema = {
     paymentTransactions,
     accountDeletions,
     platformDiscountRedemptions,
+    ledgers,
 };
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL!,

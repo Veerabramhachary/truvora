@@ -8,7 +8,7 @@ import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { resolveCategory } from "@/lib/category-access";
 import { canUseFeature } from "@/lib/feature-access";
-import { getPersonalLedgerId } from "@/lib/ledger";
+import { ledgerErrorResponse, requireLedger } from "@/lib/ledger";
 
 /**
  * `@refinedev/simple-rest` sends `_start`/`_end`/`_sort`/`_order` and reads the
@@ -32,6 +32,7 @@ export async function GET(req: NextRequest) {
         if (!userId) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
+        const ledger = await requireLedger(req, userId);
 
         const params = req.nextUrl.searchParams;
 
@@ -54,12 +55,12 @@ export async function GET(req: NextRequest) {
                 ? asc
                 : desc;
 
-        const forUser = eq(expenses.userId, userId);
+        const forLedger = eq(expenses.ledgerId, ledger.id);
 
         const countRow = await db
             .select({ total: sql<number>`count(*)` })
             .from(expenses)
-            .where(forUser);
+            .where(forLedger);
         const total = Number(countRow[0]?.total ?? 0);
 
         const data = await db
@@ -81,7 +82,7 @@ export async function GET(req: NextRequest) {
             })
             .from(expenses)
             .leftJoin(categories, eq(expenses.categoryId, categories.id))
-            .where(forUser)
+            .where(forLedger)
             .orderBy(order(column))
             .limit(end - start)
             .offset(start);
@@ -91,6 +92,8 @@ export async function GET(req: NextRequest) {
             headers: { "X-Total-Count": String(total) },
         });
     } catch (err) {
+        const ledgerResponse = ledgerErrorResponse(err);
+        if (ledgerResponse) return ledgerResponse;
         console.error("Failed to fetch expenses:", err);
         return NextResponse.json(
             { success: false, error: "Internal server error" },
@@ -105,6 +108,7 @@ export const POST = async (req: Request) => {
         if (!userId) {
             return NextResponse.json({error:"Unauthorized"}, { status: 401 });
         }
+        const ledger = await requireLedger(req, userId);
 
         let body: unknown;
         try {
@@ -121,7 +125,7 @@ export const POST = async (req: Request) => {
         }
 
         const category = await resolveCategory(
-            userId,
+            ledger.id,
             data.category,
             data.type === "expense" ? "expense" : null,
         );
@@ -139,9 +143,6 @@ export const POST = async (req: Request) => {
         }
 
         await db.transaction(async (tx) => {
-            // Ledger-scoped writes must carry ledger_id (NOT NULL in step 4).
-            const ledgerId = await getPersonalLedgerId(userId, tx);
-
             const [expense] = await tx.insert(expenses).values({
                 title: data.title,
                 note: data.note,
@@ -150,8 +151,8 @@ export const POST = async (req: Request) => {
                 type: data.type,
                 categoryId: category.id,
                 userId: userId,
+                ledgerId: ledger.id,
                 currency: data.currency,
-                ledgerId,
             }).returning({ id: expenses.id });
 
             await tx.insert(transactions).values({
@@ -161,12 +162,12 @@ export const POST = async (req: Request) => {
                 date: data.date,
                 type: data.type,
                 userId: userId,
+                ledgerId: ledger.id,
                 expenseId: expense.id,
                 categoryId: category.id,
                 action: "created",
                 currency: data.currency,
                 createdAt: new Date(),
-                ledgerId,
             });
         });
 
@@ -174,6 +175,8 @@ export const POST = async (req: Request) => {
             success: true,
         });
     } catch (error) {
+        const ledgerResponse = ledgerErrorResponse(error);
+        if (ledgerResponse) return ledgerResponse;
         if (error instanceof z.ZodError) {
             return NextResponse.json(
                 {

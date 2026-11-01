@@ -8,18 +8,20 @@ import { transactions } from "@/db/schema/schema";
 import { expenseSchema } from "../schema";
 import { resolveCategory } from "@/lib/category-access";
 import { canUseFeature } from "@/lib/feature-access";
+import { ledgerErrorResponse, requireLedger } from "@/lib/ledger";
 
 type Params = { params: Promise<{ id: string }> };
 
 const idSchema = z.string().uuid();
 
 /**
- * Both handlers are `userId`-scoped: a valid id belonging to someone else is
+ * Both handlers are ledger-scoped (`requireLedger` has already verified the
+ * caller owns the ledger): a valid id from another ledger or another user is
  * indistinguishable from a missing one, so it can never be used to probe for
  * other people's rows.
  */
-function scope(userId: string, id: string) {
-    return and(eq(expenses.id, id), eq(expenses.userId, userId));
+function scope(ledgerId: string, id: string) {
+    return and(eq(expenses.id, id), eq(expenses.ledgerId, ledgerId));
 }
 
 export async function PATCH(req: Request, { params }: Params) {
@@ -28,6 +30,7 @@ export async function PATCH(req: Request, { params }: Params) {
         if (!userId) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
+        const ledger = await requireLedger(req, userId);
 
         const id = (await params).id;
         if (!idSchema.safeParse(id).success) {
@@ -50,7 +53,7 @@ export async function PATCH(req: Request, { params }: Params) {
         const data = expenseSchema.parse(body);
 
         const [existingExpense] = await db.select({ currency: expenses.currency })
-            .from(expenses).where(scope(userId, id)).limit(1);
+            .from(expenses).where(scope(ledger.id, id)).limit(1);
         if (!existingExpense) {
             return NextResponse.json({ error: "Expense not found" }, { status: 404 });
         }
@@ -59,7 +62,7 @@ export async function PATCH(req: Request, { params }: Params) {
         }
 
         const category = await resolveCategory(
-            userId,
+            ledger.id,
             data.category,
             data.type === "expense" ? "expense" : null,
         );
@@ -86,13 +89,13 @@ export async function PATCH(req: Request, { params }: Params) {
                 categoryId: category.id,
                 currency: data.currency,
                 updatedAt: new Date(),
-            }).where(scope(userId, id)).returning({ id: expenses.id });
+            }).where(scope(ledger.id, id)).returning({ id: expenses.id });
             if (updatedRows.length) {
                 await tx.update(transactions).set({
                     title: data.title, description: data.note, amount: data.amount,
                     date: data.date, type: data.type, categoryId: category.id,
                     currency: data.currency, updatedAt: new Date(),
-                }).where(and(eq(transactions.expenseId, id), eq(transactions.userId, userId)));
+                }).where(and(eq(transactions.expenseId, id), eq(transactions.ledgerId, ledger.id)));
             }
             return updatedRows;
         });
@@ -106,6 +109,8 @@ export async function PATCH(req: Request, { params }: Params) {
 
         return NextResponse.json({ success: true, data: updated[0] });
     } catch (error) {
+        const ledgerResponse = ledgerErrorResponse(error);
+        if (ledgerResponse) return ledgerResponse;
         if (error instanceof z.ZodError) {
             return NextResponse.json(
                 { error: error.issues[0]?.message ?? "Invalid expense data" },
@@ -120,12 +125,13 @@ export async function PATCH(req: Request, { params }: Params) {
     }
 }
 
-export async function DELETE(_req: Request, { params }: Params) {
+export async function DELETE(req: Request, { params }: Params) {
     try {
         const { userId } = await auth();
         if (!userId) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
+        const ledger = await requireLedger(req, userId);
 
         const id = (await params).id;
         if (!idSchema.safeParse(id).success) {
@@ -138,7 +144,7 @@ export async function DELETE(_req: Request, { params }: Params) {
         const deleted = await db.transaction(async (tx) => {
             const rows = await tx
             .delete(expenses)
-            .where(scope(userId, id))
+            .where(scope(ledger.id, id))
             .returning({
                 id: expenses.id,
                 title: expenses.title,
@@ -146,7 +152,7 @@ export async function DELETE(_req: Request, { params }: Params) {
                 date: expenses.date,
                 type: expenses.type,
             });
-            if (rows.length) await tx.delete(transactions).where(and(eq(transactions.expenseId, id), eq(transactions.userId, userId)));
+            if (rows.length) await tx.delete(transactions).where(and(eq(transactions.expenseId, id), eq(transactions.ledgerId, ledger.id)));
             return rows;
         });
 
@@ -161,6 +167,8 @@ export async function DELETE(_req: Request, { params }: Params) {
 
         return NextResponse.json({ success: true, data: removed });
     } catch (error) {
+        const ledgerResponse = ledgerErrorResponse(error);
+        if (ledgerResponse) return ledgerResponse;
         console.error("Expense delete failed:", error);
         return NextResponse.json(
             { error: "Could not delete the expense" },

@@ -3,6 +3,7 @@ import { categories, transactions } from "@/db/schema/schema";
 import { auth } from "@clerk/nextjs/server";
 import { asc, desc, eq, sql } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
+import { ledgerErrorResponse, requireLedger } from "@/lib/ledger";
 
 /**
  * `@refinedev/simple-rest` sends `_start`/`_end`/`_sort`/`_order` and reads the
@@ -26,6 +27,7 @@ export async function GET(req: NextRequest) {
     }
 
     try {
+        const ledger = await requireLedger(req, userId);
         const params = req.nextUrl.searchParams;
 
         // Clamp so a crafted query can't request the whole table in one go.
@@ -48,12 +50,12 @@ export async function GET(req: NextRequest) {
                 ? desc
                 : asc;
 
-        const forUser = eq(transactions.userId, userId);
+        const forLedger = eq(transactions.ledgerId, ledger.id);
 
         const countRow = await db
             .select({ total: sql<number>`count(*)` })
             .from(transactions)
-            .where(forUser);
+            .where(forLedger);
         const total = Number(countRow[0]?.total ?? 0);
 
         const rows = await db
@@ -73,7 +75,7 @@ export async function GET(req: NextRequest) {
             })
             .from(transactions)
             .leftJoin(categories, eq(transactions.categoryId, categories.id))
-            .where(forUser)
+            .where(forLedger)
             .orderBy(order(column))
             .limit(end - start)
             .offset(start);
@@ -82,6 +84,8 @@ export async function GET(req: NextRequest) {
             headers: { "X-Total-Count": String(total) },
         });
     } catch (error) {
+        const ledgerResponse = ledgerErrorResponse(error);
+        if (ledgerResponse) return ledgerResponse;
         console.error("Error fetching transactions:", error);
         return NextResponse.json(
             { error: "Internal Server Error" },

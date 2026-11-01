@@ -1,0 +1,28 @@
+# Build artifacts & local deps
+node_modules
+.next
+out
+build
+.turbo
+coverage
+
+# VCS / editor
+.git
+.github
+.vscode
+.idea
+
+# Secrets — never copy into an image
+.env
+.env.*
+!.env.example
+
+# Local-only
+*.log
+npm-debug.log*
+.vercel
+
+# Not needed inside the image
+deploy
+AGENTS.md
+README.md

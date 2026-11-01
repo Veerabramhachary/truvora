@@ -6,6 +6,7 @@ import { expenses } from "@/db/schema/expenses";
 import { categories, subscriptions, transactions } from "@/db/schema/schema";
 import { tryConsumeFeature } from "@/lib/feature-access";
 import { checkRateLimits, rateLimitResponse } from "@/lib/rate-limit";
+import { ledgerErrorResponse, requireLedger } from "@/lib/ledger";
 
 /**
  * CSV export for the Exports feature gate.
@@ -63,6 +64,8 @@ export async function GET(req: Request) {
         );
         if (limited) return limited;
 
+        const ledger = await requireLedger(req, userId);
+
         const source = new URL(req.url).searchParams.get("type");
         if (!SOURCES.includes(source as Source)) {
             return NextResponse.json(
@@ -91,7 +94,7 @@ export async function GET(req: Request) {
                     categories,
                     eq(subscriptions.categoryId, categories.id),
                 )
-                .where(eq(subscriptions.userId, userId))
+                .where(eq(subscriptions.ledgerId, ledger.id))
                 .orderBy(desc(subscriptions.startDate));
 
             headers = [
@@ -126,7 +129,7 @@ export async function GET(req: Request) {
                 })
                 .from(expenses)
                 .leftJoin(categories, eq(expenses.categoryId, categories.id))
-                .where(eq(expenses.userId, userId))
+                .where(eq(expenses.ledgerId, ledger.id))
                 .orderBy(desc(expenses.date));
 
             headers = ["Date", "Description", "Category", "Type", "Amount", "Currency"];
@@ -155,7 +158,7 @@ export async function GET(req: Request) {
                     categories,
                     eq(transactions.categoryId, categories.id),
                 )
-                .where(eq(transactions.userId, userId))
+                .where(eq(transactions.ledgerId, ledger.id))
                 .orderBy(desc(transactions.createdAt));
 
             headers = [
@@ -195,13 +198,15 @@ export async function GET(req: Request) {
             status: 200,
             headers: {
                 "Content-Type": "text/csv; charset=utf-8",
-                "Content-Disposition": `attachment; filename="truvora-${source}-${stamp}.csv"`,
+                "Content-Disposition": `attachment; filename="truvora-${ledger.type}-${source}-${stamp}.csv"`,
                 // Never let a CSV be embedded or fetched cross-origin.
                 "X-Content-Type-Options": "nosniff",
                 "Content-Security-Policy": "default-src 'none'",
             },
         });
     } catch (error) {
+        const ledgerResponse = ledgerErrorResponse(error);
+        if (ledgerResponse) return ledgerResponse;
         console.error("Export failed:", error);
         return NextResponse.json(
             { error: "Could not export your data" },

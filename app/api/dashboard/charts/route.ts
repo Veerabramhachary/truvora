@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import z from "zod";
 import { toPaise } from "@/lib/money";
 import { getFeatureLimit } from "@/lib/feature-access";
+import { ledgerErrorResponse, requireLedger } from "@/lib/ledger";
 
 const querySchema = z.object({
     startDate: z.string().datetime(),
@@ -20,6 +21,16 @@ export const GET = async (request: NextRequest) => {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    let ledger: Awaited<ReturnType<typeof requireLedger>>;
+    try {
+        ledger = await requireLedger(request, userId);
+    } catch (error) {
+        const ledgerResponse = ledgerErrorResponse(error);
+        if (ledgerResponse) return ledgerResponse;
+        throw error;
+    }
+
+    // Chart access is a plan feature, so it stays per user rather than per ledger.
     const chartTier = await getFeatureLimit(userId, "charts");
     if (chartTier !== "comparative" && chartTier !== "advanced") {
         return NextResponse.json(
@@ -55,7 +66,7 @@ export const GET = async (request: NextRequest) => {
         .from(expenses)
         .where(
             and(
-                eq(expenses.userId, userId),
+                eq(expenses.ledgerId, ledger.id),
                 eq(expenses.currency, currency),
                 eq(expenses.type, "expense"),
                 gte(expenses.date, start),
@@ -73,7 +84,7 @@ export const GET = async (request: NextRequest) => {
         .from(subscriptions)
         .where(
             and(
-                eq(subscriptions.userId, userId),
+                eq(subscriptions.ledgerId, ledger.id),
                 eq(subscriptions.currency, currency),
                 eq(subscriptions.active, true),
                 lte(subscriptions.startDate, end)

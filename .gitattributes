@@ -1,0 +1,6 @@
+# Docker and cron entrypoints must be LF even from a Windows checkout, or the
+# container fails with "exec format error" / "/bin/sh^M: not found" and crontab
+# runs commands with a trailing \r.
+Dockerfile text eol=lf
+deploy/* text eol=lf
+*.sh text eol=lf

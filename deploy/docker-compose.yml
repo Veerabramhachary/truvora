@@ -1,0 +1,34 @@
+# Emergency single-host deployment (VPS / VM behind nginx or Caddy).
+#
+#   cd deploy
+#   set -a && . ../.env && set +a      # load env for variable substitution
+#   docker compose up -d --build
+#
+# NEXT_PUBLIC_APP_URL is required at build time (it is baked into the client
+# bundle), which is why compose fails fast when it is unset.
+
+services:
+    truvora:
+        build:
+            context: ..
+            dockerfile: Dockerfile
+            args:
+                NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:?set NEXT_PUBLIC_APP_URL in ../.env}
+        restart: unless-stopped
+        env_file:
+            - ../.env
+        environment:
+            NODE_ENV: production
+        ports:
+            # Bound to loopback only; terminate TLS in a reverse proxy in front.
+            - "127.0.0.1:3000:3000"
+        healthcheck:
+            test:
+                - CMD
+                - node
+                - -e
+                - "fetch('http://127.0.0.1:3000/').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 20s

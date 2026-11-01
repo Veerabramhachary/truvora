@@ -13,7 +13,7 @@ import {
 } from "./schema";
 import { resolveCategory } from "@/lib/category-access";
 import { canUseFeature } from "@/lib/feature-access";
-import { getPersonalLedgerId } from "@/lib/ledger";
+import { ledgerErrorResponse, requireLedger } from "@/lib/ledger";
 
 /**
  * `@refinedev/simple-rest` sends `_start`/`_end`/`_sort`/`_order` and reads the
@@ -34,6 +34,7 @@ export async function GET(req: NextRequest) {
         if (!userId) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
+        const ledger = await requireLedger(req, userId);
 
         const params = req.nextUrl.searchParams;
 
@@ -70,12 +71,12 @@ export async function GET(req: NextRequest) {
                 ? asc
                 : desc;
 
-        const forUser = eq(subscriptions.userId, userId);
+        const forLedger = eq(subscriptions.ledgerId, ledger.id);
 
         const countRow = await db
             .select({ total: sql<number>`count(*)` })
             .from(subscriptions)
-            .where(forUser);
+            .where(forLedger);
         const total = Number(countRow[0]?.total ?? 0);
 
         const data = await db
@@ -101,7 +102,7 @@ export async function GET(req: NextRequest) {
             })
             .from(subscriptions)
             .leftJoin(categories, eq(subscriptions.categoryId, categories.id))
-            .where(forUser)
+            .where(forLedger)
             .orderBy(order(column))
             .limit(end - start)
             .offset(start);
@@ -111,6 +112,8 @@ export async function GET(req: NextRequest) {
             headers: { "X-Total-Count": String(total) },
         });
     } catch (err) {
+        const ledgerResponse = ledgerErrorResponse(err);
+        if (ledgerResponse) return ledgerResponse;
         console.error("Failed to fetch subscriptions:", err);
         return NextResponse.json(
             { error: "Failed to fetch subscriptions" },
@@ -147,8 +150,9 @@ export async function POST(req: Request) {
         if (data.currency !== "INR") {
             return NextResponse.json({ error: "New financial records must use INR" }, { status: 400 });
         }
+        const ledger = await requireLedger(req, userId);
         const category = await resolveCategory(
-            userId,
+            ledger.id,
             data.category,
             "subscription",
         );
@@ -203,13 +207,10 @@ export async function POST(req: Request) {
             // selecting this user's rows (the database cannot compare them).
             // Prefer an active card, then the most recently edited matching one.
             await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${userId}))`);
-            // Resolved once per request: both the insert below and the
-            // reuse branch write ledger-scoped rows.
-            const ledgerId = await getPersonalLedgerId(userId, tx);
             const existingRows = await tx
                 .select({ id: subscriptions.id, name: subscriptions.name, active: subscriptions.active, updatedAt: subscriptions.updatedAt })
                 .from(subscriptions)
-                .where(eq(subscriptions.userId, userId));
+                .where(eq(subscriptions.ledgerId, ledger.id));
             const normalizedName = data.name.trim().toLocaleLowerCase();
             const existing = existingRows
                 .filter((row) => row.name?.trim().toLocaleLowerCase() === normalizedName)
@@ -230,8 +231,6 @@ export async function POST(req: Request) {
                     endDate,
                     nextDate: nextRenewalDate(today, data.interval, data.intervalCount),
                     categoryId: category.id,
-                    // Repairs a card whose ledger_id predates the rollout.
-                    ledgerId,
                     note: data.note || null,
                     active: endDate >= today,
                     deactivatedAt: endDate < today ? endDate : null,
@@ -245,12 +244,12 @@ export async function POST(req: Request) {
                     date: today,
                     type: "subscription",
                     userId,
+                    ledgerId: ledger.id,
                     categoryId: category.id,
                     subscriptionId: existing.id,
                     action: "created",
                     currency: data.currency,
                     createdAt: today,
-                    ledgerId,
                 });
                 const [usage] = await tx
                     .select({ count: sql<number>`count(*)::int` })
@@ -297,7 +296,7 @@ export async function POST(req: Request) {
                 .insert(subscriptions)
                 .values({
                     userId,
-                    ledgerId,
+                    ledgerId: ledger.id,
                     name: data.name,
                     price: data.price,
                     currency: data.currency,
@@ -350,17 +349,19 @@ export async function POST(req: Request) {
                 date: data.startDate,
                 type: "subscription",
                 userId,
+                ledgerId: ledger.id,
                 categoryId: category.id,
                 action: "created",
                 currency: data.currency,
                 createdAt: new Date(),
-                ledgerId,
             });
             return { ...created, reused: false };
         });
 
         return NextResponse.json(result, { status: result.reused ? 200 : 201 });
     } catch (error) {
+        const ledgerResponse = ledgerErrorResponse(error);
+        if (ledgerResponse) return ledgerResponse;
         console.error("Subscription creation error:", error);
         if (error instanceof Error && (error.message === "Subscription limit exceeded" || error.message === "Your plan does not allow subscriptions")) {
             return NextResponse.json({ error: error.message }, { status: 403 });

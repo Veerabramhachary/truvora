@@ -4,8 +4,11 @@ import { categories } from "@/db/schema/schema";
 
 export type CustomCategoryType = "expense" | "subscription";
 
+/**
+ * Custom categories belong to a ledger; built-in ones (no owner) are global.
+ */
 export async function resolveCategory(
-    userId: string,
+    ledgerId: string,
     name: string,
     type: CustomCategoryType | null,
 ) {
@@ -16,7 +19,7 @@ export async function resolveCategory(
             .where(
                 and(
                     eq(categories.displayName, name),
-                    eq(categories.userId, userId),
+                    eq(categories.ledgerId, ledgerId),
                     eq(categories.categoryType, type),
                 ),
             )

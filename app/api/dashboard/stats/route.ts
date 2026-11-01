@@ -5,6 +5,7 @@ import { and, count, eq, gte, isNull, lt, sql, lte, or } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import z from "zod";
 import { toPaise } from "@/lib/money";
+import { ledgerErrorResponse, requireLedger } from "@/lib/ledger";
 
 const querySchema = z.object({
     currency: z.literal("INR").default("INR"),
@@ -19,6 +20,8 @@ export const GET = async (request: NextRequest) => {
                 { status: 401 },
             );
         }
+
+        const ledger = await requireLedger(request, userId);
 
         const { searchParams } = request.nextUrl;
         const query = querySchema.safeParse({
@@ -78,7 +81,7 @@ export const GET = async (request: NextRequest) => {
                 .from(subscriptions)
                 .where(
                     and(
-                        eq(subscriptions.userId, userId),
+                        eq(subscriptions.ledgerId, ledger.id),
                         eq(subscriptions.currency, currency),
                         eq(subscriptions.active, true),
                     ),
@@ -93,7 +96,7 @@ export const GET = async (request: NextRequest) => {
                 .from(transactions)
                 .where(
                     and(
-                        eq(transactions.userId, userId),
+                        eq(transactions.ledgerId, ledger.id),
                         eq(transactions.currency, currency),
                         eq(transactions.type, "income"),
                         eq(transactions.action, "created"),
@@ -111,7 +114,7 @@ export const GET = async (request: NextRequest) => {
                 .from(transactions)
                 .where(
                     and(
-                        eq(transactions.userId, userId),
+                        eq(transactions.ledgerId, ledger.id),
                         eq(transactions.currency, currency),
                         eq(transactions.type, "income"),
                         eq(transactions.action, "created"),
@@ -129,7 +132,7 @@ export const GET = async (request: NextRequest) => {
                 .from(transactions)
                 .where(
                     and(
-                        eq(transactions.userId, userId),
+                        eq(transactions.ledgerId, ledger.id),
                         eq(transactions.currency, currency),
                         eq(transactions.type, "expense"),
                         eq(transactions.action, "created"),
@@ -144,7 +147,7 @@ export const GET = async (request: NextRequest) => {
                 .select({ value: sql<string>`COALESCE(SUM(${transactions.amount}), 0)::text` })
                 .from(transactions)
                 .where(and(
-                    eq(transactions.userId, userId),
+                    eq(transactions.ledgerId, ledger.id),
                     eq(transactions.currency, currency),
                     eq(transactions.type, "expense"),
                     eq(transactions.action, "created"),
@@ -161,7 +164,7 @@ export const GET = async (request: NextRequest) => {
                 .from(subscriptions)
                 .where(
                     and(
-                        eq(subscriptions.userId, userId),
+                        eq(subscriptions.ledgerId, ledger.id),
                         eq(subscriptions.currency, currency),
                         eq(subscriptions.active, true),
                     ),
@@ -174,7 +177,7 @@ export const GET = async (request: NextRequest) => {
                 .select({ value: sql<string>`COALESCE(SUM(ROUND(${subscriptions.price} / (CASE WHEN ${subscriptions.interval} = 'year' THEN 12 ELSE 1 END * ${subscriptions.intervalCount}), 2)), 0)::text` })
                 .from(subscriptions)
                 .where(and(
-                    eq(subscriptions.userId, userId),
+                    eq(subscriptions.ledgerId, ledger.id),
                     eq(subscriptions.currency, currency),
                     gte(subscriptions.endDate, startOfPreviousMonth),
                     lt(subscriptions.startDate, startOfCurrentMonth),
@@ -195,7 +198,7 @@ export const GET = async (request: NextRequest) => {
                     .from(transactions)
                     .where(
                         and(
-                            eq(transactions.userId, userId),
+                            eq(transactions.ledgerId, ledger.id),
                             eq(transactions.type, "subscription"),
                             lt(transactions.date, startOfCurrentMonth), // CUTOFF = start of current month
                         ),
@@ -256,7 +259,9 @@ export const GET = async (request: NextRequest) => {
                 totalSpend: Number(totalSpendGrowth.toFixed(1)),
             },
         });
-    } catch {
+    } catch (error) {
+        const ledgerResponse = ledgerErrorResponse(error);
+        if (ledgerResponse) return ledgerResponse;
         return NextResponse.json(
             { message: "Internal server error" },
             { status: 500 },

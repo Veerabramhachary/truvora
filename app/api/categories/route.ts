@@ -9,7 +9,7 @@ import {
 import { asc, and, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { getPersonalLedgerId } from "@/lib/ledger";
+import { ledgerErrorResponse, requireLedger } from "@/lib/ledger";
 
 const categoryTypeSchema = z.enum(["expense", "subscription"]);
 const createCategorySchema = z
@@ -44,6 +44,7 @@ export async function GET(req: NextRequest) {
     }
 
     try {
+        const ledger = await requireLedger(req, userId);
         if (!(await canUseFeature(userId, "customCategories"))) {
             return NextResponse.json(
                 { error: "Custom categories are not available on your plan" },
@@ -56,7 +57,7 @@ export async function GET(req: NextRequest) {
             .from(categories)
             .where(
                 and(
-                    eq(categories.userId, userId),
+                    eq(categories.ledgerId, ledger.id),
                     eq(categories.categoryType, type.data),
                 ),
             )
@@ -64,6 +65,8 @@ export async function GET(req: NextRequest) {
 
         return NextResponse.json(data);
     } catch (error) {
+        const ledgerResponse = ledgerErrorResponse(error);
+        if (ledgerResponse) return ledgerResponse;
         console.error("Failed to fetch custom categories:", error);
         return NextResponse.json(
             { error: "Could not load categories" },
@@ -110,6 +113,16 @@ export async function POST(req: Request) {
         );
     }
 
+    let ledger: Awaited<ReturnType<typeof requireLedger>>;
+    try {
+        ledger = await requireLedger(req, userId);
+    } catch (error) {
+        const ledgerResponse = ledgerErrorResponse(error);
+        if (ledgerResponse) return ledgerResponse;
+        console.error("Failed to resolve ledger:", error);
+        return NextResponse.json({ error: "Could not create category" }, { status: 500 });
+    }
+
     const { name, type } = parsed.data;
     if (builtInCategoryNames[type].has(name.toLocaleLowerCase())) {
         return NextResponse.json(
@@ -120,17 +133,14 @@ export async function POST(req: Request) {
 
     let category: { id: string; name: string | null } | undefined;
     try {
-        // Custom categories are ledger-scoped; built-in ones (user_id NULL)
-        // deliberately stay ledger-less.
-        const ledgerId = await getPersonalLedgerId(userId);
         [category] = await db
             .insert(categories)
             .values({
                 name: `custom-${crypto.randomUUID()}`,
                 displayName: name,
                 userId,
+                ledgerId: ledger.id,
                 categoryType: type,
-                ledgerId,
             })
             .onConflictDoNothing()
             .returning({ id: categories.id, name: categories.displayName });

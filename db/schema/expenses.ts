@@ -9,7 +9,8 @@ export const expenseType = pgEnum('expense_type', [
 export const expenses = pgTable("expenses", {
     id: uuid('id').primaryKey().defaultRandom(),
     userId: text('user_id').notNull(),
-    // Nullable during the expand phase; becomes NOT NULL after backfill.
+    // NOT NULL from step 4 of the rollout: every ledger-scoped row names its
+    // ledger (01_backfill + 02_verify already proved no row is left NULL).
     ledgerId: uuid('ledger_id').notNull().references(() => ledgers.id),
     title: encryptedText('title').notNull(),
     note: encryptedText('note'),

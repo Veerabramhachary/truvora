@@ -1,0 +1,16 @@
+# Truvora — replacement for the Vercel crons declared in vercel.json.
+#
+# Same schedule as Vercel ("0 0 * * *" = daily at 00:00 UTC). The routes
+# authenticate with a bearer token, not a Clerk session (see proxy.ts, the
+# "/api/crons/(.*)" entry in the public allow-list).
+#
+# Install on the host that runs the app (or any host that can reach it):
+#   1. mkdir -p /etc/truvora && cp this file's sibling trigger-cron.sh to /opt/truvora/deploy/
+#   2. Create /etc/truvora/cron.env containing:
+#        TRUVORA_BASE_URL=https://app.example.com
+#        CRON_SECRET=<same value as on the app host>
+#      then: chmod 600 /etc/truvora/cron.env
+#   3. crontab -e  ->  paste the two lines below.
+CRON_TZ=UTC
+0 0 * * * /opt/truvora/deploy/trigger-cron.sh subscriptionsTC  >> /var/log/truvora-cron.log 2>&1
+0 0 * * * /opt/truvora/deploy/trigger-cron.sh account-deletions >> /var/log/truvora-cron.log 2>&1

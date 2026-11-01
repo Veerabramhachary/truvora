@@ -12,7 +12,7 @@ import { SITE_URL } from "@/lib/site";
 import { platformDiscounts } from "@/db/schema/platform-discounts";
 import { markWebhookDeletion } from "@/lib/account-deletion";
 import { accountDeletions } from "@/db/schema/account-deletions";
-import { getPersonalLedgerId } from "@/lib/ledger";
+import { ledgers } from "@/db/schema/ledgers";
 
 export async function POST(req: NextRequest) {
     const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET;
@@ -128,8 +128,14 @@ export async function POST(req: NextRequest) {
                 // backfill covered pre-rollout users; this covers everyone
                 // from here on, so `02_verify`'s "users without personal
                 // ledger" stays 0 and every ledger-scoped insert can resolve
-                // its ledger_id (NOT NULL from step 4).
-                await getPersonalLedgerId(id, tx);
+                // its ledger_id (NOT NULL from step 4). Inserted on `tx` (not
+                // via getOrCreatePersonalLedger, which uses the pooled db)
+                // so it stays part of this transaction; the partial unique
+                // index absorbs webhook re-deliveries and concurrent races.
+                await tx
+                    .insert(ledgers)
+                    .values({ ownerUserId: id, type: "personal", name: "Personal" })
+                    .onConflictDoNothing();
 
                 const existingSubscription = await tx
                     .select({ id: app_subscriptions.id })
