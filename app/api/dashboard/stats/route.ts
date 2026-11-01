@@ -1,7 +1,7 @@
 import { db } from "@/db";
 import { transactions, subscriptions } from "@/db/schema/schema";
 import { auth } from "@clerk/nextjs/server";
-import { and, asc, count, eq, gte, isNull, lt, sql, lte, or } from "drizzle-orm";
+import { and, asc, count, eq, gte, lt, lte, sql } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import z from "zod";
 import { toPaise } from "@/lib/money";
@@ -191,62 +191,6 @@ export const GET = async (request: NextRequest) => {
                     eq(subscriptions.ledgerId, ledger.id),
                     eq(subscriptions.currency, currency),
                     activeSubscriptionNow(now),
-                    gte(subscriptions.nextDate, startOfToday),
-                    lte(subscriptions.nextDate, endOfUpcomingWindow),
-                ))
-                .then((res) => String(res[0]?.value ?? "0")),
-
-            // 6. Active subscriptions count at the end of previous month
-            (async () => {
-                const latestEvents = db
-                    .select({
-                        subscriptionId: transactions.subscriptionId,
-                        action: transactions.action,
-                        rowNum: sql<number>`ROW_NUMBER() OVER (PARTITION BY ${transactions.subscriptionId} ORDER BY ${transactions.date} DESC)`.as(
-                            "row_num",
-                        ),
-                    })
-                    .from(transactions)
-                    .where(
-                        and(
-                            eq(transactions.ledgerId, ledger.id),
-                            eq(transactions.type, "subscription"),
-                            lt(transactions.date, startOfCurrentMonth), // CUTOFF = start of current month
-                        ),
-                    )
-                    .as("latest");
-
-                const result = await db
-                    .select({ value: count() })
-                    .from(subscriptions)
-                    .innerJoin(
-                        latestEvents,
-                        eq(subscriptions.id, latestEvents.subscriptionId),
-                    )
-                    .where(
-                        and(
-                            sql`${latestEvents.rowNum} = 1`,
-                            sql`${latestEvents.action} != 'deleted'`,
-                            lte(subscriptions.startDate, startOfCurrentMonth),
-                            eq(subscriptions.currency, currency),
-                        ),
-                    );
-
-                return result[0]?.value ?? 0;
-            })(),
-
-            // 9. Active subscriptions renewing between today and 7 days out,
-            // nearest first, for the "Upcoming subscriptions" stat card.
-            db
-                .select({
-                    name: subscriptions.name,
-                    nextDate: subscriptions.nextDate,
-                })
-                .from(subscriptions)
-                .where(and(
-                    eq(subscriptions.ledgerId, ledger.id),
-                    eq(subscriptions.currency, currency),
-                    eq(subscriptions.active, true),
                     gte(subscriptions.nextDate, startOfToday),
                     lte(subscriptions.nextDate, endOfUpcomingWindow),
                 ))
