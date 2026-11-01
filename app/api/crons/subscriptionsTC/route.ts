@@ -46,7 +46,11 @@ export async function GET(request: NextRequest) {
                 }
             }
             if (!claimed.length) continue;
-            const items: SubscriptionItem[] = claimed.map(({ name, daysLeft }) => ({ name: name ?? "Subscription", daysLeft }));
+            // One email per user, however many ledgers the renewals come from;
+            // each item is tagged with its ledger name.
+            const items: SubscriptionItem[] = claimed
+                .map(({ name, daysLeft, ledgerName }) => ({ name: name ?? "Subscription", daysLeft, ledgerName }))
+                .sort((a, b) => a.daysLeft - b.daysLeft || a.ledgerName.localeCompare(b.ledgerName) || a.name.localeCompare(b.name));
             const idempotencyKey = `renewal-reminder/${createHash("sha256")
                 .update(
                     [
