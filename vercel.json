@@ -1,8 +1,12 @@
 {
     "crons": [
         {
-            "path": "/api/crons/subscriptionsTC",
+            "path": "/api/crons/subscription-renewals",
             "schedule": "0 0 * * *"
+        },
+        {
+            "path": "/api/crons/subscriptionsTC",
+            "schedule": "30 0 * * *"
         },
         {
             "path": "/api/crons/account-deletions",

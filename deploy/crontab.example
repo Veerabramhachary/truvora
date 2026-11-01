@@ -10,7 +10,11 @@
 #        TRUVORA_BASE_URL=https://app.example.com
 #        CRON_SECRET=<same value as on the app host>
 #      then: chmod 600 /etc/truvora/cron.env
-#   3. crontab -e  ->  paste the two lines below.
+#   3. crontab -e  ->  paste the three lines below.
+#
+# subscription-renewals runs first and subscriptionsTC (reminders) 30 minutes
+# later, so reminders see the already-advanced renewal dates.
 CRON_TZ=UTC
-0 0 * * * /opt/truvora/deploy/trigger-cron.sh subscriptionsTC  >> /var/log/truvora-cron.log 2>&1
+0 0 * * * /opt/truvora/deploy/trigger-cron.sh subscription-renewals >> /var/log/truvora-cron.log 2>&1
+30 0 * * * /opt/truvora/deploy/trigger-cron.sh subscriptionsTC  >> /var/log/truvora-cron.log 2>&1
 0 0 * * * /opt/truvora/deploy/trigger-cron.sh account-deletions >> /var/log/truvora-cron.log 2>&1

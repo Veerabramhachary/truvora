@@ -90,6 +90,11 @@ export const transactions = pgTable("transactions", {
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
     index("transactions_ledger_date_idx").on(table.ledgerId, table.date),
+    // One charge per subscription per cycle date. This is what makes the daily
+    // renewal job safe to re-run: a repeated cycle conflicts instead of
+    // duplicating. Rows with a NULL subscription_id (plain income/expense)
+    // are never equal to each other in Postgres, so they are unaffected.
+    uniqueIndex("transactions_subscription_date_unique").on(table.subscriptionId, table.date),
 ]);
 
 export const subscriptions = pgTable("subscriptions", {
