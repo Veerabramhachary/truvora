@@ -1,9 +1,9 @@
 import { db } from "@/db";
 import { featureUsage } from "@/db/schema/feature-usage";
 import { FeatureLimits } from "@/db/schema/plans";
-import { and, eq, gte, isNull, lte, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { getSubscriptionGate } from "./subscription";
-import { subscriptions } from "@/db/schema/schema";
+import { countActiveSubscriptions } from "./active-subscription";
 
 type LimitInfo = {
     limit: number;
@@ -38,20 +38,8 @@ export const getCurrentCountForStaticCap = async (
     feature: string,
 ): Promise<number> => {
     if (feature === "subscriptions") {
-        const now = new Date();
-        const result = await db
-            .select({ count: sql<number>`count(*)` })
-            .from(subscriptions)
-            .where(
-                and(
-                    eq(subscriptions.userId, userId),
-                    eq(subscriptions.active, true),
-                    lte(subscriptions.startDate, now),
-                    gte(subscriptions.endDate, now),
-                    isNull(subscriptions.deactivatedAt),
-                ),
-            );
-        return result[0]?.count ?? 0;
+        // Same condition as the list and the dashboard (lib/active-subscription).
+        return countActiveSubscriptions(db, userId);
     }
     return 0;
 };

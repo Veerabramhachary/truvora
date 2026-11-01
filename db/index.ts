@@ -1,4 +1,7 @@
-import { loadEnvConfig } from "@next/env";
+// @next/env is CJS whose named exports are defined with Object.defineProperty,
+// which Node's ESM named-export detection (cjs-module-lexer) cannot see — the
+// default import (module.exports) is the interop-safe way under "type": "module".
+import nextEnv from "@next/env";
 import { drizzle } from "drizzle-orm/neon-serverless";
 import { Pool } from "@neondatabase/serverless";
 import * as baseSchema from "./schema/schema";
@@ -9,7 +12,7 @@ import { accountDeletions } from "./schema/account-deletions";
 import { platformDiscountRedemptions } from "./schema/platform-discounts";
 import { ledgers } from "./schema/ledgers";
 
-loadEnvConfig(process.cwd());
+nextEnv.loadEnvConfig(process.cwd());
 
 export const schema = {
     ...baseSchema,

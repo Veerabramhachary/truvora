@@ -1,11 +1,12 @@
 import { db } from "@/db";
 import { transactions, subscriptions } from "@/db/schema/schema";
 import { auth } from "@clerk/nextjs/server";
-import { and, asc, count, eq, gte, isNull, lt, sql, lte, or } from "drizzle-orm";
+import { and, asc, count, eq, gte, lt, lte, sql } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import z from "zod";
 import { toPaise } from "@/lib/money";
 import { ledgerErrorResponse, requireLedger } from "@/lib/ledger";
+import { activeSubscriptionAt, activeSubscriptionNow } from "@/lib/active-subscription";
 
 const querySchema = z.object({
     currency: z.literal("INR").default("INR"),
@@ -78,9 +79,7 @@ export const GET = async (request: NextRequest) => {
             incomeCurrent,
             incomePrevious,
             expenseCurrent,
-            expensePrevious,
             subsCurrent,
-            subsPrevious,
             activeSubsPrevious,
             upcomingRenewals,
         ] = await Promise.all([
@@ -92,7 +91,7 @@ export const GET = async (request: NextRequest) => {
                     and(
                         eq(subscriptions.ledgerId, ledger.id),
                         eq(subscriptions.currency, currency),
-                        eq(subscriptions.active, true),
+                        activeSubscriptionNow(now),
                     ),
                 )
                 .then((res) => res[0]?.value ?? 0),
@@ -151,20 +150,6 @@ export const GET = async (request: NextRequest) => {
                 )
                 .then((res) => String(res[0]?.value ?? "0")),
 
-            // 5. Previous month expenses, used for an apples-to-apples spend change.
-            db
-                .select({ value: sql<string>`COALESCE(SUM(${transactions.amount}), 0)::text` })
-                .from(transactions)
-                .where(and(
-                    eq(transactions.ledgerId, ledger.id),
-                    eq(transactions.currency, currency),
-                    eq(transactions.type, "expense"),
-                    eq(transactions.action, "created"),
-                    gte(transactions.date, startOfPreviousMonth),
-                    lt(transactions.date, startOfCurrentMonth),
-                ))
-                .then((res) => String(res[0]?.value ?? "0")),
-
             // 6. Subscriptions total monthly spend (current active)
             db
                 .select({
@@ -175,63 +160,24 @@ export const GET = async (request: NextRequest) => {
                     and(
                         eq(subscriptions.ledgerId, ledger.id),
                         eq(subscriptions.currency, currency),
-                        eq(subscriptions.active, true),
+                        activeSubscriptionNow(now),
                     ),
                 )
                 .then((res) => String(res[0]?.value ?? "0")),
 
-            // 7. Previous month subscription run-rate. Annual charges are
-            // normalized to monthly value and dates are checked for overlap.
+            // 8. Active subscriptions at the end of the previous month, judged
+            // from dates only (the `active` flag has no history).
             db
-                .select({ value: sql<string>`COALESCE(SUM(ROUND(${subscriptions.price} / (CASE WHEN ${subscriptions.interval} = 'year' THEN 12 ELSE 1 END * ${subscriptions.intervalCount}), 2)), 0)::text` })
+                .select({ value: count() })
                 .from(subscriptions)
-                .where(and(
-                    eq(subscriptions.ledgerId, ledger.id),
-                    eq(subscriptions.currency, currency),
-                    gte(subscriptions.endDate, startOfPreviousMonth),
-                    lt(subscriptions.startDate, startOfCurrentMonth),
-                    or(isNull(subscriptions.deactivatedAt), gte(subscriptions.deactivatedAt, startOfPreviousMonth)),
-                ))
-                .then((res) => String(res[0]?.value ?? "0")),
-
-            // 6. Active subscriptions count at the end of previous month
-            (async () => {
-                const latestEvents = db
-                    .select({
-                        subscriptionId: transactions.subscriptionId,
-                        action: transactions.action,
-                        rowNum: sql<number>`ROW_NUMBER() OVER (PARTITION BY ${transactions.subscriptionId} ORDER BY ${transactions.date} DESC)`.as(
-                            "row_num",
-                        ),
-                    })
-                    .from(transactions)
-                    .where(
-                        and(
-                            eq(transactions.ledgerId, ledger.id),
-                            eq(transactions.type, "subscription"),
-                            lt(transactions.date, startOfCurrentMonth), // CUTOFF = start of current month
-                        ),
-                    )
-                    .as("latest");
-
-                const result = await db
-                    .select({ value: count() })
-                    .from(subscriptions)
-                    .innerJoin(
-                        latestEvents,
-                        eq(subscriptions.id, latestEvents.subscriptionId),
-                    )
-                    .where(
-                        and(
-                            sql`${latestEvents.rowNum} = 1`,
-                            sql`${latestEvents.action} != 'deleted'`,
-                            lte(subscriptions.startDate, startOfCurrentMonth),
-                            eq(subscriptions.currency, currency),
-                        ),
-                    );
-
-                return result[0]?.value ?? 0;
-            })(),
+                .where(
+                    and(
+                        eq(subscriptions.ledgerId, ledger.id),
+                        eq(subscriptions.currency, currency),
+                        activeSubscriptionAt(startOfCurrentMonth),
+                    ),
+                )
+                .then((res) => res[0]?.value ?? 0),
 
             // 9. Active subscriptions renewing between today and 7 days out,
             // nearest first, for the "Upcoming subscriptions" stat card.
@@ -244,7 +190,7 @@ export const GET = async (request: NextRequest) => {
                 .where(and(
                     eq(subscriptions.ledgerId, ledger.id),
                     eq(subscriptions.currency, currency),
-                    eq(subscriptions.active, true),
+                    activeSubscriptionNow(now),
                     gte(subscriptions.nextDate, startOfToday),
                     lte(subscriptions.nextDate, endOfUpcomingWindow),
                 ))
@@ -258,7 +204,6 @@ export const GET = async (request: NextRequest) => {
         const incomePreviousPaise = toPaise(incomePrevious);
         const expenseCurrentPaise = toPaise(expenseCurrent);
         const subscriptionSpendPaise = toPaise(subsCurrent);
-        const previousSpendPaise = toPaise(expensePrevious) + toPaise(subsPrevious);
         const totalSpendPaise = expenseCurrentPaise + subscriptionSpendPaise;
         const totalSpendCurrent = Number(totalSpendPaise) / 100;
 
@@ -269,9 +214,6 @@ export const GET = async (request: NextRequest) => {
         const activeSubsGrowth = activeSubsPrevious
             ? ((activeSubsCurrent - activeSubsPrevious) / activeSubsPrevious) *
               100
-            : 0;
-        const totalSpendGrowth = previousSpendPaise > BigInt(0)
-            ? Number(totalSpendPaise - previousSpendPaise) / Number(previousSpendPaise) * 100
             : 0;
 
         // ---------- Response ----------
@@ -290,7 +232,6 @@ export const GET = async (request: NextRequest) => {
             growth: {
                 income: Number(incomeGrowth.toFixed(1)),
                 activeSubscriptions: Number(activeSubsGrowth.toFixed(1)),
-                totalSpend: Number(totalSpendGrowth.toFixed(1)),
             },
         });
     } catch (error) {

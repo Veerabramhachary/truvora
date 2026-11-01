@@ -7,6 +7,7 @@ import { categories, subscriptions, transactions } from "@/db/schema/schema";
 import { tryConsumeFeature } from "@/lib/feature-access";
 import { checkRateLimits, rateLimitResponse } from "@/lib/rate-limit";
 import { ledgerErrorResponse, requireLedger } from "@/lib/ledger";
+import { activeSubscriptionFlag } from "@/lib/active-subscription";
 
 /**
  * CSV export for the Exports feature gate.
@@ -86,7 +87,7 @@ export async function GET(req: Request) {
                     interval: subscriptions.interval,
                     startDate: subscriptions.startDate,
                     nextDate: subscriptions.nextDate,
-                    active: subscriptions.active,
+                    active: activeSubscriptionFlag(),
                     categoryName: sql`COALESCE(${categories.displayName}, ${categories.name})`,
                 })
                 .from(subscriptions)

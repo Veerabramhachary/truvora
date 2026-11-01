@@ -20,7 +20,6 @@ const SectionCards = () => {
         upcomingSubscriptions?: number;
         nextRenewal?: { name: string; date: string } | null;
         growth: {
-            totalSpend?: number;
             activeSubscriptions?: number;
             income?: number;
         };

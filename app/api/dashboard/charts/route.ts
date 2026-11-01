@@ -8,6 +8,7 @@ import z from "zod";
 import { toPaise } from "@/lib/money";
 import { getFeatureLimit } from "@/lib/feature-access";
 import { ledgerErrorResponse, requireLedger } from "@/lib/ledger";
+import { activeSubscriptionNow } from "@/lib/active-subscription";
 
 const querySchema = z.object({
     startDate: z.string().datetime(),
@@ -86,7 +87,7 @@ export const GET = async (request: NextRequest) => {
             and(
                 eq(subscriptions.ledgerId, ledger.id),
                 eq(subscriptions.currency, currency),
-                eq(subscriptions.active, true),
+                activeSubscriptionNow(),
                 lte(subscriptions.startDate, end)
             ),
         )
