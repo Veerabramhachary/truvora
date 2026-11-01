@@ -1,3 +1,14 @@
+/**
+ * Categories are user-created, so labels arrive in mixed casing ("Education"
+ * vs "aws"). Title-case all-lowercase labels for display while leaving names
+ * that already contain uppercase (acronyms like "AWS", proper nouns) alone.
+ */
+export function displayCategoryName(name: string): string {
+    if (!name) return name;
+    if (name !== name.toLowerCase()) return name;
+    return name.replace(/\b[a-z]/g, (char) => char.toUpperCase());
+}
+
 export const expenseCategories = [
     {
         label: "Housing&Utilities",

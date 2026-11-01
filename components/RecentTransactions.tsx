@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { displayCategoryName } from "@/lib/categories";
 
 type Transaction = {
     id: string;
@@ -49,9 +50,9 @@ export function RecentTransactions() {
                             {transactions.map((transaction) => {
                                 const isIncome = transaction.type === "income";
                                 return <TableRow key={transaction.id}>
-                                    <TableCell><div className="flex items-center gap-3"><div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted">{isIncome ? <ArrowUpRight className="size-4 text-emerald-600" /> : <ArrowDownLeft className="size-4 text-primary" />}</div><div className="min-w-0"><p className="truncate font-medium">{transaction.title || "Untitled"}</p><p className="text-xs text-muted-foreground">{new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short" }).format(new Date(transaction.date))}</p></div></div></TableCell>
-                                    <TableCell><Badge variant="secondary" className="font-normal">{transaction.category?.name || "Uncategorized"}</Badge></TableCell>
-                                    <TableCell className={`text-right font-medium ${isIncome ? "text-emerald-600" : ""}`}>{isIncome ? "+" : "-"}{formatAmount(transaction.amount, transaction.currency)}</TableCell>
+                                    <TableCell><div className="flex items-center gap-3"><div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted">{isIncome ? <ArrowUpRight aria-hidden="true" className="size-4 text-emerald-600" /> : <ArrowDownLeft aria-hidden="true" className="size-4 text-red-600" />}</div><div className="min-w-0"><p className="truncate font-medium">{transaction.title || "Untitled"}</p><p className="text-xs text-muted-foreground">{new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short" }).format(new Date(transaction.date))}</p></div></div></TableCell>
+                                    <TableCell><Badge variant="secondary" className="font-normal">{displayCategoryName(transaction.category?.name || "Uncategorized")}</Badge></TableCell>
+                                    <TableCell className={`text-right font-medium ${isIncome ? "text-emerald-600" : "text-red-600"}`}><span className="sr-only">{isIncome ? "Income" : "Expense"}: </span>{isIncome ? "+" : "-"}{formatAmount(transaction.amount, transaction.currency)}</TableCell>
                                 </TableRow>;
                             })}
                         </TableBody>

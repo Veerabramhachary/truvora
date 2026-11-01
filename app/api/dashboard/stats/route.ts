@@ -1,7 +1,7 @@
 import { db } from "@/db";
 import { transactions, subscriptions } from "@/db/schema/schema";
 import { auth } from "@clerk/nextjs/server";
-import { and, count, eq, gte, isNull, lt, sql, lte, or } from "drizzle-orm";
+import { and, asc, count, eq, gte, isNull, lt, sql, lte, or } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import z from "zod";
 import { toPaise } from "@/lib/money";
@@ -64,6 +64,14 @@ export const GET = async (request: NextRequest) => {
         );
         startOfNextMonth.setHours(0, 0, 0, 0);
 
+        // Renewal window for the "Upcoming subscriptions" dashboard card:
+        // from the start of today through the end of the 7th day ahead.
+        const startOfToday = new Date(now);
+        startOfToday.setHours(0, 0, 0, 0);
+        const endOfUpcomingWindow = new Date(now);
+        endOfUpcomingWindow.setDate(now.getDate() + 7);
+        endOfUpcomingWindow.setHours(23, 59, 59, 999);
+
         // ---------- Parallel data fetching ----------
         const [
             activeSubsCurrent,
@@ -74,6 +82,7 @@ export const GET = async (request: NextRequest) => {
             subsCurrent,
             subsPrevious,
             activeSubsPrevious,
+            upcomingRenewals,
         ] = await Promise.all([
             // 1. Current active subscriptions count
             db
@@ -223,6 +232,23 @@ export const GET = async (request: NextRequest) => {
 
                 return result[0]?.value ?? 0;
             })(),
+
+            // 9. Active subscriptions renewing between today and 7 days out,
+            // nearest first, for the "Upcoming subscriptions" stat card.
+            db
+                .select({
+                    name: subscriptions.name,
+                    nextDate: subscriptions.nextDate,
+                })
+                .from(subscriptions)
+                .where(and(
+                    eq(subscriptions.ledgerId, ledger.id),
+                    eq(subscriptions.currency, currency),
+                    eq(subscriptions.active, true),
+                    gte(subscriptions.nextDate, startOfToday),
+                    lte(subscriptions.nextDate, endOfUpcomingWindow),
+                ))
+                .orderBy(asc(subscriptions.nextDate)),
         ]);
 
         // ---------- Aggregations ----------
@@ -249,10 +275,18 @@ export const GET = async (request: NextRequest) => {
             : 0;
 
         // ---------- Response ----------
+        const nextRenewal = upcomingRenewals[0];
         return NextResponse.json({
             totalSpend: totalSpendCurrent,
             activeSubscriptions: activeSubsCurrent,
             totalIncome: Number(incomeCurrentPaise) / 100,
+            upcomingSubscriptions: upcomingRenewals.length,
+            nextRenewal: nextRenewal
+                ? {
+                    name: nextRenewal.name ?? "Subscription",
+                    date: nextRenewal.nextDate,
+                }
+                : null,
             growth: {
                 income: Number(incomeGrowth.toFixed(1)),
                 activeSubscriptions: Number(activeSubsGrowth.toFixed(1)),
