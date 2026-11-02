@@ -12,6 +12,7 @@
         "test": "vitest run",
         "db:generate": "drizzle-kit generate",
         "db:migrate": "drizzle-kit migrate",
+        "db:migrate:verbose": "node scripts/migrate-verbose.mjs",
         "db:push": "drizzle-kit push",
         "db:studio": "drizzle-kit studio",
         "db:journal-backfill": "node scripts/backfill-migration-journal.mjs",

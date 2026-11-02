@@ -64,7 +64,7 @@ const PLAN_TIERS = [
             exports: { limit: 1000, interval: "month" as const },
             subscriptions: { limit: -1 },
             charts: "advanced" as const,
-            reminders: "priority" as const,
+            reminders: "email" as const,
             viewsAndFilters: true,
             exportFormats: { csv: true, pdf: true, pdfLevel: "advanced" as const, xlsx: true },
             customCategories: true,
@@ -72,7 +72,8 @@ const PLAN_TIERS = [
         features: [
             "Unlimited subscriptions",
             "Advanced charts, views, and filters",
-            "Priority renewal reminders",
+            "Renewal reminders",
+            "Monthly report (coming soon)",
             "1,000 CSV exports per month",
             "Advanced PDF and XLSX exports per month",
         ],

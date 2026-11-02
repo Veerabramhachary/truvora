@@ -1,10 +1,14 @@
 import { auth } from "@clerk/nextjs/server";
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
 import { ledgers } from "@/db/schema/ledgers";
-import { getOrCreatePersonalLedger, ledgerErrorResponse } from "@/lib/ledger";
+import {
+    createBusinessLedger,
+    getOrCreatePersonalLedger,
+    ledgerErrorResponse,
+} from "@/lib/ledger";
 
 const createLedgerSchema = z
     .object({ name: z.string().trim().min(1, "Enter a name").max(40, "Name is too long") })
@@ -42,11 +46,7 @@ export async function GET() {
     }
 }
 
-/**
- * Creates the user's business ledger. Launch rule: at most one active business
- * ledger per user (an application rule, not a schema constraint, so Phase 3 can
- * lift it without a migration).
- */
+/** Creates the user's business ledger (one active business ledger per user at launch). */
 export async function POST(req: Request) {
     try {
         const { userId } = await auth();
@@ -71,36 +71,14 @@ export async function POST(req: Request) {
         // Make sure the owner FK target exists / personal ledger is in place first.
         await getOrCreatePersonalLedger(userId);
 
-        const created = await db.transaction(async (tx) => {
-            // Serialize concurrent creates for one user so the cap cannot be raced.
-            await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`ledger:${userId}`}))`);
-            const [existing] = await tx
-                .select({ id: ledgers.id })
-                .from(ledgers)
-                .where(
-                    and(
-                        eq(ledgers.ownerUserId, userId),
-                        eq(ledgers.type, "business"),
-                        isNull(ledgers.archivedAt),
-                    ),
-                )
-                .limit(1);
-            if (existing) return null;
-
-            const [row] = await tx
-                .insert(ledgers)
-                .values({ ownerUserId: userId, type: "business", name: parsed.data.name })
-                .returning(summary);
-            return row;
-        });
-
+        const { ledger, created } = await createBusinessLedger(userId, parsed.data.name);
         if (!created) {
             return NextResponse.json(
                 { error: "You already have a business ledger" },
                 { status: 409 },
             );
         }
-        return NextResponse.json(created, { status: 201 });
+        return NextResponse.json(ledger, { status: 201 });
     } catch (error) {
         const ledgerResponse = ledgerErrorResponse(error);
         if (ledgerResponse) return ledgerResponse;

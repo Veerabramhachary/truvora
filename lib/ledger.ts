@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
@@ -106,4 +106,45 @@ export async function requireLedger(req: Request, userId: string): Promise<Ledge
         .limit(1);
     if (!ledger) throw new LedgerError("Ledger not found", 404);
     return ledger;
+}
+
+export type LedgerSummaryRow = Pick<Ledger, "id" | "type" | "name">;
+
+/**
+ * Creates the user's business ledger. Launch rule: at most one active
+ * business ledger per user (an application rule, not a schema constraint, so
+ * Phase 3 can lift it without a migration).
+ *
+ * Returns `created: false` with the existing ledger when one already exists,
+ * so callers choose their own behaviour: the ledgers API answers 409, the
+ * onboarding wizard treats it as success so a retry after a partial failure
+ * just works.
+ */
+export async function createBusinessLedger(
+    userId: string,
+    name: string,
+): Promise<{ ledger: LedgerSummaryRow; created: boolean }> {
+    const summary = { id: ledgers.id, type: ledgers.type, name: ledgers.name };
+    return db.transaction(async (tx) => {
+        // Serialize concurrent creates for one user so the cap cannot be raced.
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`ledger:${userId}`}))`);
+        const [existing] = await tx
+            .select(summary)
+            .from(ledgers)
+            .where(
+                and(
+                    eq(ledgers.ownerUserId, userId),
+                    eq(ledgers.type, "business"),
+                    isNull(ledgers.archivedAt),
+                ),
+            )
+            .limit(1);
+        if (existing) return { ledger: existing, created: false };
+
+        const [row] = await tx
+            .insert(ledgers)
+            .values({ ownerUserId: userId, type: "business", name })
+            .returning(summary);
+        return { ledger: row, created: true };
+    });
 }

@@ -2,6 +2,8 @@
 export interface SubscriptionItem {
     name: string;
     daysLeft: number;
+    /** Name of the ledger (e.g. "Personal", "My Shop") the renewal belongs to. */
+    ledgerName: string;
     price?: string; // Optional: add if you have price data
 }
 
@@ -21,7 +23,10 @@ export function EmailTemplate({ userName, subscriptions }: EmailTemplateProps) {
                     {subscriptions.map((sub, idx) => (
                         <div key={idx} className="p-3 border rounded-lg bg-slate-50">
                             <div className="flex justify-between items-center">
-                                <span className="font-semibold text-indigo-600">{sub.name}</span>
+                                <span>
+                                    <span className="font-semibold text-indigo-600">{sub.name}</span>
+                                    <span className="ml-2 text-xs px-2 py-1 bg-slate-200 rounded">{sub.ledgerName}</span>
+                                </span>
                                 <span className="text-sm px-2 py-1 bg-indigo-100 rounded">
                                     {sub.daysLeft} {sub.daysLeft === 1 ? "day" : "days"} left
                                 </span>
