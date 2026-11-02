@@ -133,6 +133,6 @@ describe("plan limit count", () => {
         expect(sql).toContain('"user_id" = $');
         expect(params).toContain("user_1");
         expect(sql).toMatch(/exists \(select 1 from "ledgers"/i);
-        expect(sql).toContain('"archived_at" is null');
+        expect(sql).toMatch(/"archived_at" is null/i);
     });
 });
