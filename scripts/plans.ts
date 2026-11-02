@@ -58,29 +58,33 @@ const planData: PlanData[] = [
     },
     {
         name: "Pro",
-        description: "Advanced insights, flexible views, and expanded exports.",
+        description: "Advanced insights and expanded exports.",
         price: "299.00",
         featureLimits: {
             subscriptions: { limit: -1 },
             charts: "advanced",
             exports: { limit: 1000, interval: "month" },
             reminders: "email",
-            viewsAndFilters: true,
+            // Saved views are not built yet (coming soon); basic search and filter
+            // is available on every plan, so this flag stays off for now.
+            viewsAndFilters: false,
             exportFormats: {
                 csv: true,
                 pdf: true,
                 pdfLevel: "advanced",
-                xlsx: true,
+                xlsx: false,
             },
             customCategories: true,
         },
         features: [
             "Unlimited subscriptions",
-            "Advanced charts, views, and filters",
+            "Advanced charts",
+            "Saved views (coming soon)",
             "Renewal reminders",
             "Monthly report (coming soon)",
             "1,000 CSV exports per month",
-            "Advanced PDF and XLSX exports per month",
+            "Advanced PDF exports per month",
+            "XLSX exports (coming soon)",
         ],
         metadata: { tier: "pro" },
     },

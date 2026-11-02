@@ -109,28 +109,10 @@ export function ChartAreaInteractive() {
             </div>
         );
     }
-    if (
-        isError ||
-        (timeSeriesResult?.data && !Array.isArray(timeSeriesResult?.data))
-    ) {
-        return (
-            <div
-                role="alert"
-                className="p-10 text-destructive text-center font-medium"
-            >
-                {isError
-                    ? "Failed to load spending history."
-                    : "Received invalid data format."}
-            </div>
-        );
-    }
-
     /*
-      The chart query is gated on the feature response, so these two states have
-      to be handled explicitly rather than falling through to a zeroed chart.
-      Previously a brand-new account rendered an error here — no plan meant no
-      tier meant the query never ran, and "no data" was indistinguishable from a
-      failure.
+      Refine supplies an empty object when a disabled custom query has no data.
+      Check the feature gate before validating chart data so users without chart
+      access see the plan message rather than a misleading format error.
     */
     if (!featureResult?.data?.allowed || chartTier === null) {
         return (
@@ -141,6 +123,19 @@ export function ChartAreaInteractive() {
                 <p className="text-sm text-muted-foreground">
                     Upgrade to Starter or Pro to see your spending over time.
                 </p>
+            </div>
+        );
+    }
+
+    if (isError || (query.isSuccess && !Array.isArray(timeSeriesResult?.data))) {
+        return (
+            <div
+                role="alert"
+                className="p-10 text-destructive text-center font-medium"
+            >
+                {isError
+                    ? "Failed to load spending history."
+                    : "Received invalid data format."}
             </div>
         );
     }
