@@ -146,4 +146,39 @@ describe("planRenewals", () => {
         expect(plan.capped).toBe(true);
         expect(plan.nextDate.getTime()).toBeLessThanOrEqual(d("2026-11-01T00:00:00Z").getTime());
     });
+
+    describe("archived ledger", () => {
+        it("charges cycles before the ledger was archived, not after, and still advances", () => {
+            const plan = planRenewals(
+                monthly({ ledgerArchivedAt: d("2026-04-20T00:00:00Z") }),
+                d("2026-08-01T00:00:00Z"),
+            );
+            // Feb 15, Mar 15, Apr 15 are before Apr 20; May..Jul are frozen.
+            expect(plan.cycles.map((c) => c.charge)).toEqual([true, true, true, false, false, false]);
+            expect(plan.nextDate.getTime()).toBeGreaterThan(d("2026-08-01T00:00:00Z").getTime());
+        });
+
+        it("records nothing for a ledger archived before the first due cycle", () => {
+            const plan = planRenewals(
+                monthly({ ledgerArchivedAt: d("2026-01-20T00:00:00Z") }),
+                d("2026-06-01T00:00:00Z"),
+            );
+            expect(plan.cycles.every((c) => !c.charge)).toBe(true);
+            expect(plan.cycles.length).toBeGreaterThan(0);
+        });
+
+        it("a restored ledger (archivedAt back to null) charges normally again", () => {
+            const plan = planRenewals(monthly({ ledgerArchivedAt: null }), d("2026-04-01T00:00:00Z"));
+            expect(plan.cycles.every((c) => c.charge)).toBe(true);
+        });
+
+        it("restoring does not back-charge the frozen gap", () => {
+            const now = d("2026-08-01T00:00:00Z");
+            const frozen = planRenewals(monthly({ ledgerArchivedAt: d("2026-04-20T00:00:00Z") }), now);
+            // After restore the stored nextDate is the one the frozen run left.
+            const afterRestore = planRenewals(monthly({ nextDate: frozen.nextDate, ledgerArchivedAt: null }), now);
+            expect(afterRestore.cycles).toEqual([]);
+        });
+    });
 });
+

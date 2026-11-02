@@ -1,6 +1,7 @@
 import { and, eq, gt, gte, isNull, lte, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { subscriptions } from "@/db/schema/schema";
+import { ledgers } from "@/db/schema/ledgers";
 import { featureUsage } from "@/db/schema/feature-usage";
 
 /**
@@ -9,7 +10,12 @@ import { featureUsage } from "@/db/schema/feature-usage";
  * A subscription counts as active right now when ALL of these hold:
  *   1. its `active` flag is on,
  *   2. `startDate <= now <= endDate`,
- *   3. it has not been deactivated (`deactivatedAt IS NULL`).
+ *   3. it has not been deactivated (`deactivatedAt IS NULL`),
+ *   4. its ledger is not archived. An archived ledger is frozen: its
+ *      subscriptions are not reminded about, not charged by the renewal job and
+ *      do not count against the plan limit. (Nothing archives a ledger yet;
+ *      whatever does must call `syncActiveSubscriptionUsage` for the owner,
+ *      because the stored usage counter is only refreshed on writes.)
  *
  * The dashboard, the subscription list, the plan limit, the export status and
  * the reminder cron must all use this one condition so they can never
@@ -24,7 +30,13 @@ export function activeSubscriptionNow(now: Date = new Date()): SQL {
         lte(subscriptions.startDate, now),
         gte(subscriptions.endDate, now),
         isNull(subscriptions.deactivatedAt),
+        ledgerNotArchived(),
     )!;
+}
+
+/** The subscription's ledger exists and has not been archived. */
+function ledgerNotArchived(): SQL {
+    return sql`EXISTS (SELECT 1 FROM ${ledgers} WHERE ${ledgers.id} = ${subscriptions.ledgerId} AND ${ledgers.archivedAt} IS NULL)`;
 }
 
 /**
@@ -56,6 +68,8 @@ export function isSubscriptionActiveNow(
         startDate: Date;
         endDate: Date;
         deactivatedAt: Date | null;
+        /** When the subscription's ledger was archived, if it was. */
+        ledgerArchivedAt?: Date | null;
     },
     now: Date = new Date(),
 ): boolean {
@@ -63,7 +77,8 @@ export function isSubscriptionActiveNow(
         row.active &&
         row.startDate <= now &&
         row.endDate >= now &&
-        row.deactivatedAt === null
+        row.deactivatedAt === null &&
+        (row.ledgerArchivedAt ?? null) === null
     );
 }
 

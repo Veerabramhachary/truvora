@@ -65,15 +65,19 @@ export type RenewalSubscription = {
     nextDate: Date;
     interval: string;
     intervalCount: number;
+    /** When the subscription's ledger was archived, if it was. */
+    ledgerArchivedAt?: Date | null;
 };
 
 /**
  * Was the subscription live on `date`, so that a charge on that date is real?
- * Cycles that fall before the start, after the end, or in a period it was
- * deactivated are advanced past without recording a charge.
+ * Cycles that fall before the start, after the end, in a period it was
+ * deactivated, or once its ledger was archived are advanced past without
+ * recording a charge (so restoring a ledger later never back-charges the gap).
  */
 export function isChargeableOn(sub: RenewalSubscription, date: Date): boolean {
     if (date < sub.startDate || date > sub.endDate) return false;
+    if (sub.ledgerArchivedAt && date >= sub.ledgerArchivedAt) return false;
     if (sub.deactivatedAt) return date < sub.deactivatedAt;
     return sub.active;
 }
