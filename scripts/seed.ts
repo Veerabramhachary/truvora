@@ -58,24 +58,28 @@ const PLAN_TIERS = [
     },
     {
         name: "Pro",
-        description: "Advanced insights, flexible views, and expanded exports.",
+        description: "Advanced insights and expanded exports.",
         price: "199.00",
         featureLimits: {
             exports: { limit: 1000, interval: "month" as const },
             subscriptions: { limit: -1 },
             charts: "advanced" as const,
             reminders: "email" as const,
-            viewsAndFilters: true,
-            exportFormats: { csv: true, pdf: true, pdfLevel: "advanced" as const, xlsx: true },
+            // Saved views are not built yet (coming soon); basic search and filter
+            // is available on every plan, so this flag stays off for now.
+            viewsAndFilters: false,
+            exportFormats: { csv: true, pdf: true, pdfLevel: "advanced" as const, xlsx: false },
             customCategories: true,
         },
         features: [
             "Unlimited subscriptions",
-            "Advanced charts, views, and filters",
+            "Advanced charts",
+            "Saved views (coming soon)",
             "Renewal reminders",
             "Monthly report (coming soon)",
             "1,000 CSV exports per month",
-            "Advanced PDF and XLSX exports per month",
+            "Advanced PDF exports per month",
+            "XLSX exports (coming soon)",
         ],
     },
 ] as const;
