@@ -45,6 +45,16 @@ resulting `.sql` file **and** the `drizzle/meta/` snapshots.
 npm run db:generate -- --name <change_description>
 ```
 
+## If `db:migrate` exits with code 1 and prints nothing
+
+`drizzle-kit migrate` with the Neon driver can fail without showing the
+database error. Run the same migrations with `npm run db:migrate:verbose`: it
+applies pending migrations in one transaction and prints the Postgres message,
+code, detail and hint on failure. Migrations should be idempotent
+(`IF NOT EXISTS`) so a database that was synced with `db:push` can still run
+them. Note `db:journal-backfill` only works on an EMPTY journal; it refuses to
+touch a journal that already has rows.
+
 ## If `db:migrate` fails on an existing database
 
 `push` writes nothing to `drizzle.__drizzle_migrations`, so a database that was

@@ -2,7 +2,10 @@ import { db, closeDb } from "@/db";
 import { plans } from "@/db/schema/plans";
 import { and, eq, notInArray, type InferInsertModel } from "drizzle-orm";
 
-type PlanData = Pick<InferInsertModel<typeof plans>, "name" | "description" | "price" | "featureLimits" | "features" | "metadata">;
+type PlanData = Pick<
+    InferInsertModel<typeof plans>,
+    "name" | "description" | "price" | "featureLimits" | "features" | "metadata"
+>;
 const planData: PlanData[] = [
     {
         name: "Free",
@@ -12,7 +15,12 @@ const planData: PlanData[] = [
             subscriptions: { limit: 10 },
             exports: { limit: 10, interval: "month" },
             reminders: "email",
-            exportFormats: { csv: true, pdf: false, pdfLevel: "none", xlsx: false },
+            exportFormats: {
+                csv: true,
+                pdf: false,
+                pdfLevel: "none",
+                xlsx: false,
+            },
             customCategories: false,
         },
         features: [
@@ -31,7 +39,12 @@ const planData: PlanData[] = [
             charts: "comparative",
             exports: { limit: 100, interval: "month" },
             reminders: "email",
-            exportFormats: { csv: true, pdf: true, pdfLevel: "basic", xlsx: false },
+            exportFormats: {
+                csv: true,
+                pdf: true,
+                pdfLevel: "basic",
+                xlsx: false,
+            },
             customCategories: true,
         },
         features: [
@@ -46,20 +59,26 @@ const planData: PlanData[] = [
     {
         name: "Pro",
         description: "Advanced insights, flexible views, and expanded exports.",
-        price: "199.00",
+        price: "299.00",
         featureLimits: {
             subscriptions: { limit: -1 },
             charts: "advanced",
             exports: { limit: 1000, interval: "month" },
-            reminders: "priority",
+            reminders: "email",
             viewsAndFilters: true,
-            exportFormats: { csv: true, pdf: true, pdfLevel: "advanced", xlsx: true },
+            exportFormats: {
+                csv: true,
+                pdf: true,
+                pdfLevel: "advanced",
+                xlsx: true,
+            },
             customCategories: true,
         },
         features: [
             "Unlimited subscriptions",
             "Advanced charts, views, and filters",
-            "Priority renewal reminders",
+            "Renewal reminders",
+            "Monthly report (coming soon)",
             "1,000 CSV exports per month",
             "Advanced PDF and XLSX exports per month",
         ],
@@ -69,9 +88,16 @@ const planData: PlanData[] = [
 
 async function seedPlans() {
     const names = planData.map((plan) => plan.name);
-    await db.update(plans).set({ isActive: false }).where(
-        and(eq(plans.currency, "INR"), eq(plans.isActive, true), notInArray(plans.name, names)),
-    );
+    await db
+        .update(plans)
+        .set({ isActive: false })
+        .where(
+            and(
+                eq(plans.currency, "INR"),
+                eq(plans.isActive, true),
+                notInArray(plans.name, names),
+            ),
+        );
 
     for (const plan of planData) {
         const values = {
@@ -84,9 +110,17 @@ async function seedPlans() {
             provider: "none" as const,
             providerPlanId: null,
         };
-        const [existing] = await db.select({ id: plans.id }).from(plans).where(
-            and(eq(plans.name, plan.name), eq(plans.currency, "INR"), eq(plans.interval, "month")),
-        ).limit(1);
+        const [existing] = await db
+            .select({ id: plans.id })
+            .from(plans)
+            .where(
+                and(
+                    eq(plans.name, plan.name),
+                    eq(plans.currency, "INR"),
+                    eq(plans.interval, "month"),
+                ),
+            )
+            .limit(1);
 
         if (existing) {
             await db.update(plans).set(values).where(eq(plans.id, existing.id));
@@ -96,8 +130,10 @@ async function seedPlans() {
     }
 }
 
-seedPlans().then(closeDb).catch(async (error) => {
-    console.error("Failed to seed plans:", error);
-    await closeDb();
-    process.exitCode = 1;
-});
+seedPlans()
+    .then(closeDb)
+    .catch(async (error) => {
+        console.error("Failed to seed plans:", error);
+        await closeDb();
+        process.exitCode = 1;
+    });

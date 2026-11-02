@@ -2,9 +2,14 @@ import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
+type RenewalEmailPayload = {
+    userName: string;
+    subscriptions: { name: string; ledgerName: string; daysLeft: number }[];
+};
+
 const { sendMock, emailTemplateMock, dueMock } = vi.hoisted(() => ({
     sendMock: vi.fn(),
-    emailTemplateMock: vi.fn(() => null),
+    emailTemplateMock: vi.fn((payload: RenewalEmailPayload) => payload),
     dueMock: vi.fn(),
 }));
 
