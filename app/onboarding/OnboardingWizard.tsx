@@ -157,8 +157,8 @@ export default function OnboardingWizard() {
                             <CardDescription>Add your first record, or head to the dashboard.</CardDescription>
                         </CardHeader>
                         <CardContent className="grid gap-3">
-                            <Button asChild variant="outline"><Link href="/subscriptions">Add a subscription</Link></Button>
-                            <Button asChild variant="outline"><Link href="/expenses">Log an expense</Link></Button>
+                            <Button asChild variant="outline"><Link href="/subscriptions?create=1">Add a subscription</Link></Button>
+                            <Button asChild variant="outline"><Link href="/expenses?create=1">Log an expense</Link></Button>
                         </CardContent>
                         <CardFooter>
                             <Button asChild className="w-full"><Link href="/dashboard">Go to dashboard</Link></Button>

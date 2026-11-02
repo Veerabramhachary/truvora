@@ -19,6 +19,7 @@ import { format, isValid } from "date-fns";
 import FormExpense from "./FormExpense";
 import type { ExpenseRecord } from "./TransactionForm";
 import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete";
 import { toast } from "sonner";
 import { apiErrorMessage } from "@/lib/api-error";
@@ -32,7 +33,10 @@ import {
 } from "@/components/ui/dialog";
 
 const ExpenseContent = () => {
-    const [open, setOpen] = useState(false);
+    const [formOpen, setFormOpen] = useState(false);
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const open = formOpen || searchParams.get("create") === "1";
     const [exporting, setExporting] = useState(false);
     const [editing, setEditing] = useState<ExpenseRecord | null>(null);
     const [pendingDelete, setPendingDelete] = useState<ExpenseRecord | null>(
@@ -46,8 +50,16 @@ const ExpenseContent = () => {
     });
 
     const closeForm = () => {
-        setOpen(false);
+        setFormOpen(false);
         setEditing(null);
+        if (searchParams.get("create") === "1") {
+            const params = new URLSearchParams(searchParams.toString());
+            params.delete("create");
+            const queryString = params.toString();
+            router.replace(queryString ? `/expenses?${queryString}` : "/expenses", {
+                scroll: false,
+            });
+        }
     };
 
     const handleExport = async () => {
@@ -114,7 +126,7 @@ const ExpenseContent = () => {
                         size="sm"
                         onClick={() => {
                             setEditing(null);
-                            setOpen(true);
+                            setFormOpen(true);
                         }}
                     >
                         Create
@@ -207,7 +219,7 @@ const ExpenseContent = () => {
                                     aria-label={`Edit ${item.title}`}
                                     onClick={() => {
                                         setEditing(item);
-                                        setOpen(true);
+                                        setFormOpen(true);
                                     }}
                                 >
                                     Edit

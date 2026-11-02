@@ -16,6 +16,7 @@ import { ledgerFetch } from "@/lib/ledger-client";
 import { useRefreshAll } from "@/lib/use-refresh";
 import { format, isValid } from "date-fns";
 import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import SubsForm, { type SubscriptionRecord } from "./SubsForm";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete";
 import { toast } from "sonner";
@@ -30,7 +31,10 @@ import {
 } from "@/components/ui/dialog";
 
 const SubscContent = () => {
-    const [open, setOpen] = useState(false);
+    const [formOpen, setFormOpen] = useState(false);
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const open = formOpen || searchParams.get("create") === "1";
     const [exporting, setExporting] = useState(false);
     const [subscriptionLimit, setSubscriptionLimit] = useState<number | null>(null);
     const [serverActiveCount, setServerActiveCount] = useState(0);
@@ -41,8 +45,16 @@ const SubscContent = () => {
     const refreshAll = useRefreshAll();
 
     const closeForm = () => {
-        setOpen(false);
+        setFormOpen(false);
         setEditing(null);
+        if (searchParams.get("create") === "1") {
+            const params = new URLSearchParams(searchParams.toString());
+            params.delete("create");
+            const queryString = params.toString();
+            router.replace(queryString ? `/subscriptions?${queryString}` : "/subscriptions", {
+                scroll: false,
+            });
+        }
     };
 
     const handleExport = async () => {
@@ -139,7 +151,7 @@ const SubscContent = () => {
                             title={subscriptionLimit !== null && subscriptionLimit !== -1 && currentActiveCount >= subscriptionLimit ? "Your active subscription limit has been reached." : undefined}
                             onClick={() => {
                                 setEditing(null);
-                                setOpen(true);
+                                setFormOpen(true);
                             }}
                         >
                             Create
@@ -250,7 +262,7 @@ const SubscContent = () => {
                                     aria-label={`Edit ${item.title}`}
                                     onClick={() => {
                                         setEditing(item);
-                                        setOpen(true);
+                                        setFormOpen(true);
                                     }}
                                 >
                                     Edit
