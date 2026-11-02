@@ -20,8 +20,8 @@ const SectionCards = () => {
         upcomingSubscriptions?: number;
         nextRenewal?: { name: string; date: string } | null;
         growth: {
-            activeSubscriptions?: number;
-            income?: number;
+            activeSubscriptions?: number | null;
+            income?: number | null;
         };
     }>({
         url: "/api/dashboard/stats",
@@ -75,19 +75,21 @@ const SectionCards = () => {
                 currency: currency,
             }),
             growth: growth.income,
-            note:
-                growth.income !== undefined
-                    ? `vs last month ${growth.income > 0 ? "▲" : "▼"}`
-                    : "No previous data",
+            note: totalIncome === 0
+                ? "No income recorded this month"
+                : growth.income == null
+                  ? "No previous month to compare"
+                  : "Income received this month",
         },
         {
             label: "Active Subscriptions",
             value: format(activeSubscriptions),
             growth: growth.activeSubscriptions,
-            note:
-                growth.activeSubscriptions !== undefined
-                    ? `vs last month ${growth.activeSubscriptions > 0 ? "▲" : "▼"}`
-                    : "No previous data",
+            note: activeSubscriptions === 0
+                ? "No active subscriptions"
+                : growth.activeSubscriptions == null
+                  ? "No previous month to compare"
+                  : "Currently active",
         },
         {
             label: "Upcoming subscriptions",
@@ -99,29 +101,33 @@ const SectionCards = () => {
         },
     ];
 
-    const renderGrowthBadge = (growthValue: number | undefined) => {
+    const renderGrowthBadge = (
+        growthValue: number | null | undefined,
+    ) => {
         if (growthValue === undefined || growthValue === null) return null;
         const isPositive = growthValue > 0;
         const sign = isPositive ? "+" : "";
         const formatted = `${sign}${growthValue.toFixed(1)}%`;
-        const badgeClass = isPositive
-            ? "bg-green-100 text-green-800"
-            : "bg-red-100 text-red-800";
+        const badgeClass = growthValue === 0
+            ? "bg-muted text-muted-foreground"
+            : isPositive
+              ? "bg-green-100 text-green-800"
+              : "bg-red-100 text-red-800";
         return <Badge className={badgeClass}>{formatted}</Badge>;
     };
 
     return (
         <div className="grid grid-cols-1 gap-4 *:data-[slot=card]:bg-linear-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs dark:*:data-[slot=card]:bg-card">
-            {cards.map((card, index) => (
-                <Card key={index} className="@container/card hover:bg-accent">
+            {cards.map((card) => (
+                <Card key={card.label} className="@container/card gap-3 hover:bg-accent">
                     <CardHeader>
-                        <CardDescription>{card.label}</CardDescription>
-                        <CardTitle>{card.value}</CardTitle>
+                        <CardDescription className="min-h-10 leading-5">{card.label}</CardDescription>
+                        <CardTitle className="text-2xl leading-none tabular-nums">{card.value}</CardTitle>
                         <CardAction>
                             {renderGrowthBadge(card.growth)}
                         </CardAction>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="min-h-10">
                         <p className="text-sm text-muted-foreground">
                             {card.note}
                         </p>

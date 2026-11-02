@@ -145,12 +145,6 @@ export function ChartAreaInteractive() {
         );
     }
 
-    const hasSpend = data.some((point) => {
-        if (seriesFilter === "expenses") return point.expense > 0;
-        if (seriesFilter === "subscriptions") return point.subscription > 0;
-        return point.expense > 0 || point.subscription > 0;
-    });
-
     const filters = (
         <div className="flex w-full flex-wrap gap-2 sm:ml-auto sm:w-auto">
             <Select
@@ -204,30 +198,6 @@ export function ChartAreaInteractive() {
             </Select>
         </div>
     );
-
-    if (!hasSpend) {
-        return (
-            <Card className="pt-0">
-                <CardHeader className="flex flex-col items-start gap-3 space-y-0 border-b py-4 sm:flex-row sm:items-center">
-                    <div className="grid flex-1 gap-1">
-                        <CardTitle>Expenses &amp; Subscriptions</CardTitle>
-                        <CardDescription>
-                            Choose a different filter or date range to view spending history.
-                        </CardDescription>
-                    </div>
-                    {filters}
-                </CardHeader>
-                <CardContent className="flex h-64 flex-col items-center justify-center gap-2 p-10 text-center">
-                    <p className="font-medium text-foreground">
-                        Nothing to chart yet
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                        Add an expense or try a wider date range.
-                    </p>
-                </CardContent>
-            </Card>
-        );
-    }
 
     const transformedData = data.map((item) => ({
         date: item.date,

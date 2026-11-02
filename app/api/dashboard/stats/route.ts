@@ -208,13 +208,22 @@ export const GET = async (request: NextRequest) => {
         const totalSpendCurrent = Number(totalSpendPaise) / 100;
 
         const incomeGrowth = incomePreviousPaise > BigInt(0)
-            ? (Number(incomeCurrentPaise - incomePreviousPaise) / Number(incomePreviousPaise)) * 100
-            : 0;
+            ? Number(
+                ((Number(incomeCurrentPaise - incomePreviousPaise) /
+                    Number(incomePreviousPaise)) *
+                    100).toFixed(1),
+            )
+            : null;
 
         const activeSubsGrowth = activeSubsPrevious
-            ? ((activeSubsCurrent - activeSubsPrevious) / activeSubsPrevious) *
-              100
-            : 0;
+            ? Number(
+                (
+                    ((activeSubsCurrent - activeSubsPrevious) /
+                        activeSubsPrevious) *
+                    100
+                ).toFixed(1),
+            )
+            : null;
 
         // ---------- Response ----------
         const nextRenewal = upcomingRenewals[0];
@@ -230,8 +239,8 @@ export const GET = async (request: NextRequest) => {
                 }
                 : null,
             growth: {
-                income: Number(incomeGrowth.toFixed(1)),
-                activeSubscriptions: Number(activeSubsGrowth.toFixed(1)),
+                income: incomeGrowth,
+                activeSubscriptions: activeSubsGrowth,
             },
         });
     } catch (error) {
