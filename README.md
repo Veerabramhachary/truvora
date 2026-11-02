@@ -4,6 +4,8 @@ Privacy-first personal finance tracker: expenses, income, recurring
 subscriptions and spending insights, with the sensitive fields encrypted at
 rest.
 
+For instructions on using Truvora, see the [user guide](USER_GUIDE.md).
+
 ## Stack
 
 | Layer | Choice |

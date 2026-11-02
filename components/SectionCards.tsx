@@ -20,8 +20,8 @@ const SectionCards = () => {
         upcomingSubscriptions?: number;
         nextRenewal?: { name: string; date: string } | null;
         growth: {
-            activeSubscriptions?: number;
-            income?: number;
+            activeSubscriptions?: number | null;
+            income?: number | null;
         };
     }>({
         url: "/api/dashboard/stats",
@@ -41,7 +41,7 @@ const SectionCards = () => {
 
     if (isLoading) {
         return (
-            <div className="flex h-64 w-full items-center justify-center p-10">
+            <div className="flex min-h-[280px] w-full items-center justify-center p-8 xl:h-full">
                 <p className="animate-pulse text-muted-foreground">
                     Loading stats...
                 </p>
@@ -52,7 +52,7 @@ const SectionCards = () => {
         return (
             <div
                 role="alert"
-                className="p-10 text-destructive text-center font-medium"
+                className="flex min-h-[280px] items-center justify-center p-8 text-center font-medium text-destructive xl:h-full"
             >
                 Failed to load dashboard. Please refresh the page.
             </div>
@@ -75,19 +75,21 @@ const SectionCards = () => {
                 currency: currency,
             }),
             growth: growth.income,
-            note:
-                growth.income !== undefined
-                    ? `vs last month ${growth.income > 0 ? "▲" : "▼"}`
-                    : "No previous data",
+            note: totalIncome === 0
+                ? "No income recorded this month"
+                : growth.income == null
+                  ? "No previous month to compare"
+                  : "Income received this month",
         },
         {
             label: "Active Subscriptions",
             value: format(activeSubscriptions),
             growth: growth.activeSubscriptions,
-            note:
-                growth.activeSubscriptions !== undefined
-                    ? `vs last month ${growth.activeSubscriptions > 0 ? "▲" : "▼"}`
-                    : "No previous data",
+            note: activeSubscriptions === 0
+                ? "No active subscriptions"
+                : growth.activeSubscriptions == null
+                  ? "No previous month to compare"
+                  : "Currently active",
         },
         {
             label: "Upcoming subscriptions",
@@ -99,30 +101,34 @@ const SectionCards = () => {
         },
     ];
 
-    const renderGrowthBadge = (growthValue: number | undefined) => {
+    const renderGrowthBadge = (
+        growthValue: number | null | undefined,
+    ) => {
         if (growthValue === undefined || growthValue === null) return null;
         const isPositive = growthValue > 0;
         const sign = isPositive ? "+" : "";
         const formatted = `${sign}${growthValue.toFixed(1)}%`;
-        const badgeClass = isPositive
-            ? "bg-green-100 text-green-800"
-            : "bg-red-100 text-red-800";
+        const badgeClass = growthValue === 0
+            ? "bg-muted text-muted-foreground"
+            : isPositive
+              ? "bg-green-100 text-green-800"
+              : "bg-red-100 text-red-800";
         return <Badge className={badgeClass}>{formatted}</Badge>;
     };
 
     return (
-        <div className="grid grid-cols-1 gap-4 *:data-[slot=card]:bg-linear-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs dark:*:data-[slot=card]:bg-card">
-            {cards.map((card, index) => (
-                <Card key={index} className="@container/card hover:bg-accent">
-                    <CardHeader>
-                        <CardDescription>{card.label}</CardDescription>
-                        <CardTitle>{card.value}</CardTitle>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:h-full xl:grid-cols-1 xl:grid-rows-3 *:data-[slot=card]:bg-linear-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs dark:*:data-[slot=card]:bg-card">
+            {cards.map((card) => (
+                <Card key={card.label} className={`@container/card min-h-0 gap-2 py-3 hover:bg-accent ${card.label === "Upcoming subscriptions" ? "col-span-2 sm:col-span-1" : ""}`}>
+                    <CardHeader className="gap-1 px-3 py-0 sm:px-4">
+                        <CardDescription className="text-xs leading-5 sm:text-sm">{card.label}</CardDescription>
+                        <CardTitle className="text-xl leading-tight tabular-nums sm:text-2xl">{card.value}</CardTitle>
                         <CardAction>
                             {renderGrowthBadge(card.growth)}
                         </CardAction>
                     </CardHeader>
-                    <CardContent>
-                        <p className="text-sm text-muted-foreground">
+                    <CardContent className="px-3 sm:px-4">
+                        <p className="line-clamp-2 text-xs text-muted-foreground sm:line-clamp-1 sm:text-sm">
                             {card.note}
                         </p>
                     </CardContent>

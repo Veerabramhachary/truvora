@@ -1,6 +1,7 @@
 import { and, asc, eq, lte } from "drizzle-orm";
 import { db } from "@/db";
 import { subscriptions, transactions } from "@/db/schema/schema";
+import { ledgers } from "@/db/schema/ledgers";
 import { planRenewals } from "./subscription-cycles";
 
 export type RenewalSummary = {
@@ -11,7 +12,7 @@ export type RenewalSummary = {
     moreDue: boolean;
     /** Charges written to the ledger (or that would be, in a dry run). */
     recorded: number;
-    /** Cycles passed over without a charge (not active on that date). */
+    /** Cycles passed over without a charge (inactive, ended or archived ledger). */
     skippedInactive: number;
     /** Charges that already existed for that (subscription, date). */
     alreadyRecorded: number;
@@ -24,6 +25,19 @@ type OneResult = Pick<RenewalSummary, "recorded" | "skippedInactive" | "alreadyR
     capped: boolean;
     skipped: boolean;
 };
+
+/** When the ledger was archived (null if it is live or no longer exists). */
+async function ledgerArchivedAt(
+    executor: Pick<typeof db, "select">,
+    ledgerId: string,
+): Promise<Date | null> {
+    const [row] = await executor
+        .select({ archivedAt: ledgers.archivedAt })
+        .from(ledgers)
+        .where(eq(ledgers.id, ledgerId))
+        .limit(1);
+    return row?.archivedAt ?? null;
+}
 
 const EMPTY: OneResult = { recorded: 0, skippedInactive: 0, alreadyRecorded: 0, capped: false, skipped: true };
 
@@ -41,7 +55,10 @@ async function renewOne(id: string, now: Date, dryRun: boolean): Promise<OneResu
             .where(and(eq(subscriptions.id, id), lte(subscriptions.nextDate, now)))
             .limit(1);
         if (!sub) return EMPTY;
-        const plan = planRenewals(sub, now);
+        const plan = planRenewals(
+            { ...sub, ledgerArchivedAt: await ledgerArchivedAt(db, sub.ledgerId) },
+            now,
+        );
         const charges = plan.cycles.filter((c) => c.charge).length;
         return {
             recorded: charges,
@@ -61,7 +78,12 @@ async function renewOne(id: string, now: Date, dryRun: boolean): Promise<OneResu
         // Gone, already advanced by another run, or locked by one: nothing to do.
         if (!sub) return EMPTY;
 
-        const plan = planRenewals(sub, now);
+        // A frozen (archived) ledger gets no new charges, but nextDate still
+        // moves on so restoring it later does not back-charge the gap.
+        const plan = planRenewals(
+            { ...sub, ledgerArchivedAt: await ledgerArchivedAt(tx, sub.ledgerId) },
+            now,
+        );
         const charges = plan.cycles.filter((c) => c.charge);
 
         let recorded = 0;

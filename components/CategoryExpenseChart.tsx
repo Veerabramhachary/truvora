@@ -34,7 +34,7 @@ export function CategoryExpenseChart() {
                 <PieChart><ChartTooltip content={<ChartTooltipContent nameKey="name" hideLabel />} /><Pie data={categories} dataKey="amount" nameKey="name" innerRadius={58} strokeWidth={4} /></PieChart>
             </ChartContainer>}
             <ul className="mt-4 flex flex-col gap-2">
-                {categories.map((item) => <li key={item.name} className="flex items-center gap-2 text-xs"><span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: item.fill }} aria-hidden="true" /><span className="min-w-0 flex-1 truncate text-muted-foreground">{item.name}</span><span className="shrink-0 font-medium tabular-nums">₹{item.amount.toLocaleString("en-IN")}</span></li>)}
+                {categories.map((item) => <li key={item.name} className="grid grid-cols-[8px_minmax(0,1fr)_minmax(5.5rem,auto)] items-center gap-x-2 text-xs"><span className="size-2 rounded-full" style={{ backgroundColor: item.fill }} aria-hidden="true" /><span className="min-w-0 truncate text-muted-foreground">{item.name}</span><span className="text-right font-medium tabular-nums">₹{item.amount.toLocaleString("en-IN")}</span></li>)}
             </ul>
         </CardContent>
     </Card>;

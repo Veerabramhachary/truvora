@@ -11,6 +11,9 @@ import { activeSubscriptionNow } from "@/lib/active-subscription";
  * (Free included). Renewal reminders are not a paid feature, so there is
  * deliberately no plan or billing condition here.
  *
+ * Subscriptions in an archived ledger are skipped (they are not "active", see
+ * lib/active-subscription).
+ *
  * Each row carries the name of the ledger it belongs to, so a user with a
  * personal and a business ledger can tell which one a renewal is for.
  */

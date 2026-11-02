@@ -9,6 +9,7 @@ vi.mock("@/db", () => ({ db: {} }));
 import {
     activeSubscriptionAt,
     activeSubscriptionNow,
+    countActiveSubscriptions,
     isSubscriptionActiveNow,
 } from "@/lib/active-subscription";
 
@@ -38,6 +39,10 @@ describe("active subscription condition (JS mirror)", () => {
     it("is not active once deactivated", () => {
         expect(isSubscriptionActiveNow({ ...base, deactivatedAt: day("2026-10-01") }, NOW)).toBe(false);
     });
+    it("is not active when its ledger is archived", () => {
+        expect(isSubscriptionActiveNow({ ...base, ledgerArchivedAt: day("2026-10-01") }, NOW)).toBe(false);
+        expect(isSubscriptionActiveNow({ ...base, ledgerArchivedAt: null }, NOW)).toBe(true);
+    });
 });
 
 describe("active subscription condition (generated SQL)", () => {
@@ -51,6 +56,11 @@ describe("active subscription condition (generated SQL)", () => {
         expect(sql).toContain('"deactivated_at" is null');
         expect(params).toContain(true);
         expect(params.filter((p) => p instanceof Date || typeof p === "string")).toHaveLength(2);
+    });
+
+    it("excludes subscriptions whose ledger is archived", () => {
+        const { sql } = dialect.sqlToQuery(activeSubscriptionNow(NOW));
+        expect(sql).toMatch(/exists \(select 1 from "ledgers" where "ledgers"\."id" = "subscriptions"\."ledger_id" and "ledgers"\."archived_at" is null\)/i);
     });
 
     it("point-in-time variant ignores the flag but honours dates and deactivation", () => {
@@ -95,5 +105,34 @@ describe("no inline copies of the active rule", () => {
             /action\s*(!=|=)\s*'deleted'|action:\s*"deleted"/.test(readFileSync(f, "utf8")),
         );
         expect(offenders).toEqual([]);
+    });
+});
+
+describe("plan limit count", () => {
+    const dialect = new PgDialect();
+
+    it("counts the owner's active subscriptions and leaves out archived ledgers", async () => {
+        let captured: unknown;
+        const executor = {
+            select: () => ({
+                from: () => ({
+                    where: (condition: unknown) => {
+                        captured = condition;
+                        return Promise.resolve([{ count: 2 }]);
+                    },
+                }),
+            }),
+            insert: () => {
+                throw new Error("not used");
+            },
+        };
+        const count = await countActiveSubscriptions(executor as never, "user_1", NOW);
+        expect(count).toBe(2);
+
+        const { sql, params } = dialect.sqlToQuery(captured as never);
+        expect(sql).toContain('"user_id" = $');
+        expect(params).toContain("user_1");
+        expect(sql).toMatch(/exists \(select 1 from "ledgers"/i);
+        expect(sql).toMatch(/"archived_at" is null/i);
     });
 });
