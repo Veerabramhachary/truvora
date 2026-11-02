@@ -146,7 +146,7 @@ export function ChartAreaInteractive() {
     }
 
     const filters = (
-        <div className="flex w-full flex-wrap gap-2 sm:ml-auto sm:w-auto">
+        <div className="grid w-full grid-cols-1 gap-2 min-[360px]:grid-cols-2 sm:ml-auto sm:w-auto">
             <Select
                 value={seriesFilter}
                 onValueChange={(value) => {
@@ -160,7 +160,7 @@ export function ChartAreaInteractive() {
                 }}
             >
                 <SelectTrigger
-                    className="w-full rounded-lg sm:w-40"
+                    className="h-11 w-full rounded-lg px-2 text-xs sm:h-9 sm:w-40 sm:px-3 sm:text-sm"
                     aria-label="Filter chart by spending type"
                 >
                     <SelectValue />
@@ -179,7 +179,7 @@ export function ChartAreaInteractive() {
             </Select>
             <Select value={timeRange} onValueChange={setTimeRange}>
                 <SelectTrigger
-                    className="w-full rounded-lg sm:w-40"
+                    className="h-11 w-full rounded-lg px-2 text-xs sm:h-9 sm:w-40 sm:px-3 sm:text-sm"
                     aria-label="Select a time range"
                 >
                     <SelectValue />
@@ -233,7 +233,7 @@ export function ChartAreaInteractive() {
             >
                 <ChartContainer
                     config={chartConfig}
-                    className="aspect-auto h-48 w-full"
+                    className="aspect-auto h-44 w-full sm:h-48"
                 >
                     <AreaChart data={transformedData}>
                         <defs>
@@ -341,15 +341,15 @@ function ChartSkeleton() {
                     <Skeleton className="h-4 w-64 max-w-full" />
                 </div>
                 <div className="flex w-full flex-wrap gap-2 sm:ml-auto sm:w-auto">
-                    <Skeleton className="h-9 w-full sm:w-40" />
-                    <Skeleton className="h-9 w-full sm:w-40" />
+                        <Skeleton className="h-11 w-full sm:h-9 sm:w-40" />
+                        <Skeleton className="h-11 w-full sm:h-9 sm:w-40" />
                 </div>
             </CardHeader>
             <CardContent
                 className="px-2 pt-4 sm:px-6 sm:pt-6"
                 style={{ minHeight: "280px" }}
             >
-                <Skeleton className="h-48 w-full rounded-xl" />
+                <Skeleton className="h-44 w-full rounded-xl sm:h-48" />
             </CardContent>
         </Card>
     );

@@ -56,7 +56,7 @@ export default function DashboardContent() {
     return (
         <div className="flex flex-1 flex-col">
             <div className="@container/main flex flex-1 flex-col">
-                <div className="flex flex-col gap-6 px-4 py-6 lg:px-6">
+                <div className="flex flex-col gap-4 px-3 py-3 sm:px-4 sm:py-4 lg:px-6 lg:py-5">
                     <Card className="overflow-hidden">
                         <CardContent className="flex flex-col gap-1 p-4 sm:p-5">
                             <CardDescription>Total spending this month</CardDescription>
@@ -65,14 +65,14 @@ export default function DashboardContent() {
                         </CardContent>
                     </Card>
 
-                    <div className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(300px,0.8fr)] xl:items-start">
+                    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(300px,0.8fr)] xl:items-stretch">
                         <ChartAreaInteractive />
-                        <div className="min-w-0">
+                        <div className="min-w-0 xl:h-full">
                             <SectionCards />
                         </div>
                     </div>
 
-                    <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.75fr)] xl:items-start">
+                    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.75fr)] xl:items-stretch">
                         <RecentTransactions />
                         <CategoryExpenseChart />
                     </div>
