@@ -18,8 +18,9 @@ import { useRefreshAll } from "@/lib/use-refresh";
 import { format, isValid } from "date-fns";
 import FormExpense from "./FormExpense";
 import type { ExpenseRecord } from "./TransactionForm";
-import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useMemo, useState } from "react";
+import { RecordFilters } from "@/components/record-filters";
+import { activeFilterCount, EMPTY_FILTERS, toRefineFilters, type FilterState } from "@/lib/record-filter-state";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete";
 import { toast } from "sonner";
 import { apiErrorMessage } from "@/lib/api-error";
@@ -32,11 +33,10 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 
+const PAGE_SIZE = 12;
+
 const ExpenseContent = () => {
-    const [formOpen, setFormOpen] = useState(false);
-    const router = useRouter();
-    const searchParams = useSearchParams();
-    const open = formOpen || searchParams.get("create") === "1";
+    const [open, setOpen] = useState(false);
     const [exporting, setExporting] = useState(false);
     const [editing, setEditing] = useState<ExpenseRecord | null>(null);
     const [pendingDelete, setPendingDelete] = useState<ExpenseRecord | null>(
@@ -45,21 +45,27 @@ const ExpenseContent = () => {
     const { mutateAsync: deleteAsync } = useDelete();
     const refreshAll = useRefreshAll();
 
+    const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
+    const [page, setPage] = useState(1);
+    const refineFilters = useMemo(() => toRefineFilters(filters), [filters]);
+    const filtersActive = activeFilterCount(filters) > 0;
+
+    const handleFiltersChange = (next: FilterState) => {
+        setFilters(next);
+        setPage(1);
+    };
+
+    // Previously this asked for the default 10 records and had no way to see
+    // more; now it pages through everything the filters match.
     const { query, result } = useList({
         resource: "expenses",
+        pagination: { currentPage: page, pageSize: PAGE_SIZE },
+        filters: refineFilters,
     });
 
     const closeForm = () => {
-        setFormOpen(false);
+        setOpen(false);
         setEditing(null);
-        if (searchParams.get("create") === "1") {
-            const params = new URLSearchParams(searchParams.toString());
-            params.delete("create");
-            const queryString = params.toString();
-            router.replace(queryString ? `/expenses?${queryString}` : "/expenses", {
-                scroll: false,
-            });
-        }
     };
 
     const handleExport = async () => {
@@ -95,27 +101,10 @@ const ExpenseContent = () => {
     // sends so the cards below are typed instead of implicitly `any`.
     const data = (result?.data ?? []) as ExpenseRecord[];
     
-    // Prevents Layout Shift and provides better UX
-    if (isLoading) {
-        return (
-            <div className="flex h-64 w-full items-center justify-center p-10">
-                <p className="animate-pulse text-muted-foreground">
-                    Loading expenses...
-                </p>
-            </div>
-        );
-    }
-
-    if (isError) {
-        return (
-            <div
-                role="alert"
-                className="p-10 text-destructive text-center font-medium"
-            >
-                Failed to load expenses. Please refresh the page.
-            </div>
-        );
-    }
+    const total = result?.total ?? data.length;
+    const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    // Keep the search box mounted while results load, or typing would lose focus.
+    const firstLoad = isLoading && data.length === 0;
 
     return (
         <section className="w-full space-y-6 relative">
@@ -126,7 +115,7 @@ const ExpenseContent = () => {
                         size="sm"
                         onClick={() => {
                             setEditing(null);
-                            setFormOpen(true);
+                            setOpen(true);
                         }}
                     >
                         Create
@@ -155,9 +144,28 @@ const ExpenseContent = () => {
                 </DialogContent>
             </Dialog>
 
-            {data.length === 0 ? (
+            <RecordFilters
+                value={filters}
+                onChange={handleFiltersChange}
+                types={[
+                    { value: "expense", label: "Expense" },
+                    { value: "income", label: "Income" },
+                ]}
+            />
+
+            {isError ? (
+                <div role="alert" className="p-10 text-destructive text-center font-medium">
+                    Failed to load expenses. Please refresh the page.
+                </div>
+            ) : firstLoad ? (
+                <div className="flex h-64 w-full items-center justify-center p-10">
+                    <p className="animate-pulse text-muted-foreground">Loading expenses...</p>
+                </div>
+            ) : data.length === 0 ? (
                 <div className="text-center p-20 border-2 border-dashed rounded-lg">
-                    <p className="text-muted-foreground">No expenses found.</p>
+                    <p className="text-muted-foreground">
+                        {filtersActive ? "No expenses match your search or filters." : "No expenses found."}
+                    </p>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
@@ -219,7 +227,7 @@ const ExpenseContent = () => {
                                     aria-label={`Edit ${item.title}`}
                                     onClick={() => {
                                         setEditing(item);
-                                        setFormOpen(true);
+                                        setOpen(true);
                                     }}
                                 >
                                     Edit
@@ -237,6 +245,32 @@ const ExpenseContent = () => {
                         </Card>
                     ))}
                 </div>
+            )}
+
+            {total > PAGE_SIZE && (
+                <nav className="flex items-center justify-between" aria-label="Expenses pages">
+                    <p className="text-sm text-muted-foreground">
+                        {total} records · Page {page} of {pageCount}
+                    </p>
+                    <div className="flex gap-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={page <= 1}
+                            onClick={() => setPage((current) => Math.max(1, current - 1))}
+                        >
+                            Previous
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={page >= pageCount}
+                            onClick={() => setPage((current) => Math.min(pageCount, current + 1))}
+                        >
+                            Next
+                        </Button>
+                    </div>
+                </nav>
             )}
 
             <ConfirmDeleteDialog

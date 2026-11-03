@@ -4,6 +4,13 @@ import { auth } from "@clerk/nextjs/server";
 import { asc, desc, eq, sql } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { ledgerErrorResponse, requireLedger } from "@/lib/ledger";
+import {
+    andAll,
+    buildFilterConditions,
+    matchesText,
+    MAX_SEARCH_SCAN,
+    parseRecordFilters,
+} from "@/lib/transaction-filters";
 
 /**
  * `@refinedev/simple-rest` sends `_start`/`_end`/`_sort`/`_order` and reads the
@@ -50,32 +57,76 @@ export async function GET(req: NextRequest) {
                 ? desc
                 : asc;
 
-        const forLedger = eq(transactions.ledgerId, ledger.id);
+        // Filters (F-05). Everything but free-text search runs in SQL.
+        const parsed = parseRecordFilters(params);
+        if (!parsed.ok) {
+            return NextResponse.json({ error: parsed.error }, { status: 400 });
+        }
+        const { q, ...sqlFilters } = parsed.filters;
+        const where = andAll([
+            eq(transactions.ledgerId, ledger.id),
+            ...buildFilterConditions(transactions, sqlFilters),
+        ]);
+
+        const selection = {
+            id: transactions.id,
+            title: transactions.title,
+            amount: transactions.amount,
+            type: transactions.type,
+            currency: transactions.currency,
+            createdAt: transactions.createdAt,
+            category: {
+                id: categories.id,
+                name: sql`COALESCE(${categories.displayName}, ${categories.name})`,
+                color: categories.color,
+            },
+            date: transactions.date,
+        };
+
+        // Titles and descriptions are encrypted at rest, so text search has to
+        // happen here after decrypting, over rows that already passed the SQL
+        // filters. Capped so one request cannot decrypt an unbounded ledger.
+        if (q) {
+            const scanned = await db
+                .select({ ...selection, description: transactions.description })
+                .from(transactions)
+                .leftJoin(categories, eq(transactions.categoryId, categories.id))
+                .where(where)
+                .orderBy(order(column))
+                .limit(MAX_SEARCH_SCAN + 1);
+            const truncated = scanned.length > MAX_SEARCH_SCAN;
+            const matches = scanned
+                .slice(0, MAX_SEARCH_SCAN)
+                .filter((row) => matchesText([row.title, row.description], q));
+            const page = matches.slice(start, end).map((row) => ({
+                id: row.id,
+                title: row.title,
+                amount: row.amount,
+                type: row.type,
+                currency: row.currency,
+                createdAt: row.createdAt,
+                category: row.category,
+                date: row.date,
+            }));
+            return NextResponse.json(page, {
+                headers: {
+                    "X-Total-Count": String(matches.length),
+                    "X-Search-Truncated": String(truncated),
+                },
+            });
+        }
 
         const countRow = await db
             .select({ total: sql<number>`count(*)` })
             .from(transactions)
-            .where(forLedger);
+            .where(where);
         const total = Number(countRow[0]?.total ?? 0);
 
         const rows = await db
-            .select({
-                id: transactions.id,
-                title: transactions.title,
-                amount: transactions.amount,
-                type: transactions.type,
-                currency: transactions.currency,
-                createdAt: transactions.createdAt,
-                category: {
-                    id: categories.id,
-                    name: sql`COALESCE(${categories.displayName}, ${categories.name})`,
-                    color: categories.color,
-                },
-                date: transactions.date,
-            })
+            .select(selection)
             .from(transactions)
             .leftJoin(categories, eq(transactions.categoryId, categories.id))
-            .where(forLedger)
+            .where(where)
             .orderBy(order(column))
             .limit(end - start)
             .offset(start);

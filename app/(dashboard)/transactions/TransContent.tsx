@@ -1,6 +1,8 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import Header from "@/components/header";
+import { RecordFilters } from "@/components/record-filters";
 import { Button } from "@/components/ui/button";
 import {
     Table,
@@ -14,6 +16,13 @@ import { useTable } from "@refinedev/core";
 import { ledgerFetch } from "@/lib/ledger-client";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/currencies";
+import { displayCategoryName } from "@/lib/categories";
+import {
+    activeFilterCount,
+    EMPTY_FILTERS,
+    toRefineFilters,
+    type FilterState,
+} from "@/lib/record-filter-state";
 
 /** Shape returned by GET /api/transactions. */
 interface TransactionRow {
@@ -22,11 +31,22 @@ interface TransactionRow {
     type: "income" | "expense" | "subscription";
     amount: string | number;
     currency?: string | null;
+    category?: { id: string; name: string | null } | null;
     date: string;
     createdAt: string;
 }
 
+const TYPES = [
+    { value: "expense", label: "Expense" },
+    { value: "income", label: "Income" },
+    { value: "subscription", label: "Subscription" },
+];
+
 const TransContent = () => {
+    const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
+    const refineFilters = useMemo(() => toRefineFilters(filters), [filters]);
+    const filtersActive = activeFilterCount(filters) > 0;
+
     const {
         tableQuery,
         currentPage,
@@ -46,15 +66,24 @@ const TransContent = () => {
         sorters: {
             initial: [{ field: "date", order: "desc" }],
         },
+        // Search and filters are always applied on top of the paging/sorting.
+        filters: { permanent: refineFilters },
     });
 
-    const headers = ["Id", "Title", "Type", "Amount", "Date", "Created"];
+    const handleFiltersChange = (next: FilterState) => {
+        setFilters(next);
+        setCurrentPage(1);
+    };
+
+    const headers = ["Title", "Category", "Type", "Amount", "Date", "Created"];
 
     const { data, isLoading, isError } = tableQuery;
 
     const transactions = (data?.data ?? []) as TransactionRow[];
     const total = data?.total ?? 0;
-    const totalPages = Math.ceil(total / pageSize);
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    // Keep the filter bar mounted while results load, or typing would lose focus.
+    const firstLoad = isLoading && transactions.length === 0;
 
     const handleExport = async () => {
         try {
@@ -92,12 +121,6 @@ const TransContent = () => {
         ]);
     };
 
-    if (isLoading) return <div className="p-4">Loading...</div>;
-    if (isError)
-        return (
-            <div className="p-4 text-red-500">Error loading transactions</div>
-        );
-
     return (
         <section className="p-6 space-y-6">
             <title>Transactions</title>
@@ -113,29 +136,51 @@ const TransContent = () => {
                 </Button>
             </Header>
 
+            <RecordFilters value={filters} onChange={handleFiltersChange} types={TYPES} />
+
+            {isError && (
+                <div role="alert" className="p-4 text-red-500">
+                    Error loading transactions
+                </div>
+            )}
+
             {/* TABLE */}
             <Table>
                 <TableHeader>
                     <TableRow>
-                        {headers.map((header, index) => (
-                            <TableHead key={index}>{header}</TableHead>
+                        {headers.map((header) => (
+                            <TableHead key={header}>{header}</TableHead>
                         ))}
                     </TableRow>
                 </TableHeader>
 
                 <TableBody>
-                    {transactions.length === 0 && (
+                    {firstLoad && (
+                        <TableRow>
+                            <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
+                                Loading...
+                            </TableCell>
+                        </TableRow>
+                    )}
+
+                    {!firstLoad && !isError && transactions.length === 0 && (
                         <TableRow>
                             <TableCell colSpan={6} className="text-center py-6">
-                                No transactions found
+                                {filtersActive
+                                    ? "No transactions match your search or filters"
+                                    : "No transactions found"}
                             </TableCell>
                         </TableRow>
                     )}
 
                     {transactions.map((transaction) => (
                         <TableRow key={transaction.id}>
-                            <TableCell>{transaction.id}</TableCell>
                             <TableCell>{transaction.title}</TableCell>
+                            <TableCell>
+                                {transaction.category?.name
+                                    ? displayCategoryName(transaction.category.name)
+                                    : "—"}
+                            </TableCell>
                             <TableCell className="capitalize">
                                 {transaction.type}
                             </TableCell>
@@ -159,7 +204,7 @@ const TransContent = () => {
             {/* PAGINATION */}
             <div className="flex justify-between items-center pt-4">
                 <p className="text-sm text-gray-500">
-                    Page {currentPage} of {totalPages}
+                    {total} {total === 1 ? "record" : "records"} · Page {currentPage} of {totalPages}
                 </p>
 
                 <div className="flex gap-2">
