@@ -9,6 +9,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveCategory } from "@/lib/category-access";
 import { canUseFeature } from "@/lib/feature-access";
 import { ledgerErrorResponse, requireLedger } from "@/lib/ledger";
+import {
+    andAll,
+    buildFilterConditions,
+    matchesText,
+    MAX_SEARCH_SCAN,
+    parseRecordFilters,
+} from "@/lib/transaction-filters";
 
 /**
  * `@refinedev/simple-rest` sends `_start`/`_end`/`_sort`/`_order` and reads the
@@ -55,34 +62,68 @@ export async function GET(req: NextRequest) {
                 ? asc
                 : desc;
 
-        const forLedger = eq(expenses.ledgerId, ledger.id);
+        // Filters (F-05). Everything but free-text search runs in SQL; titles
+        // and notes are encrypted at rest, so text search decrypts in the app
+        // over rows that already passed the SQL filters (capped).
+        const parsed = parseRecordFilters(params, ["income", "expense"]);
+        if (!parsed.ok) {
+            return NextResponse.json({ error: parsed.error }, { status: 400 });
+        }
+        const { q, ...sqlFilters } = parsed.filters;
+        const where = andAll([
+            eq(expenses.ledgerId, ledger.id),
+            ...buildFilterConditions(expenses, sqlFilters),
+        ]);
+
+        const selection = {
+            // Refine's simple-rest provider requires every list item to
+            // expose its primary key as `id`. Returning this as
+            // `expenseId` left the UI without stable record identifiers,
+            // which prevented the list from rendering reliably and made
+            // edit/delete requests target `undefined`.
+            id: expenses.id,
+            title: expenses.title,
+            type: expenses.type,
+            amount: expenses.amount,
+            date: expenses.date,
+            description: expenses.note,
+            categoryId: expenses.categoryId,
+            categoryName: sql`COALESCE(${categories.displayName}, ${categories.name})`,
+            currency: expenses.currency,
+        };
+
+        if (q) {
+            const scanned = await db
+                .select(selection)
+                .from(expenses)
+                .leftJoin(categories, eq(expenses.categoryId, categories.id))
+                .where(where)
+                .orderBy(order(column))
+                .limit(MAX_SEARCH_SCAN + 1);
+            const truncated = scanned.length > MAX_SEARCH_SCAN;
+            const matches = scanned
+                .slice(0, MAX_SEARCH_SCAN)
+                .filter((row) => matchesText([row.title, row.description], q));
+            return NextResponse.json(matches.slice(start, end), {
+                status: 200,
+                headers: {
+                    "X-Total-Count": String(matches.length),
+                    "X-Search-Truncated": String(truncated),
+                },
+            });
+        }
 
         const countRow = await db
             .select({ total: sql<number>`count(*)` })
             .from(expenses)
-            .where(forLedger);
+            .where(where);
         const total = Number(countRow[0]?.total ?? 0);
 
         const data = await db
-            .select({
-                // Refine's simple-rest provider requires every list item to
-                // expose its primary key as `id`. Returning this as
-                // `expenseId` left the UI without stable record identifiers,
-                // which prevented the list from rendering reliably and made
-                // edit/delete requests target `undefined`.
-                id: expenses.id,
-                title: expenses.title,
-                type: expenses.type,
-                amount: expenses.amount,
-                date: expenses.date,
-                description: expenses.note,
-                categoryId: expenses.categoryId,
-                categoryName: sql`COALESCE(${categories.displayName}, ${categories.name})`,
-                currency: expenses.currency,
-            })
+            .select(selection)
             .from(expenses)
             .leftJoin(categories, eq(expenses.categoryId, categories.id))
-            .where(forLedger)
+            .where(where)
             .orderBy(order(column))
             .limit(end - start)
             .offset(start);
