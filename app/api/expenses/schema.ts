@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { positiveMoneySchema } from "@/lib/money";
+import { TAX_KINDS } from "@/lib/tax";
 
 /**
  * Shared request contract for creating and editing an expense.
@@ -18,6 +19,8 @@ export const expenseSchema = z.object({
     /** Display label of a row in `categories` (see components/category-selector). */
     category: z.string().min(1),
     currency: z.string().min(1),
+    /** Business ledgers only. Omit to leave unchanged; null clears it. */
+    taxKind: z.enum(TAX_KINDS).nullable().optional(),
 });
 
 export type ExpenseInput = z.infer<typeof expenseSchema>;

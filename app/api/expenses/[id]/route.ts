@@ -9,6 +9,7 @@ import { expenseSchema } from "../schema";
 import { resolveCategory } from "@/lib/category-access";
 import { canUseFeature } from "@/lib/feature-access";
 import { ledgerErrorResponse, requireLedger } from "@/lib/ledger";
+import { validateTaxKind } from "@/lib/tax";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -52,6 +53,17 @@ export async function PATCH(req: Request, { params }: Params) {
 
         const data = expenseSchema.parse(body);
 
+        const taxError = validateTaxKind({
+            ledgerType: ledger.type,
+            recordType: data.type,
+            taxKind: data.taxKind,
+        });
+        if (taxError) {
+            return NextResponse.json({ error: taxError }, { status: 400 });
+        }
+        // undefined = leave as is, null = clear, a kind = set (also on the ledger row).
+        const taxPatch = data.taxKind === undefined ? {} : { taxKind: data.taxKind };
+
         const [existingExpense] = await db.select({ currency: expenses.currency })
             .from(expenses).where(scope(ledger.id, id)).limit(1);
         if (!existingExpense) {
@@ -88,13 +100,14 @@ export async function PATCH(req: Request, { params }: Params) {
                 type: data.type,
                 categoryId: category.id,
                 currency: data.currency,
+                ...taxPatch,
                 updatedAt: new Date(),
             }).where(scope(ledger.id, id)).returning({ id: expenses.id });
             if (updatedRows.length) {
                 await tx.update(transactions).set({
                     title: data.title, description: data.note, amount: data.amount,
                     date: data.date, type: data.type, categoryId: category.id,
-                    currency: data.currency, updatedAt: new Date(),
+                    currency: data.currency, ...taxPatch, updatedAt: new Date(),
                 }).where(and(eq(transactions.expenseId, id), eq(transactions.ledgerId, ledger.id)));
             }
             return updatedRows;

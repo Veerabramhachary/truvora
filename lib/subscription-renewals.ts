@@ -102,6 +102,8 @@ async function renewOne(id: string, now: Date, dryRun: boolean): Promise<OneResu
                         currency: sub.currency,
                         categoryId: sub.categoryId,
                         subscriptionId: sub.id,
+                        // The subscription decides the tax treatment of its charges.
+                        taxKind: sub.taxKind,
                         type: "subscription" as const,
                         action: "created" as const,
                         date: cycle.date,

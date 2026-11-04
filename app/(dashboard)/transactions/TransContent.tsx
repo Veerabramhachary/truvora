@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Header from "@/components/header";
 import { RecordFilters } from "@/components/record-filters";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,8 @@ import { ledgerFetch } from "@/lib/ledger-client";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/currencies";
 import { displayCategoryName } from "@/lib/categories";
+import { useLedger } from "@/components/ledger-provider";
+import { TAX_KIND_LABELS, type TaxKind } from "@/lib/tax";
 import {
     activeFilterCount,
     EMPTY_FILTERS,
@@ -34,6 +36,7 @@ interface TransactionRow {
     category?: { id: string; name: string | null } | null;
     date: string;
     createdAt: string;
+    taxKind?: TaxKind | null;
 }
 
 const TYPES = [
@@ -43,8 +46,11 @@ const TYPES = [
 ];
 
 const TransContent = () => {
+    const { active } = useLedger();
+    const showTax = active?.type === "business";
     const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
     const refineFilters = useMemo(() => toRefineFilters(filters), [filters]);
+    const filterKey = JSON.stringify(refineFilters);
     const filtersActive = activeFilterCount(filters) > 0;
 
     const {
@@ -70,12 +76,17 @@ const TransContent = () => {
         filters: { permanent: refineFilters },
     });
 
-    const handleFiltersChange = (next: FilterState) => {
-        setFilters(next);
+    // A new search or filter always starts again from the first page. Only
+    // react to the filters actually changing, so paging is never reset by
+    // an unrelated re-render.
+    const lastFilterKey = useRef(filterKey);
+    useEffect(() => {
+        if (lastFilterKey.current === filterKey) return;
+        lastFilterKey.current = filterKey;
         setCurrentPage(1);
-    };
+    }, [filterKey, setCurrentPage]);
 
-    const headers = ["Title", "Category", "Type", "Amount", "Date", "Created"];
+    const headers = ["Title", "Category", "Type", "Amount", "Date", "Created", ...(showTax ? ["Tax"] : [])];
 
     const { data, isLoading, isError } = tableQuery;
 
@@ -136,7 +147,7 @@ const TransContent = () => {
                 </Button>
             </Header>
 
-            <RecordFilters value={filters} onChange={handleFiltersChange} types={TYPES} />
+            <RecordFilters value={filters} onChange={setFilters} types={TYPES} />
 
             {isError && (
                 <div role="alert" className="p-4 text-red-500">
@@ -157,7 +168,7 @@ const TransContent = () => {
                 <TableBody>
                     {firstLoad && (
                         <TableRow>
-                            <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
+                            <TableCell colSpan={headers.length} className="text-center py-6 text-muted-foreground">
                                 Loading...
                             </TableCell>
                         </TableRow>
@@ -165,10 +176,15 @@ const TransContent = () => {
 
                     {!firstLoad && !isError && transactions.length === 0 && (
                         <TableRow>
-                            <TableCell colSpan={6} className="text-center py-6">
+                            <TableCell colSpan={headers.length} className="text-center py-6">
                                 {filtersActive
                                     ? "No transactions match your search or filters"
                                     : "No transactions found"}
+                                {filtersActive && (
+                                    <Button variant="link" onClick={() => setFilters(EMPTY_FILTERS)}>
+                                        Clear filters
+                                    </Button>
+                                )}
                             </TableCell>
                         </TableRow>
                     )}
@@ -196,6 +212,11 @@ const TransContent = () => {
                             <TableCell>
                                 {new Date(transaction.createdAt).toDateString()}
                             </TableCell>
+                            {showTax && (
+                                <TableCell>
+                                    {transaction.taxKind ? TAX_KIND_LABELS[transaction.taxKind] : "—"}
+                                </TableCell>
+                            )}
                         </TableRow>
                     ))}
                 </TableBody>

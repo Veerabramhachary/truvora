@@ -13,6 +13,8 @@ import {
     CardDescription,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { TaxSummary } from "@/components/TaxSummary";
+import { useLedger } from "@/components/ledger-provider";
 
 const ChartAreaInteractive = dynamic(
     () =>
@@ -47,6 +49,7 @@ const ChartAreaInteractive = dynamic(
   <main> is invalid HTML and doubled the inset padding.
 */
 export default function DashboardContent() {
+    const { active } = useLedger();
     const { result } = useCustom<{ totalSpend: number }>({ url: "/api/dashboard/stats", method: "get" });
     const totalSpend = result?.data?.totalSpend;
     const formattedTotal = totalSpend === undefined
@@ -56,7 +59,7 @@ export default function DashboardContent() {
     return (
         <div className="flex flex-1 flex-col">
             <div className="@container/main flex flex-1 flex-col">
-                <div className="flex flex-col gap-4 px-3 py-3 sm:px-4 sm:py-4 lg:px-6 lg:py-5">
+                <div className="flex flex-col gap-6 px-4 py-6 lg:px-6">
                     <Card className="overflow-hidden">
                         <CardContent className="flex flex-col gap-1 p-4 sm:p-5">
                             <CardDescription>Total spending this month</CardDescription>
@@ -65,17 +68,20 @@ export default function DashboardContent() {
                         </CardContent>
                     </Card>
 
-                    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(300px,0.8fr)] xl:items-stretch">
+                    <div className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(300px,0.8fr)] xl:items-start">
                         <ChartAreaInteractive />
-                        <div className="min-w-0 xl:h-full">
+                        <div className="min-w-0">
                             <SectionCards />
                         </div>
                     </div>
 
-                    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.75fr)] xl:items-stretch">
+                    <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.75fr)] xl:items-start">
                         <RecentTransactions />
                         <CategoryExpenseChart />
                     </div>
+
+                    {/* Tax tracking exists on business ledgers only. */}
+                    {active?.type === "business" && <TaxSummary />}
                 </div>
             </div>
         </div>
