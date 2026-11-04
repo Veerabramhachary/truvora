@@ -14,6 +14,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { encryptedText } from "./custom-types";
+import { taxKindEnum } from "./tax";
 import { expenses } from "./expenses";
 import { ledgers } from "./ledgers";
 
@@ -86,6 +87,9 @@ export const transactions = pgTable("transactions", {
     expenseId: uuid("expense_id").unique().references(() => expenses.id, { onDelete: "cascade" }),
     action: transactionActionEnum("action").notNull(),
     currency: text("currency").notNull().default("INR"),
+    // Copied from the expense/subscription that produced this row, so the tax
+    // summary can read everything from one table. NULL = not tax related.
+    taxKind: taxKindEnum("tax_kind"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
@@ -115,6 +119,8 @@ export const subscriptions = pgTable("subscriptions", {
     deactivatedAt: timestamp("deactivated_at"),
     nextDate: timestamp("next_date").notNull(),
     active: boolean("active").notNull().default(true),
+    // Business ledgers only; copied onto every charge this subscription records.
+    taxKind: taxKindEnum("tax_kind"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [

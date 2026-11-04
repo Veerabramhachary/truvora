@@ -13,6 +13,7 @@ import {
 import { resolveCategory } from "@/lib/category-access";
 import { canUseFeature } from "@/lib/feature-access";
 import { ledgerErrorResponse, requireLedger } from "@/lib/ledger";
+import { validateTaxKind } from "@/lib/tax";
 import {
     activeSubscriptionFlag,
     countActiveSubscriptions,
@@ -98,6 +99,7 @@ export async function GET(req: NextRequest) {
                 intervalCount: subscriptions.intervalCount,
                 endDate: subscriptions.endDate,
                 nextDate: subscriptions.nextDate,
+                taxKind: subscriptions.taxKind,
             })
             .from(subscriptions)
             .leftJoin(categories, eq(subscriptions.categoryId, categories.id))
@@ -150,6 +152,14 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "New financial records must use INR" }, { status: 400 });
         }
         const ledger = await requireLedger(req, userId);
+        const taxError = validateTaxKind({
+            ledgerType: ledger.type,
+            recordType: "subscription",
+            taxKind: data.taxKind,
+        });
+        if (taxError) {
+            return NextResponse.json({ error: taxError }, { status: 400 });
+        }
         const category = await resolveCategory(
             ledger.id,
             data.category,
@@ -224,6 +234,7 @@ export async function POST(req: Request) {
                     name: subscriptions.name,
                     isActive: activeSubscriptionFlag(now),
                     updatedAt: subscriptions.updatedAt,
+                    taxKind: subscriptions.taxKind,
                 })
                 .from(subscriptions)
                 .where(eq(subscriptions.ledgerId, ledger.id));
@@ -256,6 +267,8 @@ export async function POST(req: Request) {
                     note: data.note || null,
                     active: willBeActive,
                     deactivatedAt: willBeActive ? null : endDate,
+                    // undefined = keep the card's current tax treatment.
+                    ...(data.taxKind === undefined ? {} : { taxKind: data.taxKind }),
                     updatedAt: today,
                 }).where(eq(subscriptions.id, existing.id)).returning({ id: subscriptions.id });
 
@@ -271,6 +284,7 @@ export async function POST(req: Request) {
                     subscriptionId: existing.id,
                     action: "created",
                     currency: data.currency,
+                    taxKind: data.taxKind === undefined ? existing.taxKind : data.taxKind,
                     createdAt: today,
                 });
                 await syncActiveSubscriptionUsage(tx, userId, today);
@@ -301,6 +315,7 @@ export async function POST(req: Request) {
                         ),
                     categoryId: category.id,
                     note: data.note || null,
+                    taxKind: data.taxKind ?? null,
                     // Keep future-dated subscriptions eligible to become
                     // active automatically when their start date arrives.
                     active: subscriptionEndDate(data.endDate) >= now,
@@ -328,6 +343,7 @@ export async function POST(req: Request) {
                 subscriptionId: created.id,
                 action: "created",
                 currency: data.currency,
+                taxKind: data.taxKind ?? null,
                 createdAt: now,
             });
             return { ...created, reused: false };

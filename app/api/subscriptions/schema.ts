@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { positiveMoneySchema } from "@/lib/money";
+import { TAX_KINDS } from "@/lib/tax";
 
 /** Shared request contract for creating and editing a subscription. */
 export const subscriptionSchema = z.object({
@@ -18,6 +19,8 @@ export const subscriptionSchema = z.object({
     note: z.string().optional(),
     active: z.boolean().optional(),
     deactivatedAt: z.date().optional(),
+    /** Business ledgers only. Omit to leave unchanged; null clears it. */
+    taxKind: z.enum(TAX_KINDS).nullable().optional(),
 });
 
 export type SubscriptionInput = z.infer<typeof subscriptionSchema>;

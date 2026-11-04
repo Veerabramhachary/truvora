@@ -2,6 +2,7 @@ import { decimal, index, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-
 import { categories } from "./schema";
 import { ledgers } from "./ledgers";
 import { encryptedText } from "./custom-types";
+import { taxKindEnum } from "./tax";
 export const expenseType = pgEnum('expense_type', [
     'income',
     'expense'
@@ -19,6 +20,8 @@ export const expenses = pgTable("expenses", {
     date: timestamp("date").notNull(),
     type:expenseType('type').notNull(),
     categoryId: uuid('category_id').references(() => categories.id),
+    // Business ledgers only. NULL = not tax related.
+    taxKind: taxKindEnum('tax_kind'),
     createdAt: timestamp('created_at').defaultNow(),
     updatedAt: timestamp('updated_at').defaultNow()
 }, (table) => [

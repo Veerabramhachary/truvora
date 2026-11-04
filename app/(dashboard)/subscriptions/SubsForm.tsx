@@ -20,6 +20,8 @@ import { CustomCategoryField } from "@/components/custom-category-field";
 import { apiErrorMessage } from "@/lib/api-error";
 import { CurrencySelect } from "@/components/currency-select";
 import { DEFAULT_CURRENCY } from "@/lib/currencies";
+import { TaxKindField } from "@/components/tax-kind-field";
+import { TAX_KINDS, type TaxKind } from "@/lib/tax";
 
 const formSchema = z.object({
     name: z.string().min(2, "name is required"),
@@ -31,6 +33,8 @@ const formSchema = z.object({
     currency: z.string().min(1, "Currency is required"),
     interval: z.enum(["month", "year"]),
     active: z.boolean(),
+    // Business ledgers only; the field is hidden on a personal ledger.
+    taxKind: z.enum(TAX_KINDS).nullable().optional(),
 }).refine((data) => {
     // Validation: End date must be after Start date if it exists
     if (data.endDate && data.startDate) {
@@ -58,6 +62,7 @@ export interface SubscriptionRecord {
     interval?: "month" | "year" | null;
     endDate: string | Date;
     nextDate: string | Date;
+    taxKind?: TaxKind | null;
 }
 
 interface SubsFormProps {
@@ -105,6 +110,7 @@ const SubsForm = ({ editing, onSaved }: SubsFormProps) => {
                   category: editing.categoryName ?? "",
                   price: Number(editing.amount),
                   active: editing.active,
+                  taxKind: editing.taxKind ?? null,
               }
             : {
                   interval: "month",
@@ -115,6 +121,7 @@ const SubsForm = ({ editing, onSaved }: SubsFormProps) => {
                   category: "",
                   price: 0,
                   active: true,
+                  taxKind: null,
               },
     });
 
@@ -132,6 +139,7 @@ const SubsForm = ({ editing, onSaved }: SubsFormProps) => {
     const currencyValue = useWatch({ control, name: "currency" });
     const intervalValue = useWatch({ control, name: "interval" });
     const activeValue = useWatch({ control, name: "active" });
+    const taxKindValue = useWatch({ control, name: "taxKind" });
 
 
     const onSubmit: SubmitHandler<FormValues> = async (data) => {
@@ -267,6 +275,12 @@ const SubsForm = ({ editing, onSaved }: SubsFormProps) => {
                         {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
                     </div>
                 </div>
+
+                <TaxKindField
+                    recordType="subscription"
+                    value={taxKindValue}
+                    onChange={(next) => setValue("taxKind", next)}
+                />
 
                 <div className="space-y-2">
                     <Label htmlFor="subscription-note">Note</Label>

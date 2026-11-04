@@ -23,6 +23,8 @@ import { CustomCategoryField } from "@/components/custom-category-field";
 import { apiErrorMessage } from "@/lib/api-error";
 import { CurrencySelect } from "@/components/currency-select";
 import { DEFAULT_CURRENCY } from "@/lib/currencies";
+import { TaxKindField } from "@/components/tax-kind-field";
+import { TAX_KINDS, type TaxKind } from "@/lib/tax";
 
 const formSchema = z.object({
     title: z.string().min(2, "Title is required"),
@@ -32,6 +34,8 @@ const formSchema = z.object({
     category: z.string().min(1, "Select a category"),
     currency: z.string().min(1, "Currency is required"),
     type: z.enum(["income", "expense"]),
+    // Business ledgers only; the field is hidden on a personal ledger.
+    taxKind: z.enum(TAX_KINDS).nullable().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -48,6 +52,7 @@ export interface ExpenseRecord {
     description?: string | null;
     /** Display label from the `categories` join — exactly what the selector submits. */
     categoryName?: string | null;
+    taxKind?: TaxKind | null;
 }
 
 interface TransactionFormProps {
@@ -82,6 +87,7 @@ export function TransactionForm({
                   date: new Date(editing.date),
                   category: editing.categoryName ?? "",
                   currency: editing.currency ?? DEFAULT_CURRENCY,
+                  taxKind: editing.taxKind ?? null,
               }
             : {
                   type,
@@ -91,6 +97,7 @@ export function TransactionForm({
                   note: "",
                   category: "",
                   amount: 0,
+                  taxKind: null,
               },
     });
 
@@ -106,6 +113,7 @@ export function TransactionForm({
     const dateValue = useWatch({ control, name: "date" });
     const categoryValue = useWatch({ control, name: "category" });
     const currencyValue = useWatch({ control, name: "currency" });
+    const taxKindValue = useWatch({ control, name: "taxKind" });
 
     const onSubmit: SubmitHandler<FormValues> = async (data) => {
         const isEdit = Boolean(editing);
@@ -247,6 +255,12 @@ export function TransactionForm({
                     </p>
                 )}
             </div>
+
+            <TaxKindField
+                recordType={type}
+                value={taxKindValue}
+                onChange={(next) => setValue("taxKind", next)}
+            />
 
             <div className="flex gap-2">
                 <Button

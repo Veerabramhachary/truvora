@@ -74,6 +74,7 @@ export async function GET(req: NextRequest) {
             amount: transactions.amount,
             type: transactions.type,
             currency: transactions.currency,
+            taxKind: transactions.taxKind,
             createdAt: transactions.createdAt,
             category: {
                 id: categories.id,
@@ -104,6 +105,7 @@ export async function GET(req: NextRequest) {
                 amount: row.amount,
                 type: row.type,
                 currency: row.currency,
+                taxKind: row.taxKind,
                 createdAt: row.createdAt,
                 category: row.category,
                 date: row.date,

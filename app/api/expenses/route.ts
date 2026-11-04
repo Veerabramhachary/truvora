@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveCategory } from "@/lib/category-access";
 import { canUseFeature } from "@/lib/feature-access";
 import { ledgerErrorResponse, requireLedger } from "@/lib/ledger";
+import { validateTaxKind } from "@/lib/tax";
 import {
     andAll,
     buildFilterConditions,
@@ -90,6 +91,7 @@ export async function GET(req: NextRequest) {
             categoryId: expenses.categoryId,
             categoryName: sql`COALESCE(${categories.displayName}, ${categories.name})`,
             currency: expenses.currency,
+            taxKind: expenses.taxKind,
         };
 
         if (q) {
@@ -165,6 +167,15 @@ export const POST = async (req: Request) => {
             return NextResponse.json({ error: "New financial records must use INR" }, { status: 400 });
         }
 
+        const taxError = validateTaxKind({
+            ledgerType: ledger.type,
+            recordType: data.type,
+            taxKind: data.taxKind,
+        });
+        if (taxError) {
+            return NextResponse.json({ success: false, error: taxError }, { status: 400 });
+        }
+
         const category = await resolveCategory(
             ledger.id,
             data.category,
@@ -194,6 +205,7 @@ export const POST = async (req: Request) => {
                 userId: userId,
                 ledgerId: ledger.id,
                 currency: data.currency,
+                taxKind: data.taxKind ?? null,
             }).returning({ id: expenses.id });
 
             await tx.insert(transactions).values({
@@ -208,6 +220,7 @@ export const POST = async (req: Request) => {
                 categoryId: category.id,
                 action: "created",
                 currency: data.currency,
+                taxKind: data.taxKind ?? null,
                 createdAt: new Date(),
             });
         });

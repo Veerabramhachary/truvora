@@ -12,6 +12,7 @@ import {
 import { resolveCategory } from "@/lib/category-access";
 import { canUseFeature } from "@/lib/feature-access";
 import { ledgerErrorResponse, requireLedger } from "@/lib/ledger";
+import { validateTaxKind } from "@/lib/tax";
 import { syncActiveSubscriptionUsage } from "@/lib/active-subscription";
 
 type Params = { params: Promise<{ id: string }> };
@@ -78,6 +79,17 @@ export async function PATCH(req: Request, { params }: Params) {
 
         const data = subscriptionSchema.parse(body);
 
+        const taxError = validateTaxKind({
+            ledgerType: ledger.type,
+            recordType: "subscription",
+            taxKind: data.taxKind,
+        });
+        if (taxError) {
+            return NextResponse.json({ error: taxError }, { status: 400 });
+        }
+        // undefined = leave as is, null = clear, a kind = set.
+        const taxPatch = data.taxKind === undefined ? {} : { taxKind: data.taxKind };
+
         const [existingSubscription] = await db.select({
             currency: subscriptions.currency,
             active: subscriptions.active,
@@ -121,7 +133,8 @@ export async function PATCH(req: Request, { params }: Params) {
                 { status: 400 },
             );
         }
-        const updated = await db
+        const updated = await db.transaction(async (tx) => {
+        const rows = await tx
             .update(subscriptions)
             .set({
                 name: data.name,
@@ -146,6 +159,7 @@ export async function PATCH(req: Request, { params }: Params) {
                     : shouldBeActive
                       ? null
                       : existingSubscription.deactivatedAt ?? now,
+                ...taxPatch,
                 updatedAt: new Date(),
             })
             .where(
@@ -155,6 +169,21 @@ export async function PATCH(req: Request, { params }: Params) {
                 ),
             )
             .returning({ id: subscriptions.id });
+        // The subscription decides the tax treatment of every charge it has
+        // recorded, so the tax summary never disagrees with the subscription.
+        if (rows.length > 0 && data.taxKind !== undefined) {
+            await tx
+                .update(transactions)
+                .set({ taxKind: data.taxKind, updatedAt: new Date() })
+                .where(
+                    and(
+                        eq(transactions.subscriptionId, id),
+                        eq(transactions.ledgerId, ledger.id),
+                    ),
+                );
+        }
+        return rows;
+        });
 
         if (updated.length === 0) {
             return NextResponse.json(
