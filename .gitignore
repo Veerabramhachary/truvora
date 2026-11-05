@@ -68,3 +68,6 @@ tmp/
 # backup of deleted rows (contains user data — never commit).
 .tmp-*
 orphan-backup-transactions.json
+
+# Sentry Config File
+.env.sentry-build-plugin

@@ -1,5 +1,9 @@
 "use client";
 
+import * as Sentry from "@sentry/nextjs";
+import Error from "next/error";
+import { useEffect } from "react";
+
 /*
   Last-resort boundary: this replaces the root layout, so it has to render its
   own <html> and <body>. Anything it doesn't include (fonts, theme) is gone,
@@ -13,6 +17,9 @@ export default function GlobalError({
     error: Error & { digest?: string };
     reset: () => void;
 }) {
+    useEffect(() => {
+        Sentry.captureException(error);
+    }, [error]);
     return (
         <html lang="en">
             <body
@@ -51,8 +58,8 @@ export default function GlobalError({
                         color: "#475569",
                     }}
                 >
-                    The app couldn&apos;t recover from that one. Reloading usually
-                    sorts it out.
+                    The app couldn&apos;t recover from that one. Reloading
+                    usually sorts it out.
                 </p>
                 <button
                     type="button"
