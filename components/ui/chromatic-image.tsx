@@ -119,6 +119,7 @@ export function ChromaticImage({
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [ready, setReady] = useState(false);
+  const [contextGeneration, setContextGeneration] = useState(0);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -192,6 +193,7 @@ export function ChromaticImage({
     let disposed = false;
     let frame = 0;
     let isRendering = false;
+    let contextLost = false;
     let previousTime = performance.now();
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -211,7 +213,7 @@ export function ChromaticImage({
     };
 
     const render = (time: number) => {
-      if (disposed) return;
+      if (disposed || contextLost) return;
       const delta = Math.min((time - previousTime) / 1000, 0.05);
       previousTime = time;
       progress = approach(progress, progressTarget, 10, delta);
@@ -239,11 +241,26 @@ export function ChromaticImage({
     };
 
     const requestRender = () => {
-      if (isRendering) return;
+      if (disposed || contextLost || isRendering) return;
       isRendering = true;
       previousTime = performance.now();
       frame = requestAnimationFrame(render);
     };
+
+    const handleContextLost = (event: Event) => {
+      event.preventDefault();
+      contextLost = true;
+      cancelAnimationFrame(frame);
+      isRendering = false;
+      setReady(false);
+    };
+
+    const handleContextRestored = () => {
+      setContextGeneration((generation) => generation + 1);
+    };
+
+    canvas.addEventListener("webglcontextlost", handleContextLost);
+    canvas.addEventListener("webglcontextrestored", handleContextRestored);
 
     const updatePointer = (event: PointerEvent) => {
       const bounds = container.getBoundingClientRect();
@@ -263,7 +280,7 @@ export function ChromaticImage({
     const image = new Image();
     image.crossOrigin = "anonymous";
     image.onload = () => {
-      if (disposed) return;
+      if (disposed || contextLost) return;
       gl.bindTexture(gl.TEXTURE_2D, texture);
       gl.texImage2D(
         gl.TEXTURE_2D,
@@ -294,6 +311,8 @@ export function ChromaticImage({
     return () => {
       disposed = true;
       cancelAnimationFrame(frame);
+      canvas.removeEventListener("webglcontextlost", handleContextLost);
+      canvas.removeEventListener("webglcontextrestored", handleContextRestored);
       resizeObserver.disconnect();
       container.removeEventListener("pointermove", updatePointer);
       container.removeEventListener("pointerleave", resetPointer);
@@ -304,7 +323,7 @@ export function ChromaticImage({
       gl.deleteShader(vertex);
       gl.deleteShader(fragment);
     };
-  }, [backgroundColor, displacement, chromaticShift, src, tilt, zoom]);
+  }, [backgroundColor, displacement, chromaticShift, contextGeneration, src, tilt, zoom]);
 
   return (
     <div
