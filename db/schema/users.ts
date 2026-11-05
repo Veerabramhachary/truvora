@@ -9,7 +9,6 @@ export const users = pgTable("users", {
     imageUrl: text("image_url"),
     referralPlatform: text("referral_platform"),
     platformDiscountId: uuid("platform_discount_id").references(() => platformDiscounts.id, { onDelete: "set null" }),
-    stripeCustomerId: text("stripe_customer_id").unique(),
     // NULL until the sign-up wizard is finished or skipped. Existing users are
     // backfilled in migration 0014 so they are never sent through it.
     onboardingCompletedAt: timestamp("onboarding_completed_at"),

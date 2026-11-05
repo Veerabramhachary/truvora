@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,6 +43,7 @@ type Props = {
 export function RecordFilters({ value, onChange, types }: Props) {
     const [options, setOptions] = useState<Options>({ categories: [], currencies: [] });
     const [draft, setDraft] = useState(value.q);
+    const previousQuery = useRef(value.q);
 
     useEffect(() => {
         let cancelled = false;
@@ -58,6 +59,13 @@ export function RecordFilters({ value, onChange, types }: Props) {
             cancelled = true;
         };
     }, []);
+
+    useEffect(() => {
+        if (previousQuery.current === value.q) return;
+        previousQuery.current = value.q;
+        // External query changes (for example clearing filters) reset the draft.
+        setDraft(value.q);
+    }, [value.q]);
 
     // Debounce the search box.
     useEffect(() => {

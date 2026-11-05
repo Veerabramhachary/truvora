@@ -32,21 +32,19 @@ them in a staging environment configured like production.
 - [x] Exercise plan feature limits through the UI and direct API requests,
       including concurrent requests near a limit. Confirm denied operations
       don't consume quota unexpectedly.
-- [x] Confirm the current checkout behavior is intentional: authenticated
-      checkout requests return `503` because payments are disabled.
+- [x] Confirm the current upgrade behavior is intentional: plan upgrades are
+      unavailable because no payment provider is configured.
 - [ ] Test on supported mobile and desktop browsers, including empty states,
       error states, and recovery after refresh or network failure.
 
 ## Implementation still outstanding
 
-- [ ] **Payment launch:** checkout is intentionally disabled in
-      `app/api/stripe/checkout/route.ts`. Before accepting payments, enable it
-      deliberately and complete end-to-end Stripe test-mode coverage for
-      checkout, price/plan matching, webhook signature verification and
+- [ ] **Payment launch:** no payment provider is currently integrated. Before
+      accepting payments, select a provider and complete end-to-end staging
+      coverage for checkout, plan matching, webhook signature verification and
       retries, subscription state changes, refunds/failures as applicable,
       customer mapping, and cancellation. Update the privacy policy and
-      configure live Stripe keys, webhook, and price IDs only after staging
-      passes.
+      configure live credentials only after staging passes.
 - [x] **Request rate limiting:** shared Upstash Redis limits cover authenticated
       APIs, exports, sensitive account/billing actions, and public plans/prices
       endpoints. Configure Redis credentials in each deployed environment and
@@ -64,14 +62,13 @@ them in a staging environment configured like production.
       `ENCRYPTION_PASSPHRASE`, `ENCRYPTION_SALT`, Clerk keys and webhook secret,
       `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_SUPPORT_EMAIL`, `RESEND_API_KEY`,
       `RENEWAL_EMAIL_FROM`, `CRON_SECRET`, `UPSTASH_REDIS_REST_URL`, and
-      `UPSTASH_REDIS_REST_TOKEN`. Keep secrets out of source and CI logs. Add
-      Stripe secrets only when payments are enabled.
+      `UPSTASH_REDIS_REST_TOKEN`. Keep secrets out of source and CI logs.
 - [ ] Confirm database migrations are applied, backups are running, and a
       restore has been tested. Protect the encryption passphrase and salt:
       changing them makes existing encrypted values unreadable.
 - [ ] Confirm the deployed Vercel cron matches `vercel.json` and that required
       plan/category seed data exists.
-- [ ] Review provider dashboards for webhook health, cron executions, email
+- [ ] Review Clerk webhook health, cron executions, email
       delivery, error rates, and database capacity after staging and initial
       production traffic.
 - [ ] Confirm CI is green for lint, tests, type-check, and production build.
@@ -79,6 +76,6 @@ them in a staging environment configured like production.
 ## Current automated coverage
 
 CI runs lint, Vitest, `npx tsc --noEmit`, and `next build`. The current Vitest
-suite has a few Stripe route and ownership-filter tests; it does not replace
+suite has ownership-filter tests; it does not replace
 the staging checks above, especially for real webhook delivery, database
 cleanup, cron execution, or provider configuration.

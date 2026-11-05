@@ -25,9 +25,15 @@ if (!process.env.DATABASE_URL) {
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 try {
-  const [{ before }] = (await pool.query(
-    "SELECT count(*)::int AS before FROM drizzle.__drizzle_migrations",
-  )).rows;
+  let before = 0;
+  try {
+    const [{ before: count }] = (await pool.query(
+      "SELECT count(*)::int AS before FROM drizzle.__drizzle_migrations",
+    )).rows;
+    before = count;
+  } catch (error) {
+    if (error?.code !== "42P01" && error?.code !== "3F000") throw error;
+  }
   await migrate(drizzle(pool), { migrationsFolder: "./drizzle" });
   const [{ after }] = (await pool.query(
     "SELECT count(*)::int AS after FROM drizzle.__drizzle_migrations",

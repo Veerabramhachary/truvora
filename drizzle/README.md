@@ -31,7 +31,7 @@ npm run db:push -- --force   # --force skips the confirmation prompt
 | --- | --- |
 | `CREATE TYPE payment_transaction_type` | `transaction_type` was declared twice with different value sets. `payment_transactions.type` pointed at the `(expense, income, subscription)` enum and could therefore never store `payment`. |
 | `payment_transactions.type` → `payment_transaction_type` | Same collision. |
-| `UNIQUE (provider_subscription_id)` on `app_subscriptions` | `ON CONFLICT (provider_subscription_id)` had no matching unique constraint, so every Stripe subscription event failed with `42P10`. |
+| `UNIQUE (provider_subscription_id)` on `app_subscriptions` | `ON CONFLICT (provider_subscription_id)` had no matching unique constraint, so every payment-provider subscription event failed with `42P10`. |
 | `CREATE TABLE feature_usage` | Added after the last surviving snapshot. |
 | `ALTER TYPE payment_provider ADD VALUE 'none'` | The Clerk webhook provisions new users with `provider: "none"`, which the previous enum rejected. |
 

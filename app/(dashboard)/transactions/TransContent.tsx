@@ -13,8 +13,9 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { useTable } from "@refinedev/core";
-import { ledgerFetch } from "@/lib/ledger-client";
 import { toast } from "sonner";
+import { FeatureGate } from "@/lib/feature-gate";
+import { downloadExport } from "@/lib/export-client";
 import { formatCurrency } from "@/lib/currencies";
 import { displayCategoryName } from "@/lib/categories";
 import { useLedger } from "@/components/ledger-provider";
@@ -96,27 +97,14 @@ const TransContent = () => {
     // Keep the filter bar mounted while results load, or typing would lose focus.
     const firstLoad = isLoading && transactions.length === 0;
 
-    const handleExport = async () => {
+    const handleExport = async (format: "csv" | "pdf") => {
         try {
-            // The whole ledger, not just this page — the server does the CSV.
-            const response = await ledgerFetch("/api/export?type=transactions");
-            if (!response.ok) {
-                throw response;
-            }
-
-            const blob = await response.blob();
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = "transactions.csv";
-            link.click();
-            URL.revokeObjectURL(url);
-            link.remove();
+            // What you see is what you get: the current search and filters are
+            // sent along. With none set it is the whole ledger, not one page.
+            await downloadExport({ source: "transactions", format, filters: refineFilters });
         } catch (error) {
             toast.error(
-                error instanceof Response
-                    ? "Export isn't available yet."
-                    : "Could not export transactions.",
+                error instanceof Error ? error.message : "Could not export transactions.",
             );
         }
     };
@@ -142,9 +130,15 @@ const TransContent = () => {
                     Sort Date
                 </Button>
 
-                <Button variant="outline" onClick={handleExport}>
+                <Button variant="outline" onClick={() => handleExport("csv")}>
                     Export CSV
                 </Button>
+
+                <FeatureGate feature="exportFormats">
+                    <Button variant="outline" onClick={() => handleExport("pdf")}>
+                        Export PDF
+                    </Button>
+                </FeatureGate>
             </Header>
 
             <RecordFilters value={filters} onChange={setFilters} types={TYPES} />

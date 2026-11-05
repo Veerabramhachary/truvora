@@ -13,17 +13,21 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { FeatureGate } from "@/lib/feature-gate";
 import { useDelete, useList } from "@refinedev/core";
-import { ledgerFetch } from "@/lib/ledger-client";
+import { downloadExport } from "@/lib/export-client";
 import { useRefreshAll } from "@/lib/use-refresh";
 import { format, isValid } from "date-fns";
 import FormExpense from "./FormExpense";
 import type { ExpenseRecord } from "./TransactionForm";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { RecordFilters } from "@/components/record-filters";
-import { activeFilterCount, EMPTY_FILTERS, toRefineFilters, type FilterState } from "@/lib/record-filter-state";
+import {
+    activeFilterCount,
+    EMPTY_FILTERS,
+    toRefineFilters,
+    type FilterState,
+} from "@/lib/record-filter-state";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete";
 import { toast } from "sonner";
-import { apiErrorMessage } from "@/lib/api-error";
 import { formatCurrency } from "@/lib/currencies";
 import {
     Dialog,
@@ -37,7 +41,7 @@ const PAGE_SIZE = 12;
 
 const ExpenseContent = () => {
     const [open, setOpen] = useState(false);
-    const [exporting, setExporting] = useState(false);
+    const [exporting, setExporting] = useState<"csv" | "pdf" | null>(null);
     const [editing, setEditing] = useState<ExpenseRecord | null>(null);
     const [pendingDelete, setPendingDelete] = useState<ExpenseRecord | null>(
         null,
@@ -68,31 +72,22 @@ const ExpenseContent = () => {
         setEditing(null);
     };
 
-    const handleExport = async () => {
-        setExporting(true);
+    const handleExport = async (exportFormat: "csv" | "pdf") => {
+        setExporting(exportFormat);
         try {
-            const response = await ledgerFetch("/api/export?type=expenses");
-            if (!response.ok) {
-                throw response;
-            }
-
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = "expenses.csv";
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
+            // What you see is what you get: the current search and filters are
+            // sent along. With none set it is the whole ledger.
+            await downloadExport({
+                source: "expenses",
+                format: exportFormat,
+                filters: refineFilters,
+            });
         } catch (error) {
-            const message =
-                error instanceof Response
-                    ? "Export isn't available yet."
-                    : apiErrorMessage(error, "Could not export expenses.");
-            toast.error(message);
+            toast.error(
+                error instanceof Error ? error.message : "Could not export expenses.",
+            );
         } finally {
-            setExporting(false);
+            setExporting(null);
         }
     };
 
@@ -100,9 +95,16 @@ const ExpenseContent = () => {
     // The data provider returns BaseRecord; assert the shape the API actually
     // sends so the cards below are typed instead of implicitly `any`.
     const data = (result?.data ?? []) as ExpenseRecord[];
-    
+
     const total = result?.total ?? data.length;
     const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    useEffect(() => {
+        if (!isLoading && result && page > pageCount) {
+            // The loaded total can shrink after the final item on this page is removed.
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setPage(pageCount);
+        }
+    }, [isLoading, result, page, pageCount]);
     // Keep the search box mounted while results load, or typing would lose focus.
     const firstLoad = isLoading && data.length === 0;
 
@@ -124,23 +126,44 @@ const ExpenseContent = () => {
                         <Button
                             variant="outline"
                             size="sm"
-                            onClick={handleExport}
-                            disabled={exporting}
+                            onClick={() => handleExport("csv")}
+                            disabled={exporting !== null}
                         >
-                            {exporting ? "Exporting..." : "Export"}
+                            {exporting === "csv" ? "Exporting..." : "Export CSV"}
+                        </Button>
+                    </FeatureGate>
+                    <FeatureGate feature="exportFormats">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleExport("pdf")}
+                            disabled={exporting !== null}
+                        >
+                            {exporting === "pdf" ? "Exporting..." : "Export PDF"}
                         </Button>
                     </FeatureGate>
                 </div>
             </Header>
-            <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && closeForm()}>
+            <Dialog
+                open={open}
+                onOpenChange={(nextOpen) => !nextOpen && closeForm()}
+            >
                 <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
                     <DialogHeader>
-                        <DialogTitle>{editing ? "Edit transaction" : "Add transaction"}</DialogTitle>
+                        <DialogTitle>
+                            {editing ? "Edit transaction" : "Add transaction"}
+                        </DialogTitle>
                         <DialogDescription>
-                            {editing ? "Update the details for this record." : "Add an expense or income to your ledger."}
+                            {editing
+                                ? "Update the details for this record."
+                                : "Add an expense or income to your ledger."}
                         </DialogDescription>
                     </DialogHeader>
-                    <FormExpense editing={editing} onClose={closeForm} onSaved={closeForm} />
+                    <FormExpense
+                        editing={editing}
+                        onClose={closeForm}
+                        onSaved={closeForm}
+                    />
                 </DialogContent>
             </Dialog>
 
@@ -154,26 +177,30 @@ const ExpenseContent = () => {
             />
 
             {isError ? (
-                <div role="alert" className="p-10 text-destructive text-center font-medium">
+                <div
+                    role="alert"
+                    className="p-10 text-destructive text-center font-medium"
+                >
                     Failed to load expenses. Please refresh the page.
                 </div>
             ) : firstLoad ? (
                 <div className="flex h-64 w-full items-center justify-center p-10">
-                    <p className="animate-pulse text-muted-foreground">Loading expenses...</p>
+                    <p className="animate-pulse text-muted-foreground">
+                        Loading expenses...
+                    </p>
                 </div>
             ) : data.length === 0 ? (
                 <div className="text-center p-20 border-2 border-dashed rounded-lg">
                     <p className="text-muted-foreground">
-                        {filtersActive ? "No expenses match your search or filters." : "No expenses found."}
+                        {filtersActive
+                            ? "No expenses match your search or filters."
+                            : "No expenses found."}
                     </p>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                     {data.map((item) => (
-                        <Card
-                            key={item.id}
-                            className="flex flex-col min-w-0"
-                        >
+                        <Card key={item.id} className="flex flex-col min-w-0">
                             <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
                                 <CardTitle className="text-base font-semibold truncate max-w-[150px]">
                                     {item.title}
@@ -194,7 +221,10 @@ const ExpenseContent = () => {
                                 {/* Fixed: Removed h1 for price to fix SEO/Accessibility */}
                                 <div>
                                     <p className="text-2xl font-bold tracking-tight">
-                                        {formatCurrency(Number(item.amount ?? 0), item.currency || "INR")}
+                                        {formatCurrency(
+                                            Number(item.amount ?? 0),
+                                            item.currency || "INR",
+                                        )}
                                     </p>
                                     <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
                                         {item.categoryName}
@@ -248,7 +278,10 @@ const ExpenseContent = () => {
             )}
 
             {total > PAGE_SIZE && (
-                <nav className="flex items-center justify-between" aria-label="Expenses pages">
+                <nav
+                    className="flex items-center justify-between"
+                    aria-label="Expenses pages"
+                >
                     <p className="text-sm text-muted-foreground">
                         {total} records · Page {page} of {pageCount}
                     </p>
@@ -257,7 +290,9 @@ const ExpenseContent = () => {
                             variant="outline"
                             size="sm"
                             disabled={page <= 1}
-                            onClick={() => setPage((current) => Math.max(1, current - 1))}
+                            onClick={() =>
+                                setPage((current) => Math.max(1, current - 1))
+                            }
                         >
                             Previous
                         </Button>
@@ -265,7 +300,11 @@ const ExpenseContent = () => {
                             variant="outline"
                             size="sm"
                             disabled={page >= pageCount}
-                            onClick={() => setPage((current) => Math.min(pageCount, current + 1))}
+                            onClick={() =>
+                                setPage((current) =>
+                                    Math.min(pageCount, current + 1),
+                                )
+                            }
                         >
                             Next
                         </Button>

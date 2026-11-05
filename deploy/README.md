@@ -8,7 +8,7 @@ Emergency kit. The app is a plain Next.js 16 server (`next build` → `next star
 | `VERCEL_URL` fallback in `lib/site.ts` | Set `NEXT_PUBLIC_APP_URL` explicitly |
 | `x-real-ip` injected by Vercel's edge | Your reverse proxy must set it (see [Client IP](#5-client-ip-and-reverse-proxy)) |
 
-Everything else — Neon, Clerk, Stripe, Upstash Redis, Resend — is host-agnostic.
+Everything else — Neon, Clerk, Upstash Redis, Resend — is host-agnostic.
 
 ## TL;DR
 
@@ -18,7 +18,7 @@ cp .env.example .env       # fill in every required value (see §2)
 npm run db:migrate         # fresh DBs; for an existing DB use: npm run db:push -- --force
 npm run insert-plans       # once, if the plans table is empty
 cd deploy && set -a && . ../.env && set +a && docker compose up -d --build
-# then: §5 proxy, §6 cron, §7 webhooks, §8 smoke test
+# then: §5 proxy, §6 cron, §7 webhook, §8 smoke test
 ```
 
 No Docker? Use the [bare Node path](#bare-node-alternative-no-docker).
@@ -28,7 +28,7 @@ No Docker? Use the [bare Node path](#bare-node-alternative-no-docker).
 Any of Railway, Render, Fly.io, Hetzner/DigitalOcean VPS, Coolify, AWS ECS — anything that runs a Node 20+ container or VM. Requirements:
 
 - **Outbound WebSocket support.** `db/index.ts` uses `neon-serverless` `Pool`, which connects to Neon over WebSocket. Most hosts allow this; a locked-down egress would require switching to the HTTP `neon()` driver or plain `pg`.
-- **A public HTTPS origin** for Clerk/Stripe webhooks.
+- **A public HTTPS origin** for the Clerk webhook.
 
 ## 2. Environment
 
@@ -40,7 +40,7 @@ Copy `.env.example` → `.env` and fill every value. The load-bearing ones:
 | `ENCRYPTION_PASSPHRASE`, `ENCRYPTION_SALT` | **Copy the production values exactly.** There is no key rotation path — different values make every existing `description`/`note`/`metadata` row permanently unreadable. |
 | `NEXT_PUBLIC_APP_URL` | Real production origin, e.g. `https://app.example.com`. Baked into the client bundle at **build** time. |
 | `CLERK_SECRET_KEY`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Same instance as before, or new keys if you move instances |
-| `CLERK_WEBHOOK_SECRET`, `STRIPE_WEBHOOK_SECRET` | Regenerate when you change webhook URLs (§7) |
+| `CLERK_WEBHOOK_SECRET` | Regenerate when you change the webhook URL (§7) |
 | `CRON_SECRET` | Pick any long random string; used by both the app and the cron caller (§6) |
 | `UPSTASH_REDIS_REST_URL/TOKEN` | Optional — without it rate limits are bypassed with a logged warning |
 | `RESEND_API_KEY`, `RENEWAL_EMAIL_FROM` | Reminder emails (cron `subscriptionsTC`). The renewal job (`subscription-renewals`) needs only `CRON_SECRET` |
@@ -84,7 +84,7 @@ npm start                        # serves on :3000
 
 `lib/rate-limit.ts:getClientIp` reads `x-real-ip` and deliberately ignores client-supplied `X-Forwarded-For` (spoofable). Vercel set this header at its edge; on your host the **reverse proxy must set it**, or every visitor shares one rate-limit bucket (`"unknown"`).
 
-nginx (the proxy body is passed through untouched, which also keeps Stripe/Clerk raw-body signature verification working):
+nginx (the proxy body is passed through untouched, which keeps Clerk raw-body signature verification working):
 
 ```nginx
 server {
@@ -138,22 +138,20 @@ curl -H "Authorization: Bearer $CRON_SECRET" "$TRUVORA_BASE_URL/api/crons/subscr
 
 Existing subscriptions never had `nextDate` advanced, so the first real run catches every one of them up (up to 120 cycles each per run) and will add many `subscription` rows to transaction history and exports.
 
-## 7. Webhooks
+## 7. Webhook
 
-Point both at the new origin (both are already public in `proxy.ts`):
+Point the Clerk webhook at the new origin (it is already public in `proxy.ts`):
 
 | Provider | URL |
 | --- | --- |
-| Stripe | `https://app.example.com/api/webhooks/stripe` |
 | Clerk | `https://app.example.com/api/webhooks/clerk` |
 
-Both verify signatures on the **raw request body** — do not put anything in the proxy that re-serializes JSON. Copy the new signing secrets into `.env` (`STRIPE_WEBHOOK_SECRET`, `CLERK_WEBHOOK_SECRET`) and restart. In Clerk, also update the instance's allowed origins/JWT template audience to the new domain. In Stripe, update the live/test mode domain settings.
+The webhook verifies the signature on the **raw request body** — do not put anything in the proxy that re-serializes JSON. Copy the new signing secret into `.env` (`CLERK_WEBHOOK_SECRET`) and restart. In Clerk, also update the instance's allowed origins/JWT template audience to the new domain.
 
 ## 8. Smoke test
 
 - [ ] `GET /` and `/pricing` return 200 over HTTPS
 - [ ] Sign in, dashboard loads, an expense and a subscription create successfully
-- [ ] Stripe test-mode event → `/api/webhooks/stripe` returns 200 in the Stripe dashboard
 - [ ] Clerk test event → `/api/webhooks/clerk` returns 200; a new user gets an `app_subscriptions` row
 - [ ] `./deploy/trigger-cron.sh` exits 0; check `/var/log/truvora-cron.log`
 - [ ] No `[rate-limit] Upstash Redis is not configured` warning (unless intentionally skipped)

@@ -9,7 +9,6 @@ import { app_subscriptions } from "./schema/plans";
 import {subscriptions, transactions, categories } from './schema/schema'
 import { paymentTransactions } from "./schema/appTransactions";
 import { accountDeletions } from "./schema/account-deletions";
-import { platformDiscountRedemptions } from "./schema/platform-discounts";
 import { ledgers } from "./schema/ledgers";
 
 nextEnv.loadEnvConfig(process.cwd());
@@ -22,7 +21,6 @@ export const schema = {
     categories,
     paymentTransactions,
     accountDeletions,
-    platformDiscountRedemptions,
     ledgers,
 };
 const pool = new Pool({

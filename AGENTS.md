@@ -1,6 +1,6 @@
 # AGENTS.md — Truvora
 
-Privacy-first personal finance app: Next.js 16 (App Router, Turbopack) + React 19, Clerk, Stripe, Drizzle + Neon Postgres, Refine (`simple-rest`) + TanStack Query, shadcn/ui + Tailwind v4.
+Privacy-first personal finance app: Next.js 16 (App Router, Turbopack) + React 19, Clerk, Drizzle + Neon Postgres, Refine (`simple-rest`) + TanStack Query, shadcn/ui + Tailwind v4.
 
 ## Commands
 
@@ -39,7 +39,7 @@ Seed scripts attach rows to Clerk user id in `DEV_ID`. Plans must exist or Clerk
 - `app/(dashboard)/components/Providers.tsx` — Refine root. `dataProvider("/api")` means resource names map to `/api/<resource>`.
 - `db/schema/*.ts` — sole Drizzle schema source (`drizzle.config.ts` glob). Do not add compiled `.js` schema copies under `drizzle/`.
 - `db/index.ts` — Neon serverless Pool + `drizzle`; loads `dotenv/config`.
-- `lib/` — feature access, Stripe client (lazy), upgrade flow, site URL.
+- `lib/` — feature access, upgrade flow, site URL.
 - `scripts/` — one-off tsx seeds; not part of the app runtime.
 
 Path alias: `@/*` → repo root (`tsconfig.json`).
@@ -49,13 +49,13 @@ Path alias: `@/*` → repo root (`tsconfig.json`).
 - **Money** is `numeric`/`decimal` in Postgres → Drizzle returns **strings**. Use `Number()` (or decimal-safe helpers) before arithmetic/formatting.
 - **Encrypted columns** (`encryptedText` / `encryptedJson` in `db/schema/custom-types.ts`): `description`, `note`, `metadata` (and invoice `lines`). AES-256-GCM via `ENCRYPTION_PASSPHRASE` + `ENCRYPTION_SALT`. **No key rotation** — changing env makes ciphertext unreadable. Cannot WHERE/ORDER BY on those columns in SQL. Key is lazy so `db:generate` works without env set.
 - **Refine list contract** (`@refinedev/simple-rest`): accept `_start`, `_end`, `_sort`, `_order`; respond with a **bare JSON array** and `X-Total-Count`. Primary key field must be named `id` on list items. Clamp page size (existing routes use max 100).
-- **Users** are provisioned by the Clerk webhook (`app/api/webhooks/clerk/route.ts`), not by local signup handlers. Checkout can also insert a missing user row. Empty `plans` table → sign-up still works but no `app_subscriptions` row.
+- **Users** are provisioned by the Clerk webhook (`app/api/webhooks/clerk/route.ts`), not by local signup handlers. Empty `plans` table → sign-up still works but no `app_subscriptions` row.
 - **Feature gates**: server helpers in `lib/feature-access.ts` / `lib/subscription.ts`; UI wraps some controls in `<FeatureGate feature="...">` (`lib/feature-gate.tsx`). Some product surfaces are still client-gated only — when adding paid features, enforce on the route handler too.
 - Validation is **Zod v4** (`z.coerce`, `error.issues`). API errors often return `{ error: string }`; client helpers live in `lib/api-error.ts`.
 
 ## Env & ops
 
-- Required for most local work: `DATABASE_URL`, `ENCRYPTION_PASSPHRASE`, `ENCRYPTION_SALT`. Webhooks: `CLERK_WEBHOOK_SECRET`, `STRIPE_WEBHOOK_SECRET`. Billing: `STRIPE_SECRET_KEY`. Reminders cron: `RESEND_API_KEY`, `CRON_SECRET` (fail-closed if unset).
+- Required for most local work: `DATABASE_URL`, `ENCRYPTION_PASSPHRASE`, `ENCRYPTION_SALT`. Webhooks: `CLERK_WEBHOOK_SECRET`. Reminders cron: `RESEND_API_KEY`, `CRON_SECRET` (fail-closed if unset).
 - Cron path `/api/crons/*` is public in middleware and authenticates with `Authorization: Bearer $CRON_SECRET`.
 - Webhooks must verify signatures on **raw body** (`req.text()`), not re-serialized JSON.
 - `NEXT_PUBLIC_APP_URL` feeds sitemap/metadata via `lib/site.ts` (falls back to localhost).
@@ -64,7 +64,7 @@ Path alias: `@/*` → repo root (`tsconfig.json`).
 ## When changing code
 
 - Keep route protection and public allow-list in `proxy.ts` in sync with any new public pages/APIs.
-- Do not log or return driver/Stripe internals on 500s; prefer generic messages + `console.error` server-side.
+- Do not log or return driver/provider internals on 500s; prefer generic messages + `console.error` server-side.
 - After schema changes: `db:generate`, then `npx tsc --noEmit`.
 
 <!-- BEGIN:nextjs-agent-rules -->

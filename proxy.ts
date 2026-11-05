@@ -15,10 +15,8 @@ const isPublicRoute = createRouteMatcher([
     "/auth/verify-email(.*)",
     "/sso-callback(.*)",
     "/api/webhooks/clerk(.*)",
-    "/api/webhooks/stripe(.*)",
     "/api/account/deletion-status(.*)",
     "/api/plans(.*)",
-    "/api/stripe/prices(.*)",
     // Cron routes authenticate with the CRON_SECRET bearer token instead of a
     // Clerk session, so they must be reachable without a signed-in user.
     "/api/crons/(.*)",
@@ -130,7 +128,7 @@ export async function proxy(req: NextRequest, evt: NextFetchEvent) {
         // 1️⃣ Allow public routes immediately
         if (isPublicRoute(request)) {
             const pathname = request.nextUrl.pathname;
-            if (pathname === "/api/plans" || pathname === "/api/stripe/prices") {
+            if (pathname === "/api/plans") {
                 const result = await checkRateLimits(`ip:${getClientIp(request)}`, ["public"]);
                 if (result && !result.allowed) {
                     return NextResponse.json(
