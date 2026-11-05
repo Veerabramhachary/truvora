@@ -12,7 +12,7 @@ For instructions on using Truvora, see the [user guide](USER_GUIDE.md).
 | --- | --- |
 | Framework | Next.js 16 (App Router, Turbopack) + React 19 |
 | Auth | Clerk |
-| Billing | Stripe |
+| Billing | Local plans and feature gates; payments are not configured |
 | Database | Postgres (Neon) via Drizzle ORM |
 | UI | shadcn/ui + Tailwind CSS v4, Radix, Lucide |
 | Data fetching | Refine (simple-rest) + TanStack Query |
@@ -22,7 +22,6 @@ For instructions on using Truvora, see the [user guide](USER_GUIDE.md).
 - Node.js 20 or newer
 - A Postgres database (Neon works well)
 - A Clerk application
-- A Stripe account with products and prices
 - A Resend account (renewal reminders)
 
 ## Getting started
@@ -45,9 +44,8 @@ you if you skip them:
   a `description`, `note` or `metadata` column can be read or written. **There
   is no key rotation path**: changing either value makes existing ciphertext
   permanently unreadable.
-- `CLERK_WEBHOOK_SECRET` and `STRIPE_WEBHOOK_SECRET` — required by the two
-  webhook routes, which are the only way a new user or a new subscription
-  reaches the database.
+- `CLERK_WEBHOOK_SECRET` — required by the Clerk webhook that provisions new
+  users and their default plan.
 
 ## Database
 

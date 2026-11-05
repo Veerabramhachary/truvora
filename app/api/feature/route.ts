@@ -16,6 +16,7 @@ import type { FeatureLimits } from "@/lib/subscription";
 */
 const FEATURE_KEYS = [
     "exports",
+    "exportFormats",
     "subscriptions",
     "charts",
     "earlyAccess",
@@ -73,6 +74,21 @@ export async function GET(req: NextRequest) {
             const limit = await getFeatureLimit(userId, "charts");
             const allowed = limit === "comparative" || limit === "advanced";
             return NextResponse.json({ allowed, limit: allowed ? limit : null });
+        }
+
+        if (feature === "exportFormats") {
+            // Answers "can this plan export PDF?" (and at which level) for the UI;
+            // /api/export enforces it on the server regardless.
+            const formats = await getFeatureLimit(userId, "exportFormats");
+            const allowed = Boolean(
+                formats && typeof formats === "object" && "pdf" in formats && formats.pdf,
+            );
+            return NextResponse.json({
+                allowed,
+                limit: allowed && formats && typeof formats === "object" && "pdfLevel" in formats
+                    ? formats.pdfLevel
+                    : null,
+            });
         }
 
         // 3. Get subscription gate to access limits (optional – we can directly call canUseFeature/tryConsumeFeature)

@@ -12,7 +12,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { FeatureGate } from "@/lib/feature-gate";
 import { useDelete, useList } from "@refinedev/core";
-import { ledgerFetch } from "@/lib/ledger-client";
+import { downloadExport } from "@/lib/export-client";
 import { useRefreshAll } from "@/lib/use-refresh";
 import { format, isValid } from "date-fns";
 import { useEffect, useState } from "react";
@@ -20,7 +20,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import SubsForm, { type SubscriptionRecord } from "./SubsForm";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete";
 import { toast } from "sonner";
-import { apiErrorMessage } from "@/lib/api-error";
 import { formatCurrency } from "@/lib/currencies";
 import {
     Dialog,
@@ -34,10 +33,11 @@ const SubscContent = () => {
     const [formOpen, setFormOpen] = useState(false);
     const router = useRouter();
     const searchParams = useSearchParams();
-    const open = formOpen || searchParams.get("create") === "1";
-    const [exporting, setExporting] = useState(false);
+    const [exporting, setExporting] = useState<"csv" | "pdf" | null>(null);
     const [subscriptionLimit, setSubscriptionLimit] = useState<number | null>(null);
     const [serverActiveCount, setServerActiveCount] = useState(0);
+    const [subscriptionFeatureAllowed, setSubscriptionFeatureAllowed] =
+        useState(false);
     const [editing, setEditing] = useState<SubscriptionRecord | null>(null);
     const [pendingDelete, setPendingDelete] =
         useState<SubscriptionRecord | null>(null);
@@ -57,32 +57,17 @@ const SubscContent = () => {
         }
     };
 
-    const handleExport = async () => {
-        setExporting(true);
+    const handleExport = async (exportFormat: "csv" | "pdf") => {
+        setExporting(exportFormat);
         try {
-            const response = await ledgerFetch("/api/export?type=subscriptions");
-            if (!response.ok) {
-                // Surface the server's reason instead of a console-only 404.
-                throw response;
-            }
-
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = "subscriptions.csv";
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
+            await downloadExport({ source: "subscriptions", format: exportFormat });
         } catch (error) {
-            const message =
-                error instanceof Response
-                    ? "Export isn't available yet."
-                    : apiErrorMessage(error, "Could not export subscriptions.");
-            toast.error(message);
+            // The server's own reason (plan limit, PDF not included, ...).
+            toast.error(
+                error instanceof Error ? error.message : "Could not export subscriptions.",
+            );
         } finally {
-            setExporting(false);
+            setExporting(null);
         }
     };
 
@@ -100,7 +85,14 @@ const SubscContent = () => {
         let cancelled = false;
         fetch("/api/feature?feature=subscriptions", { cache: "no-store" })
             .then((response) => response.json())
-            .then((payload: { limit?: number | null; usage?: number }) => {
+            .then((payload: {
+                allowed?: boolean;
+                limit?: number | null;
+                usage?: number;
+            }) => {
+                if (!cancelled) {
+                    setSubscriptionFeatureAllowed(payload.allowed === true);
+                }
                 if (!cancelled && typeof payload.limit === "number") {
                     setSubscriptionLimit(payload.limit);
                 }
@@ -109,8 +101,7 @@ const SubscContent = () => {
                 }
             })
             .catch(() => {
-                // FeatureGate still enforces the server-side limit if this
-                // supplemental display request fails.
+                if (!cancelled) setSubscriptionFeatureAllowed(false);
             });
         return () => {
             cancelled = true;
@@ -118,6 +109,15 @@ const SubscContent = () => {
     }, [activeCardCount]);
 
     const currentActiveCount = Math.max(activeCardCount, serverActiveCount);
+    const withinSubscriptionLimit =
+        subscriptionLimit === null ||
+        subscriptionLimit === -1 ||
+        currentActiveCount < subscriptionLimit;
+    const open =
+        formOpen ||
+        (searchParams.get("create") === "1" &&
+            subscriptionFeatureAllowed &&
+            withinSubscriptionLimit);
 
     // 1. Consistent Loading State (Prevents CLS)
     if (isLoading) {
@@ -161,10 +161,20 @@ const SubscContent = () => {
                         <Button
                             variant="outline"
                             size="sm"
-                            onClick={handleExport}
-                            disabled={exporting}
+                            onClick={() => handleExport("csv")}
+                            disabled={exporting !== null}
                         >
-                            {exporting ? "Exporting..." : "Export"}
+                            {exporting === "csv" ? "Exporting..." : "Export CSV"}
+                        </Button>
+                    </FeatureGate>
+                    <FeatureGate feature="exportFormats">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleExport("pdf")}
+                            disabled={exporting !== null}
+                        >
+                            {exporting === "pdf" ? "Exporting..." : "Export PDF"}
                         </Button>
                     </FeatureGate>
                 </div>

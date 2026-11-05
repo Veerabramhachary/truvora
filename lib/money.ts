@@ -22,12 +22,6 @@ export function fromPaise(value: bigint): string {
     return `${negative ? "-" : ""}${absolute / BigInt(100)}.${(absolute % BigInt(100)).toString().padStart(2, "0")}`;
 }
 
-/** Stripe amounts are integer paise. Convert without float division. */
-export function fromMinorUnits(value: number): string {
-    if (!Number.isSafeInteger(value)) throw new Error("Invalid payment amount");
-    return fromPaise(BigInt(value));
-}
-
 export const positiveMoneySchema = z.coerce
     .string()
     .trim()

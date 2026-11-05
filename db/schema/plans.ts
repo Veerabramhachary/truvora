@@ -26,7 +26,6 @@ export const app_subscriptionsStatusEnum = pgEnum("app_subscriptions_status", [
     "unpaid",
 ]);
 export const paymentProviderEnum = pgEnum("payment_provider", [
-    "stripe",
     "paypal",
     "braintree",
     "none",
@@ -115,4 +114,3 @@ export const subscriptionsRelations = relations(
         transactionsTransactions: many(paymentTransactions),
     }),
 );
-

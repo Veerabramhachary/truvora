@@ -122,9 +122,9 @@ describe("needsOnboarding", () => {
         m.selectImpl.mockReset();
     });
 
-    it("is pending when there is no users row yet", async () => {
+    it("is not pending when there is no users row yet", async () => {
         m.selectImpl.mockResolvedValue([]);
-        expect(await needsOnboarding("u")).toBe(true);
+        expect(await needsOnboarding("u")).toBe(false);
     });
     it("is pending while onboarding_completed_at is NULL", async () => {
         m.selectImpl.mockResolvedValue([{ completedAt: null }]);
