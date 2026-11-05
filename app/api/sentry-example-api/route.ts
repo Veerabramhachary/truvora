@@ -7,7 +7,8 @@ class SentryExampleAPIError extends Error {
   }
 }
 
-// A faulty API route to test Sentry's error monitoring
+// Temporary Sentry diagnostic route; remove this and app/sentry-example-page
+// when the test page is no longer needed.
 export async function GET() {
   // Opt out of prerendering so the error is thrown at request time
   await connection();
