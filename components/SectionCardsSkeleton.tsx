@@ -12,6 +12,7 @@ import {
 const SectionCardsSkeleton = () => {
     return (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:h-full xl:grid-cols-1 xl:grid-rows-3 min-h-[280px]">
+            <span className="sr-only">Loading dashboard cards</span>
             {/* Income */}
             <Card className="@container/card min-h-0 gap-2 py-3">
                 <CardHeader className="gap-1 px-3 py-0 sm:px-4">
