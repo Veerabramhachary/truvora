@@ -39,12 +39,16 @@ them in a staging environment configured like production.
 
 ## Implementation still outstanding
 
-- [ ] **Payment launch:** no payment provider is currently integrated. Before
-      accepting payments, select a provider and complete end-to-end staging
-      coverage for checkout, plan matching, webhook signature verification and
-      retries, subscription state changes, refunds/failures as applicable,
-      customer mapping, and cancellation. Update the privacy policy and
-      configure live credentials only after staging passes.
+- [ ] **Payment launch:** Razorpay checkout, signature verification and the
+      webhook are implemented (see `RAZORPAY_SETUP.md`). Before accepting live
+      payments, complete end-to-end staging coverage for checkout, plan
+      matching, webhook retries, subscription state changes, refunds/failures,
+      customer mapping, and cancellation. Update the Terms and Privacy Policy
+      (already drafted for Razorpay) with legal guidance, and configure live
+      credentials only after staging passes.
+- [ ] **Recurring billing:** the current Razorpay flow grants one billing period
+      and does not create an automatic mandate. Add Razorpay Subscriptions (or
+      an equivalent renewal charge) before advertising auto-renewal.
 - [x] **Request rate limiting:** shared Upstash Redis limits cover authenticated
       APIs, exports, sensitive account/billing actions, and public plans/prices
       endpoints. Configure Redis credentials in each deployed environment and
@@ -61,8 +65,9 @@ them in a staging environment configured like production.
 - [ ] Set and verify production environment variables: `DATABASE_URL`,
       `ENCRYPTION_PASSPHRASE`, `ENCRYPTION_SALT`, Clerk keys and webhook secret,
       `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_SUPPORT_EMAIL`, `RESEND_API_KEY`,
-      `RENEWAL_EMAIL_FROM`, `CRON_SECRET`, `UPSTASH_REDIS_REST_URL`, and
-      `UPSTASH_REDIS_REST_TOKEN`. Keep secrets out of source and CI logs.
+      `RENEWAL_EMAIL_FROM`, `CRON_SECRET`, `UPSTASH_REDIS_REST_URL`,
+      `UPSTASH_REDIS_REST_TOKEN`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, and
+      `RAZORPAY_WEBHOOK_SECRET`. Keep secrets out of source and CI logs.
 - [ ] Confirm database migrations are applied, backups are running, and a
       restore has been tested. Protect the encryption passphrase and salt:
       changing them makes existing encrypted values unreadable.

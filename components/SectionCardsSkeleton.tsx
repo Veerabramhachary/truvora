@@ -3,10 +3,10 @@ import { Skeleton } from "./ui/skeleton";
 import {
     Card,
     CardDescription,
-    CardHeader,
     CardTitle,
     CardAction,
     CardContent,
+    CardHeader,
 } from "./ui/card";
 
 const SectionCardsSkeleton = () => {

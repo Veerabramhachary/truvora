@@ -4,13 +4,15 @@ import { and, eq, notInArray, type InferInsertModel } from "drizzle-orm";
 
 type PlanData = Pick<
     InferInsertModel<typeof plans>,
-    "name" | "description" | "price" | "featureLimits" | "features" | "metadata"
+    "name" | "description" | "price" | "interval" | "featureLimits" | "features" | "metadata"
 >;
 const planData: PlanData[] = [
     {
         name: "Free",
-        description: "Track recurring spending and stay ahead of renewals.",
+        description:
+            "For individuals organizing everyday personal apps and essential subscriptions.",
         price: "0.00",
+        interval: "month" as const,
         featureLimits: {
             subscriptions: { limit: 10 },
             exports: { limit: 10, interval: "month" },
@@ -22,18 +24,23 @@ const planData: PlanData[] = [
                 xlsx: false,
             },
             customCategories: false,
+            taxSummaryRows: { limit: 50 },
         },
         features: [
-            "Track up to 10 subscriptions",
+            "Track up to 10 active subscriptions in INR",
+            "Personal and Business ledger partitioning",
             "10 CSV exports per month",
-            "Renewal reminders",
+            "Startard 3-day renewal alerts",
+            "Encrypted in transit(TLS 1.3) and at rest(AES-256)",
         ],
         metadata: { tier: "free" },
     },
     {
         name: "Starter",
-        description: "More room to organize spending and export your data.",
-        price: "99.00",
+        description:
+            "For growing collections, invoice archives, and detailed category breakdowns.",
+        price: "129.00",
+        interval: "month" as const,
         featureLimits: {
             subscriptions: { limit: 50 },
             charts: "comparative",
@@ -46,20 +53,23 @@ const planData: PlanData[] = [
                 xlsx: false,
             },
             customCategories: true,
+            taxSummaryRows: { limit: 500 },
         },
         features: [
-            "Track up to 50 subscriptions",
+            "Track up to 50 subscriptions (40 more than Free)",
             "Expense vs subscription breakdown",
             "Custom categories and renewal reminders",
-            "100 CSV exports per month",
+            "100 CSV exports per month (10x free)",
             "Basic PDF exports per month",
         ],
         metadata: { tier: "starter" },
     },
     {
-        name: "Pro",
-        description: "Advanced insights and expanded exports.",
+        name: "Stroka Pro",
+        description:
+            "For businesses, freelancers, and agencies managing GST & CA tax filing.",
         price: "299.00",
+        interval: "month" as const,
         featureLimits: {
             subscriptions: { limit: -1 },
             charts: "advanced",
@@ -75,18 +85,91 @@ const planData: PlanData[] = [
                 xlsx: false,
             },
             customCategories: true,
+            taxSummaryRows: { limit: -1 },
         },
         features: [
-            "Unlimited subscriptions",
+            "Unlimited personal & business subscriptions",
+            "Tax Summary Engine (up to 400 days per request)",
+            "High capacity: Up to 20,000 tagged rows per summary",
+            "18% GST expense breakdown & Tax Summaries",
+            "Customizable alert lead times (1, 3, 7, or 14 days)",
             "Advanced charts",
-            "Saved views (coming soon)",
-            "Renewal reminders",
-            "Monthly report (coming soon)",
             "1,000 CSV exports per month",
             "Advanced PDF exports per month",
+            "Saved views (coming soon)",
+            "Monthly report (coming soon)",
             "XLSX exports (coming soon)",
         ],
         metadata: { tier: "pro" },
+    },
+    {
+        name: "Starter Yearly",
+        description:
+            "For growing collections, invoice archives, and detailed category breakdowns. Billed yearly (2 months free).",
+        price: "1290.00",
+        interval: "year" as const,
+        featureLimits: {
+            subscriptions: { limit: 50 },
+            charts: "comparative",
+            exports: { limit: 100, interval: "month" },
+            reminders: "email",
+            exportFormats: {
+                csv: true,
+                pdf: true,
+                pdfLevel: "basic",
+                xlsx: false,
+            },
+            customCategories: true,
+            taxSummaryRows: { limit: 500 },
+        },
+        features: [
+            "Track up to 50 subscriptions (40 more than Free)",
+            "Expense vs subscription breakdown",
+            "Custom categories and renewal reminders",
+            "100 CSV exports per month (10x free)",
+            "Basic PDF exports per month",
+            "Billed once per year — saves 2 months vs monthly",
+        ],
+        metadata: { tier: "starter", billing: "yearly" },
+    },
+    {
+        name: "Stroka Pro Yearly",
+        description:
+            "For businesses, freelancers, and agencies managing GST & CA tax filing. Billed yearly (2 months free).",
+        price: "2990.00",
+        interval: "year" as const,
+        featureLimits: {
+            subscriptions: { limit: -1 },
+            charts: "advanced",
+            exports: { limit: 1000, interval: "month" },
+            reminders: "email",
+            // Saved views are not built yet (coming soon); basic search and filter
+            // is available on every plan, so this flag stays off for now.
+            viewsAndFilters: false,
+            exportFormats: {
+                csv: true,
+                pdf: true,
+                pdfLevel: "advanced",
+                xlsx: false,
+            },
+            customCategories: true,
+            taxSummaryRows: { limit: -1 },
+        },
+        features: [
+            "Unlimited personal & business subscriptions",
+            "Tax Summary Engine (up to 400 days per request)",
+            "High capacity: Up to 20,000 tagged rows per summary",
+            "18% GST expense breakdown & Tax Summaries",
+            "Customizable alert lead times (1, 3, 7, or 14 days)",
+            "Advanced charts",
+            "1,000 CSV exports per month",
+            "Advanced PDF exports per month",
+            "Saved views (coming soon)",
+            "Monthly report (coming soon)",
+            "XLSX exports (coming soon)",
+            "Billed once per year — saves 2 months vs monthly",
+        ],
+        metadata: { tier: "pro", billing: "yearly" },
     },
 ];
 
@@ -107,7 +190,7 @@ async function seedPlans() {
         const values = {
             ...plan,
             currency: "INR",
-            interval: "month" as const,
+            interval: plan.interval,
             intervalCount: 1,
             trialDays: 0,
             isActive: true,
@@ -121,7 +204,7 @@ async function seedPlans() {
                 and(
                     eq(plans.name, plan.name),
                     eq(plans.currency, "INR"),
-                    eq(plans.interval, "month"),
+                    eq(plans.interval, plan.interval),
                 ),
             )
             .limit(1);

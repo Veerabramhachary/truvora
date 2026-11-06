@@ -23,7 +23,7 @@ Truvora is a manual personal/business finance tracker. Users enter records thems
 | CSV and PDF exports | Export subscriptions, expenses/income, or transactions. Expense and transaction exports accept the list filters. PDF exports are plan-gated; advanced PDFs include summaries, and business PDFs can include tax labels. | Export allowance is monthly and shared across CSV/PDF. PDF includes at most 2,000 rows and notes when results are truncated. Text search in exports has the same 5,000-row scan cap. Subscription exports do not support search/list filters. CSV and PDF do not export notes/descriptions. XLSX is not implemented. |
 | Renewal reminders | Email reminders are sent through the Resend-backed scheduled route, with duplicate-send protection. | Requires the cron schedule, `CRON_SECRET`, `RESEND_API_KEY`, and `RENEWAL_EMAIL_FROM`. The seeded plans specify email reminders. Delivery depends on deployment configuration and the email provider. |
 | Account deletion | Settings can request permanent deletion and check a pending deletion's status. A scheduled job retries cleanup that could not complete immediately. | Deletion is irreversible. Limited billing totals may be retained where required; provider backups/logs may persist temporarily. Deletion/status processing needs the scheduled job and `CRON_SECRET`. |
-| Pricing and billing display | Public pricing and signed-in billing pages display active plans and current subscription information. | The seeded plans are monthly and INR-denominated. Upgrade buttons are disabled; the checkout API returns unavailable while payments are disabled in code. |
+| Pricing and billing display | Public pricing and signed-in billing pages display active plans and current subscription information. Paid plans can be purchased through Razorpay checkout when provider keys are configured. | The seeded plans are monthly and INR-denominated. Checkout is server-priced and signature-verified; with no `RAZORPAY_*` environment variables the Upgrade buttons stay disabled and the checkout API returns unavailable. |
 | Public and legal pages | Landing page, pricing, privacy policy, and terms pages are available. | These do not imply bank connectivity, paid checkout, or other integrations. |
 | Appearance | Light, dark, and system theme choices are available. | Theme preference is a UI setting; it does not affect financial data or plan entitlements. |
 | Referral attribution | A `ref` query parameter can be captured at signup and attached to Clerk user metadata for campaign/discount lookup. | The value is trimmed, lowercased, and limited to 64 characters. This is attribution plumbing, not an available referral payout or checkout flow. |
@@ -35,10 +35,10 @@ Truvora is a manual personal/business finance tracker. Users enter records thems
 | Seed plan | Price | Active subscriptions | Exports per month | Charts | PDF | Custom categories | Reminders |
 |---|---:|---:|---:|---|---|---|---|
 | Free | INR 0 | 10 | 10 | No comparative/advanced chart tier | No | No | Email |
-| Starter | INR 99 | 50 | 100 | Comparative | Basic | Yes | Email |
+| Starter | INR 129 | 50 | 100 | Comparative | Basic | Yes | Email |
 | Pro | INR 299 | Unlimited (`-1`) | 1,000 | Advanced | Advanced | Yes | Email |
 
-All three seeded plans enable CSV. None enables XLSX. The Pro seed contains a disabled saved-views flag and describes saved views, monthly reports, and XLSX as coming soon. Paid checkout is disabled, so the displayed paid-plan prices are not currently purchasable through the app.
+All three seeded plans enable CSV. None enables XLSX. The Pro seed contains a disabled saved-views flag and describes saved views, monthly reports, and XLSX as coming soon. Paid checkout is available through Razorpay only when `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, and `RAZORPAY_WEBHOOK_SECRET` are configured and the migration has been applied (see `RAZORPAY_SETUP.md`); otherwise the displayed paid-plan prices are not purchasable through the app.
 
 ## Request and data limits
 
@@ -51,7 +51,7 @@ All three seeded plans enable CSV. None enables XLSX. The Pro seed contains a di
 | Rate-limit availability | Limits use Upstash Redis. If Redis credentials are absent or a Redis request fails, requests are allowed and a warning is logged; limits therefore depend on correctly configured Redis. |
 | Record list page size | Maximum 100 rows per page for expenses, subscriptions, and transactions. |
 | Decrypted text search | Up to 5,000 rows scanned per query; encrypted fields cannot be filtered in SQL. |
-| Tax summary | Up to 400 days per request and 20,000 tagged rows per summary. |
+| Tax summary | Up to 400 days per request; tagged rows: Free 50, Starter 500, Pro unlimited |
 | PDF export | Maximum 2,000 included rows per export. |
 | Category name | Maximum 40 characters for a custom category. |
 | Business ledger name | Maximum 40 characters. |

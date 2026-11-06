@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db";
 import { app_subscriptions, plans } from "@/db/schema/plans";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, gte, or } from "drizzle-orm";
 import Link from "next/link";
 import { BadgeCheck, Sparkles } from "lucide-react";
 import {
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { isRazorpayConfigured } from "@/lib/razorpay";
 
 export const metadata = { title: "Billing" };
 
@@ -36,13 +37,23 @@ export default async function BillingPage() {
                   .select({ subscription: app_subscriptions, plan: plans })
                   .from(app_subscriptions)
                   .innerJoin(plans, eq(app_subscriptions.planId, plans.id))
-                  .where(eq(app_subscriptions.userId, userId))
+                  .where(
+                      and(
+                          eq(app_subscriptions.userId, userId),
+                          or(
+                              eq(app_subscriptions.status, "active"),
+                              eq(app_subscriptions.status, "trialing"),
+                          ),
+                          gte(app_subscriptions.currentPeriodEnd, new Date()),
+                      ),
+                  )
                   .limit(1)
             : Promise.resolve([]),
     ]);
 
     const currentPlan = current[0]?.plan ?? null;
     const subscription = current[0]?.subscription ?? null;
+    const paymentsEnabled = isRazorpayConfigured();
 
     return (
         <div className="flex flex-1 flex-col">
@@ -72,7 +83,7 @@ export default async function BillingPage() {
                                     Current subscription
                                 </CardTitle>
                                 <CardDescription>
-                                    Renews{" "}
+                                    Current period ends{" "}
                                     {new Date(
                                         subscription.currentPeriodEnd,
                                     ).toLocaleDateString()}
@@ -154,17 +165,33 @@ export default async function BillingPage() {
                                             <p className="w-full text-center text-sm text-muted-foreground">
                                                 This is your plan.
                                             </p>
+                                        ) : Number(plan.price) <= 0 ? (
+                                            <p className="w-full text-center text-sm text-muted-foreground">
+                                                Included on the free tier.
+                                            </p>
+                                        ) : paymentsEnabled ? (
+                                            <Button className="w-full" asChild>
+                                                <Link
+                                                    href={`/billing/checkout/${plan.id}`}
+                                                >
+                                                    <Sparkles
+                                                        aria-hidden="true"
+                                                        className="me-2 h-4 w-4"
+                                                    />
+                                                    Upgrade
+                                                </Link>
+                                            </Button>
                                         ) : (
                                             <Button
                                                 className="w-full"
                                                 disabled
-                                                title="Checkout isn't available yet"
+                                                title="Payments are not configured yet"
                                             >
                                                 <Sparkles
                                                     aria-hidden="true"
                                                     className="me-2 h-4 w-4"
                                                 />
-                                                Upgrade
+                                                Payments unavailable
                                             </Button>
                                         )}
                                     </CardFooter>
@@ -174,9 +201,9 @@ export default async function BillingPage() {
                     </div>
 
                     <p className="px-4 text-sm text-muted-foreground lg:px-6">
-                        Payments are coming soon — upgrading isn&apos;t
-                        available yet. In the meantime your data is fully
-                        accessible.{" "}
+                        {paymentsEnabled
+                            ? "Checkout is handled by Razorpay. Your plan is activated only after the payment signature and amount are verified."
+                            : "Payments are not configured yet — upgrading isn't available. In the meantime your data is fully accessible."}{" "}
                         <Link
                             href="/settings"
                             className="text-primary underline underline-offset-2"

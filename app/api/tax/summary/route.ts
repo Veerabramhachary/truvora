@@ -6,9 +6,9 @@ import { db } from "@/db";
 import { transactions } from "@/db/schema/schema";
 import { ledgerErrorResponse, requireLedger } from "@/lib/ledger";
 import { summariseTax, type TaxKind } from "@/lib/tax";
+import { app_subscriptions, plans } from "@/db/schema/plans";
 
 /** Safety cap: tax-tagged records in one tax year are far below this. */
-const MAX_ROWS = 20_000;
 const MAX_RANGE_DAYS = 400;
 
 const querySchema = z.object({
@@ -46,6 +46,38 @@ export async function GET(req: NextRequest) {
             );
         }
 
+        // Fetch active subscription and plan to get tax summary row limit
+        const subscriptionResult = await db
+            .select({
+                subscription: app_subscriptions,
+                plan: plans
+            })
+            .from(app_subscriptions)
+            .innerJoin(plans, eq(app_subscriptions.planId, plans.id))
+            .where(
+                and(
+                    eq(app_subscriptions.userId, userId),
+                    eq(app_subscriptions.status, "active"),
+                ),
+            )
+            .limit(1);
+
+        // Determine max tagged rows from plan limits
+        // Default to 20_000 for backward compatibility when no active subscription
+        let maxRows = 20_000;
+        if (subscriptionResult.length > 0) {
+            const { plan } = subscriptionResult[0];
+            const limits = plan?.featureLimits;
+            if (limits?.taxSummaryRows?.limit) {
+                // -1 means unlimited
+                if (limits.taxSummaryRows.limit === -1) {
+                    maxRows = Number.MAX_SAFE_INTEGER;
+                } else {
+                    maxRows = limits.taxSummaryRows.limit;
+                }
+            }
+        }
+
         const parsed = querySchema.safeParse(Object.fromEntries(req.nextUrl.searchParams));
         if (!parsed.success) {
             return NextResponse.json(
@@ -78,11 +110,12 @@ export async function GET(req: NextRequest) {
                 ),
             )
             .orderBy(asc(transactions.date))
-            .limit(MAX_ROWS + 1);
+            .limit(maxRows + 1);
 
-        const truncated = rows.length > MAX_ROWS;
+        const truncated = rows.length > maxRows;
+        const summaryRows = rows.slice(0, maxRows);
         const summary = summariseTax(
-            rows.slice(0, MAX_ROWS).map((row) => ({
+            summaryRows.map((row) => ({
                 date: row.date,
                 amount: row.amount,
                 taxKind: row.taxKind as TaxKind,

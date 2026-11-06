@@ -1,7 +1,7 @@
 import { db } from "@/db";
 import { auth } from "@clerk/nextjs/server";
 import { app_subscriptions, plans } from "@/db/schema/plans";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 
 export type FeatureLimits = {
     exports?: { limit: number; interval: "month" | "year" | "none" }; // monthly export cap
@@ -15,7 +15,24 @@ export type FeatureLimits = {
     viewsAndFilters?: boolean;
     notifications?: "email" | "push" | "webhook" | "all";
     webhooks?: boolean;
+    // Tax summary
+    taxSummaryRows?: { limit: number }; // max tagged rows per tax summary
 };
+
+type PlanRow = typeof plans.$inferSelect;
+type SubscriptionRow = typeof app_subscriptions.$inferSelect;
+
+function buildGate(plan: PlanRow, subscription: SubscriptionRow | null) {
+    return {
+        subscription,
+        checkFeatures: (feature: keyof FeatureLimits) => {
+            const limits = plan?.featureLimits as
+                | FeatureLimits
+                | undefined;
+            return limits ? limits[feature] : null;
+        },
+    };
+}
 
 export async function getSubscriptionGate() {
     const { userId } = await auth();
@@ -25,7 +42,7 @@ export async function getSubscriptionGate() {
     const result = await db
         .select({
             subscription: app_subscriptions,
-            plan: plans
+            plan: plans,
         })
         .from(app_subscriptions)
         .where(
@@ -37,16 +54,25 @@ export async function getSubscriptionGate() {
         .innerJoin(plans, eq(app_subscriptions.planId, plans.id))
         .limit(1);
 
-        if (result.length === 0) return null;
-        const { subscription, plan } = result[0];
+    const current = result[0];
+    if (current && current.subscription.currentPeriodEnd >= new Date()) {
+        return buildGate(current.plan, current.subscription);
+    }
 
-    return {
-        subscription,
-        checkFeatures: (feature: keyof FeatureLimits) => {
-            const limits = plan?.featureLimits as
-                | FeatureLimits
-                | undefined;
-            return limits ? limits[feature] : null;
-        },
-    };
+    /*
+      An expired paid period must not keep paid features alive, and it must not
+      lock the user out of the free tier either. Fall back to the cheapest
+      active plan only when that plan is actually free; otherwise return null
+      and let the caller show "no active plan".
+    */
+    const [fallback] = await db
+        .select({ plan: plans })
+        .from(plans)
+        .where(and(eq(plans.isActive, true), eq(plans.currency, "INR")))
+        .orderBy(asc(plans.price))
+        .limit(1);
+
+    if (!fallback || Number(fallback.plan.price) > 0) return null;
+
+    return buildGate(fallback.plan, current?.subscription ?? null);
 }
