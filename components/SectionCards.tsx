@@ -9,6 +9,7 @@ import {
     CardContent,
 } from "./ui/card";
 import { Badge } from "./ui/badge";
+import SectionCardsSkeleton from "./SectionCardsSkeleton";
 
 const SectionCards = () => {
     const currency = "INR";
@@ -40,13 +41,7 @@ const SectionCards = () => {
         }).format(new Date(value));
 
     if (isLoading) {
-        return (
-            <div className="flex min-h-[280px] w-full items-center justify-center p-8 xl:h-full">
-                <p className="animate-pulse text-muted-foreground">
-                    Loading stats...
-                </p>
-            </div>
-        );
+        return <SectionCardsSkeleton />;
     }
     if (isError) {
         return (
