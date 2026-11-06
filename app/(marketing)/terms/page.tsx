@@ -85,11 +85,14 @@ export default function TermsPage() {
                     </h2>
                     <p>
                         Truvora may offer plans with different features or
-                        limits. Paid checkout is currently disabled, and you
-                        cannot start a paid subscription through the service.
-                        If paid checkout becomes available, we will show the
-                        price, billing period, renewal, cancellation and refund
-                        terms before you purchase.
+                        limits. Where paid checkout is available, the price,
+                        billing period and included features are shown before
+                        you purchase. Payments are processed by Razorpay, our
+                        payment processor. A purchase currently grants the
+                        selected plan for one billing period and does not create
+                        an automatic recurring charge. Contact support for
+                        cancellation or refund requests; applicable consumer law
+                        also applies.
                     </p>
                 </section>
 

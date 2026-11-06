@@ -28,6 +28,7 @@ export const app_subscriptionsStatusEnum = pgEnum("app_subscriptions_status", [
 export const paymentProviderEnum = pgEnum("payment_provider", [
     "paypal",
     "braintree",
+    "razorpay",
     "none",
 ]);
 
@@ -43,6 +44,8 @@ export type FeatureLimits = {
     viewsAndFilters?: boolean;
     notifications?: 'email' | 'push' | 'webhook' | 'all';
     webhooks?: boolean; // whether user can define outgoing webhooks
+    // Tax summary
+    taxSummaryRows?: { limit: number }; // max tagged rows per tax summary
     // ... any other feature
 };
 

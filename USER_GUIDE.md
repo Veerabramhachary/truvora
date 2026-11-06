@@ -61,8 +61,15 @@ download a CSV file. Keep downloaded files somewhere secure.
 
 Open the account menu and select **Billing** to see your current plan and
 available plans. Some features, such as custom categories, subscription
-capacity, or exports, may depend on your plan. Paid checkout and plan upgrades
-are not currently available in the app.
+capacity, or exports, may depend on your plan.
+
+If self-serve checkout is enabled on this deployment, **Upgrade** opens a
+checkout page with the plan price and billing period. Payment is handled by
+Razorpay; Truvora never asks for your card details. After a successful payment
+the plan is activated on the server, and the confirmation page shows the
+verified payment status. Paid plans cover a single billing period — they do not
+renew automatically, so you will need to check out again to extend. If
+**Upgrade** is disabled, paid plans are assigned by an administrator.
 
 ## Privacy and account deletion
 
@@ -80,8 +87,9 @@ see the Privacy Policy for details.
 ## Not available yet
 
 - **Reports & Insights** is under development.
-- Connecting a payment provider is not available.
-- Paid checkout and plan upgrades are not available.
+- Importing transactions from a bank or payment provider is not available.
+- Automatic plan renewals, cancellation, refunds, and proration are not
+  available; checkout buys exactly one billing period.
 
 Truvora currently records information you enter; it does not connect to a bank
 or payment provider to import transactions.

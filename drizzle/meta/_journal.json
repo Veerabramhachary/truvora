@@ -120,6 +120,13 @@
       "when": 1793881223937,
       "tag": "0016_remove_stripe",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1793974316020,
+      "tag": "0017_razorpay_payment_orders",
+      "breakpoints": true
     }
   ]
 }

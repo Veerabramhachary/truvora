@@ -113,11 +113,16 @@ export default function PrivacyPolicyPage() {
                         be processed outside India.
                     </p>
                     <p className="mt-3">
-                        Paid checkout is currently disabled. Truvora does not
-                        collect payment card details for in-app purchases. If
-                        payment processing becomes available, we will update
-                        this policy to explain what information is shared and
-                        with whom before accepting payments.
+                        Paid plans may be purchased through Razorpay, our
+                        payment processor. Razorpay collects and processes your
+                        payment details (such as card, UPI or netbanking
+                        information) under its own terms and privacy practices.
+                        Truvora receives limited payment information needed to
+                        confirm and record the purchase, such as the payment
+                        reference, amount, status and plan purchased. We do not
+                        receive or store your full card number, CVV or UPI PIN.
+                        A purchase currently grants one billing period and does
+                        not create an automatic recurring charge.
                     </p>
                 </section>
 

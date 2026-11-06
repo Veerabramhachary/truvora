@@ -15,6 +15,8 @@ const isPublicRoute = createRouteMatcher([
     "/auth/verify-email(.*)",
     "/sso-callback(.*)",
     "/api/webhooks/clerk(.*)",
+    // Razorpay signs its own requests; it has no Clerk session.
+    "/api/webhooks/razorpay(.*)",
     "/api/account/deletion-status(.*)",
     "/api/plans(.*)",
     // Cron routes authenticate with the CRON_SECRET bearer token instead of a

@@ -20,7 +20,7 @@ vi.mock("@/lib/feature-access", () => ({ canUseFeature: async () => true }));
 vi.mock("@/db", () => {
     const select = () => {
         const chain: Record<string, unknown> = {};
-        for (const key of ["from", "where", "orderBy", "limit"]) chain[key] = () => chain;
+        for (const key of ["from", "where", "orderBy", "limit", "innerJoin"]) chain[key] = () => chain;
         chain.then = (resolve: (value: unknown) => unknown) => resolve(m.rows);
         return chain;
     };

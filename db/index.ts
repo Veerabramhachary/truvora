@@ -8,6 +8,7 @@ import * as baseSchema from "./schema/schema";
 import { app_subscriptions } from "./schema/plans";
 import {subscriptions, transactions, categories } from './schema/schema'
 import { paymentTransactions } from "./schema/appTransactions";
+import { paymentOrders } from "./schema/payment-orders";
 import { accountDeletions } from "./schema/account-deletions";
 import { ledgers } from "./schema/ledgers";
 
@@ -20,6 +21,7 @@ export const schema = {
     transactions,
     categories,
     paymentTransactions,
+    paymentOrders,
     accountDeletions,
     ledgers,
 };

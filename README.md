@@ -5,6 +5,8 @@ subscriptions and spending insights, with the sensitive fields encrypted at
 rest.
 
 For instructions on using Truvora, see the [user guide](USER_GUIDE.md).
+For Razorpay checkout setup and security requirements, see
+[RAZORPAY_SETUP.md](RAZORPAY_SETUP.md).
 
 ## Stack
 
@@ -12,7 +14,7 @@ For instructions on using Truvora, see the [user guide](USER_GUIDE.md).
 | --- | --- |
 | Framework | Next.js 16 (App Router, Turbopack) + React 19 |
 | Auth | Clerk |
-| Billing | Local plans and feature gates; payments are not configured |
+| Billing | Local plans and feature gates; Razorpay checkout is disabled unless keys are configured |
 | Database | Postgres (Neon) via Drizzle ORM |
 | UI | shadcn/ui + Tailwind CSS v4, Radix, Lucide |
 | Data fetching | Refine (simple-rest) + TanStack Query |
