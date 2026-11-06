@@ -79,9 +79,10 @@ export function TaxSummary() {
     });
     const data = result?.data;
 
-    const tagged = data
-        ? Object.values(data.counts).reduce((sum, count) => sum + count, 0)
-        : 0;
+    const counts = data?.counts ?? { deductible: 0, tax_paid: 0, taxable_income: 0, tax_refund: 0 };
+    const totals = data?.totals ?? { deductible: 0, taxPaid: 0, taxableIncome: 0, taxRefund: 0, netTaxPaid: 0 };
+
+    const tagged = Object.values(counts).reduce((sum, count) => sum + count, 0);
     const money = (value: number) => formatCurrency(value, "INR");
     const chartData = (data?.months ?? []).map((month) => ({
         month: monthLabel(month.key),
@@ -127,11 +128,11 @@ export function TaxSummary() {
                 ) : (
                     <>
                         <dl className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-                            <Tile label="Deductible" value={money(data.totals.deductible)} note={`${data.counts.deductible} records`} />
-                            <Tile label="Taxable income" value={money(data.totals.taxableIncome)} note={`${data.counts.taxable_income} records`} />
-                            <Tile label="Tax paid" value={money(data.totals.taxPaid)} note={`${data.counts.tax_paid} records`} />
-                            <Tile label="Tax refunds" value={money(data.totals.taxRefund)} note={`${data.counts.tax_refund} records`} />
-                            <Tile label="Net tax paid" value={money(data.totals.netTaxPaid)} note="Paid minus refunds" />
+                            <Tile label="Deductible" value={money(totals.deductible)} note={`${counts.deductible} records`} />
+                            <Tile label="Taxable income" value={money(totals.taxableIncome)} note={`${counts.taxable_income} records`} />
+                            <Tile label="Tax paid" value={money(totals.taxPaid)} note={`${counts.tax_paid} records`} />
+                            <Tile label="Tax refunds" value={money(totals.taxRefund)} note={`${counts.tax_refund} records`} />
+                            <Tile label="Net tax paid" value={money(totals.netTaxPaid)} note="Paid minus refunds" />
                         </dl>
 
                         <ChartContainer config={chartConfig} className="aspect-auto h-64 w-full">
