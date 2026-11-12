@@ -56,6 +56,10 @@ type OrderResponse = {
     planInterval: "month" | "year";
     planIntervalCount: number;
     prefill?: { name?: string; email?: string };
+    skipRazorpay?: boolean;
+    discountApplied?: boolean;
+    discountAmount?: string;
+    originalAmount?: string;
     error?: string;
 };
 
@@ -98,13 +102,23 @@ async function responseError(response: Response, fallback: string) {
 export function RazorpayCheckoutButton({
     planId,
     planName,
+    discountApplied = false,
+    discountAmount = 0,
+    originalAmount = 0,
 }: {
     planId: string;
     planName: string;
+    discountApplied?: boolean;
+    discountAmount?: number;
+    originalAmount?: number;
 }) {
     const router = useRouter();
     const [processing, setProcessing] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [skipDiscount, setSkipDiscount] = useState(false);
+
+    const discountedAmount = discountApplied && !skipDiscount ? discountAmount : 0;
+    const amountToCharge = originalAmount - discountedAmount;
 
     async function startCheckout() {
         setError(null);
@@ -114,7 +128,7 @@ export function RazorpayCheckoutButton({
             const orderResponse = await fetch("/api/payments/razorpay/order", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ planId }),
+                body: JSON.stringify({ planId, applyDiscount: !skipDiscount }),
             });
 
             if (!orderResponse.ok) {
@@ -127,6 +141,19 @@ export function RazorpayCheckoutButton({
             }
 
             const order = (await orderResponse.json()) as OrderResponse;
+
+            // Fully comped (₹0) checkout: the server already fulfilled the
+            // order and granted the plan. No Razorpay modal needed.
+            if (order.skipRazorpay) {
+                router.replace(
+                    `/billing/success?order_id=${encodeURIComponent(
+                        order.orderId,
+                    )}`,
+                );
+                setProcessing(false);
+                return;
+            }
+
             await loadRazorpayScript();
 
             if (!window.Razorpay) {
@@ -217,6 +244,27 @@ export function RazorpayCheckoutButton({
 
     return (
         <div className="flex flex-col gap-2">
+            {discountApplied && originalAmount > 0 && !skipDiscount ? (
+                <div className="flex items-center justify-between gap-2 px-2 py-1.5 rounded bg-muted border border-border/50">
+                    <span className="text-xs text-muted-foreground line-through">
+                        Pay ₹{originalAmount.toFixed(2)}
+                    </span>
+                    <span className="text-xs font-medium text-green-foreground">
+                        Pay ₹{amountToCharge.toFixed(2)}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                        -₹{discountedAmount.toFixed(2)}
+                    </span>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSkipDiscount(true)}
+                        className="text-xs px-2 py-0.5"
+                    >
+                        {"Don't apply discount"}
+                    </Button>
+                </div>
+            ) : null}
             <Button
                 type="button"
                 size="lg"

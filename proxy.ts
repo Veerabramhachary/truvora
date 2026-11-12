@@ -6,6 +6,9 @@ import { checkRateLimits, getClientIp, rateLimitHeaders } from "@/lib/rate-limit
 // Public routes
 const isPublicRoute = createRouteMatcher([
     "/",
+    "/pricing",
+    "/privacy-policy(.*)",
+    "/terms(.*)",
     "/auth/sign-in(.*)",
     "/auth/signout(.*)",
     "/auth/sign-up(.*)",
