@@ -9,6 +9,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { paymentProviderEnum, plans } from "./plans";
 import { users } from "./users";
+import { platformDiscounts } from "./platform-discounts";
 
 /**
  * The lifecycle of a checkout attempt.
@@ -50,6 +51,12 @@ export const paymentOrders = pgTable("payment_orders", {
         .notNull()
         .default("0.00"),
     currency: text("currency").notNull().default("INR"),
+    /** Discount applied to this order, if any (platform/referral discount). */
+    discountId: uuid("discount_id").references(() => platformDiscounts.id, {
+        onDelete: "set null",
+    }),
+    discountAmount: decimal("discount_amount", { precision: 10, scale: 2 }),
+    discountCurrency: text("discount_currency"),
     status: paymentOrderStatusEnum("status").notNull().default("created"),
     notes: jsonb("notes").$type<Record<string, string>>(),
     failureReason: text("failure_reason"),

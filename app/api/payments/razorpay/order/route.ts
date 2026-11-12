@@ -14,12 +14,17 @@ import {
     getRazorpayConfig,
     RazorpayError,
 } from "@/lib/razorpay";
+import { platformDiscounts } from "@/db/schema/platform-discounts";
+import { platformDiscountRedemptions } from "@/db/schema/platform-discount-redemptions";
+import { fulfillPaymentOrder } from "@/lib/payment-fulfillment";
 
 export const runtime = "nodejs";
 
 const bodySchema = z
     .object({
         planId: z.string().uuid("planId must be a uuid"),
+        /** Opt out of applying the user's reserved platform discount. */
+        applyDiscount: z.boolean().optional(),
     })
     .strict();
 
@@ -29,6 +34,11 @@ const bodySchema = z
  * The amount is read from the `plans` table and recomputed here. A caller can
  * choose a plan id, but can never choose a price. The key secret stays on the
  * server; only the publishable key id is returned to the browser.
+ *
+ * If the user has a pending platform (referral) discount reservation from
+ * sign-up, it is applied automatically unless `applyDiscount: false` is sent.
+ * A fully-comped (₹0) checkout skips Razorpay entirely and is fulfilled
+ * server-side.
  */
 export async function POST(request: NextRequest) {
     try {
@@ -100,12 +110,117 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const amountPaise = toPaise(plan.price);
+        const planPrice = Number(plan.price);
+        const shouldApplyDiscount = parsed.data.applyDiscount ?? true;
+
+        // Resolve any pending platform discount reserved for this user at
+        // sign-up (one redemption per user total).
+        let discountCampaign: typeof platformDiscounts.$inferSelect | null = null;
+        let discountAmount = 0;
+        let discountedAmount = planPrice;
+
+        if (shouldApplyDiscount) {
+            const [redemption] = await db
+                .select({
+                    id: platformDiscountRedemptions.id,
+                    platformDiscountId: platformDiscountRedemptions.platformDiscountId,
+                    status: platformDiscountRedemptions.status,
+                })
+                .from(platformDiscountRedemptions)
+                .where(eq(platformDiscountRedemptions.userId, userId))
+                .limit(1);
+
+            if (
+                redemption &&
+                redemption.status === "pending" &&
+                redemption.platformDiscountId
+            ) {
+                const [campaign] = await db
+                    .select()
+                    .from(platformDiscounts)
+                    .where(eq(platformDiscounts.id, redemption.platformDiscountId))
+                    .limit(1);
+
+                const now = new Date();
+                const campaignValid = Boolean(campaign)
+                    && campaign.isActive
+                    && (!campaign.startsAt || campaign.startsAt <= now)
+                    && (!campaign.endsAt || campaign.endsAt >= now);
+
+                if (campaignValid && campaign) {
+                    discountCampaign = campaign;
+                    const rawDiscount =
+                        campaign.discountType === "percent"
+                            ? planPrice * (Number(campaign.discountValue) / 100)
+                            : Number(campaign.discountValue);
+                    discountAmount = Math.min(Math.max(rawDiscount, 0), planPrice);
+                    discountedAmount = planPrice - discountAmount;
+                }
+            }
+        }
+
+        const amountPaise = toPaise(discountedAmount.toFixed(2));
         if (amountPaise < BigInt(100)) {
-            return NextResponse.json(
-                { error: "This plan does not require payment." },
-                { status: 400 },
-            );
+            // Fully comped or free: skip Razorpay entirely and fulfill
+            // server-side. The order row is created locally with a synthetic
+            // provider order id so it can be tracked and audited.
+            const receipt = buildRazorpayReceipt();
+            const providerOrderId = `free_${crypto.randomUUID()}`;
+
+            const [order] = await db
+                .insert(paymentOrders)
+                .values({
+                    userId,
+                    planId: plan.id,
+                    provider: "razorpay",
+                    providerOrderId,
+                    receipt,
+                    amount: discountedAmount.toFixed(2),
+                    currency: plan.currency.toUpperCase(),
+                    status: "created",
+                    ...(discountCampaign ? { discountId: discountCampaign.id } : {}),
+                    ...(discountAmount > 0 ? { discountAmount: discountAmount.toFixed(2) } : {}),
+                    discountCurrency: plan.currency.toUpperCase(),
+                    notes: { planId: plan.id, ...(discountCampaign ? { discountApplied: "true" } : {}) },
+                })
+                .returning();
+
+            await fulfillPaymentOrder({
+                providerOrderId: order.providerOrderId,
+                currency: order.currency,
+                // No amountPaise: ₹0 checkout has no Razorpay payment to match.
+            });
+
+            // Mark the redemption consumed.
+            if (discountCampaign) {
+                await db
+                    .update(platformDiscountRedemptions)
+                    .set({ status: "completed", redeemedAt: new Date() })
+                    .where(
+                        and(
+                            eq(
+                                platformDiscountRedemptions.platformDiscountId,
+                                discountCampaign.id,
+                            ),
+                            eq(platformDiscountRedemptions.userId, userId),
+                            eq(platformDiscountRedemptions.status, "pending"),
+                        ),
+                    );
+            }
+
+            return NextResponse.json({
+                success: true,
+                skipRazorpay: true,
+                amount: "0.00",
+                currency: plan.currency.toUpperCase(),
+                planName: plan.name,
+                planInterval: plan.interval,
+                planIntervalCount: plan.intervalCount,
+                discountApplied: Boolean(discountCampaign),
+                discountAmount: discountCampaign
+                    ? discountAmount.toFixed(2)
+                    : "0.00",
+            });
         }
 
         if (amountPaise > BigInt(Number.MAX_SAFE_INTEGER)) {
@@ -156,15 +271,17 @@ export async function POST(request: NextRequest) {
             config,
         );
 
-        // Never hand the browser an order whose amount differs from the plan.
+        // Never hand the browser an order whose amount differs from the
+        // (possibly discounted) amount we computed server-side.
+        const expectedAmountPaise = toPaise(discountedAmount.toFixed(2));
         if (
             !Number.isSafeInteger(order.amount) ||
-            BigInt(order.amount) !== amountPaise ||
+            BigInt(order.amount) !== expectedAmountPaise ||
             order.currency.toUpperCase() !== "INR"
         ) {
             console.error("[razorpay] Order amount/currency mismatch", {
                 orderId: order.id,
-                expectedAmount: Number(amountPaise),
+                expectedAmount: Number(expectedAmountPaise),
                 receivedAmount: order.amount,
                 receivedCurrency: order.currency,
             });
@@ -180,10 +297,13 @@ export async function POST(request: NextRequest) {
             provider: "razorpay",
             providerOrderId: order.id,
             receipt,
-            amount: plan.price,
+            amount: discountedAmount.toFixed(2),
             currency: plan.currency.toUpperCase(),
             status: "created",
-            notes: { planId: plan.id },
+            ...(discountCampaign ? { discountId: discountCampaign.id } : {}),
+            ...(discountAmount > 0 ? { discountAmount: discountAmount.toFixed(2) } : {}),
+            discountCurrency: plan.currency.toUpperCase(),
+            notes: { planId: plan.id, ...(discountCampaign ? { discountApplied: "true" } : {}) },
         });
 
         return NextResponse.json({
@@ -198,6 +318,11 @@ export async function POST(request: NextRequest) {
                 name: profile?.firstName ?? "",
                 email: profile?.email ?? "",
             },
+            discountApplied: Boolean(discountCampaign),
+            discountAmount: discountCampaign
+                ? discountAmount.toFixed(2)
+                : "0.00",
+            originalAmount: planPrice.toFixed(2),
         });
     } catch (error) {
         if (error instanceof RazorpayError) {

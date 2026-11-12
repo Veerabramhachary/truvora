@@ -3,12 +3,12 @@ import type { NextFetchEvent, NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { checkRateLimits, getClientIp, rateLimitHeaders } from "@/lib/rate-limit";
 
-// Public routes (marketing pages)
+// Public routes
 const isPublicRoute = createRouteMatcher([
     "/",
     "/pricing",
-    "/privacy-policy",
-    "/terms",
+    "/privacy-policy(.*)",
+    "/terms(.*)",
     "/auth/sign-in(.*)",
     "/auth/signout(.*)",
     "/auth/sign-up(.*)",

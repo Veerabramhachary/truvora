@@ -10,6 +10,7 @@ import { Resend } from "resend";
 import { WelcomeEmail } from "@/components/welcome-email";
 import { SITE_URL } from "@/lib/site";
 import { platformDiscounts } from "@/db/schema/platform-discounts";
+import { platformDiscountRedemptions } from "@/db/schema/platform-discount-redemptions";
 import { markWebhookDeletion } from "@/lib/account-deletion";
 import { accountDeletions } from "@/db/schema/account-deletions";
 import { ledgers } from "@/db/schema/ledgers";
@@ -64,10 +65,40 @@ export async function POST(req: NextRequest) {
                 ? unsafeMetadata.referralPlatform.trim().toLowerCase().slice(0, 64)
                 : null;
             const [campaign] = referralPlatform ? await db
-                .select({ id: platformDiscounts.id })
+                .select({
+                    id: platformDiscounts.id,
+                    isActive: platformDiscounts.isActive,
+                    startsAt: platformDiscounts.startsAt,
+                    endsAt: platformDiscounts.endsAt,
+                    maxRedemptions: platformDiscounts.maxRedemptions,
+                    discountType: platformDiscounts.discountType,
+                    discountValue: platformDiscounts.discountValue,
+                })
                 .from(platformDiscounts)
                 .where(eq(platformDiscounts.platform, referralPlatform))
                 .limit(1) : [];
+
+            const now = new Date();
+            const campaignValid = Boolean(campaign)
+                && campaign.isActive
+                && (!campaign.startsAt || campaign.startsAt <= now)
+                && (!campaign.endsAt || campaign.endsAt >= now);
+
+            // Narrowed reference so TypeScript knows `campaign` is defined
+            // when `campaignValid` is true.
+            const validCampaign = campaignValid ? campaign : null;
+
+            // Attribution is best-effort: a bad or expired `ref` must never
+            // block sign-up. Log it so ops can see attribution leakage.
+            if (referralPlatform && !campaign) {
+                console.warn(
+                    `[clerk-webhook] No campaign for ref "${referralPlatform}" (user ${id})`,
+                );
+            } else if (referralPlatform && campaign && !campaignValid) {
+                console.warn(
+                    `[clerk-webhook] Campaign for ref "${referralPlatform}" is inactive or outside its date window (user ${id})`,
+                );
+            }
 
             const primaryEmail =
                 email_addresses.find(
@@ -109,7 +140,7 @@ export async function POST(req: NextRequest) {
                         firstName: first_name,
                         imageUrl: image_url,
                         ...(eventType === "user.created" && referralPlatform ? { referralPlatform } : {}),
-                        ...(eventType === "user.created" && campaign ? { platformDiscountId: campaign.id } : {}),
+                        ...(eventType === "user.created" && validCampaign ? { platformDiscountId: validCampaign.id } : {}),
                         updatedAt: new Date(),
                     })
                     .onConflictDoUpdate({
@@ -119,10 +150,56 @@ export async function POST(req: NextRequest) {
                             firstName: first_name,
                             imageUrl: image_url,
                             ...(eventType === "user.created" && referralPlatform ? { referralPlatform } : {}),
-                            ...(eventType === "user.created" && campaign ? { platformDiscountId: campaign.id } : {}),
+                            ...(eventType === "user.created" && validCampaign ? { platformDiscountId: validCampaign.id } : {}),
                             updatedAt: new Date(),
                         },
                     });
+
+                // Reserve the discount for this new user (one redemption per
+                // user total). Status stays `pending` until checkout applies it
+                // (Phase 2). Max redemptions is enforced here too.
+                if (
+                    eventType === "user.created"
+                    && validCampaign
+                    && validCampaign.maxRedemptions !== null
+                ) {
+                    const [existingRedemption] = await tx
+                        .select({ id: platformDiscountRedemptions.id })
+                        .from(platformDiscountRedemptions)
+                        .where(eq(platformDiscountRedemptions.userId, id))
+                        .limit(1);
+                    if (!existingRedemption) {
+                        const [usedCount] = await tx
+                            .select({
+                                count: sql<number>`count(*)::int`,
+                            })
+                            .from(platformDiscountRedemptions)
+                            .where(
+                                eq(
+                                    platformDiscountRedemptions.platformDiscountId,
+                                    validCampaign.id,
+                                ),
+                            );
+                        const used = usedCount?.count ?? 0;
+                        if (used < validCampaign.maxRedemptions) {
+                            await tx.insert(platformDiscountRedemptions).values({
+                                platformDiscountId: validCampaign.id,
+                                userId: id,
+                                status: "pending",
+                            });
+                        } else {
+                            // Campaign exhausted: clear the stamped discount so
+                            // the user is not promised something unavailable.
+                            await tx
+                                .update(users)
+                                .set({ platformDiscountId: null })
+                                .where(eq(users.id, id));
+                            console.warn(
+                                `[clerk-webhook] Campaign for ref "${referralPlatform}" exhausted (max ${validCampaign.maxRedemptions}); user ${id} not granted`,
+                            );
+                        }
+                    }
+                }
 
                 // Every user owns exactly one personal ledger. The step-1
                 // backfill covered pre-rollout users; this covers everyone

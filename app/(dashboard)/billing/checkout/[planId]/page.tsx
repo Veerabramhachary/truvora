@@ -20,6 +20,8 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import { RazorpayCheckoutButton } from "./RazorpayCheckoutButton";
+import { platformDiscounts } from "@/db/schema/platform-discounts";
+import { platformDiscountRedemptions } from "@/db/schema/platform-discount-redemptions";
 
 export const metadata = {
     title: "Checkout",
@@ -40,8 +42,10 @@ const planIdSchema = z.string().uuid();
  */
 export default async function CheckoutPage({
     params,
+    searchParams,
 }: {
     params: Promise<{ planId: string }>;
+    searchParams: Promise<{ skipDiscount?: string }>;
 }) {
     const { planId } = await params;
     if (!planIdSchema.safeParse(planId).success) notFound();
@@ -84,6 +88,56 @@ export default async function CheckoutPage({
     const paymentsEnabled = isRazorpayConfigured();
     const price = Number(plan.price);
     const intervalLabel = plan.interval === "year" ? "year" : "month";
+    const skipDiscount = (await searchParams)?.skipDiscount === "true";
+
+    // Resolve any pending platform (referral) discount reserved for this user
+    // at sign-up. One redemption per user total; status stays `pending` until
+    // checkout applies it. When the user has opted out (skipDiscount), show
+    // the full plan price instead.
+    let discountApplied = false;
+    let discountAmount = 0;
+    let discountedAmount = price;
+    let discountCampaignName: string | null = null;
+
+    if (!skipDiscount) {
+        const [redemption] = await db
+            .select({
+                platformDiscountId: platformDiscountRedemptions.platformDiscountId,
+                status: platformDiscountRedemptions.status,
+            })
+            .from(platformDiscountRedemptions)
+            .where(eq(platformDiscountRedemptions.userId, userId))
+            .limit(1);
+
+        if (
+            redemption &&
+            redemption.status === "pending" &&
+            redemption.platformDiscountId
+        ) {
+            const [campaign] = await db
+                .select()
+                .from(platformDiscounts)
+                .where(eq(platformDiscounts.id, redemption.platformDiscountId))
+                .limit(1);
+
+            const now = new Date();
+            const campaignValid = Boolean(campaign)
+                && campaign.isActive
+                && (!campaign.startsAt || campaign.startsAt <= now)
+                && (!campaign.endsAt || campaign.endsAt >= now);
+
+            if (campaignValid && campaign) {
+                const rawDiscount =
+                    campaign.discountType === "percent"
+                        ? price * (Number(campaign.discountValue) / 100)
+                        : Number(campaign.discountValue);
+                discountAmount = Math.min(Math.max(rawDiscount, 0), price);
+                discountedAmount = price - discountAmount;
+                discountApplied = true;
+                discountCampaignName = campaign.name;
+            }
+        }
+    }
 
     return (
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 py-6">
@@ -141,12 +195,35 @@ export default async function CheckoutPage({
                                 Total due today
                             </span>
                             <span className="text-2xl font-bold">
-                                {formatCurrency(price, plan.currency)}
+                                {formatCurrency(discountedAmount, plan.currency)}
                                 <span className="ms-1 text-sm font-normal text-muted-foreground">
                                     /{intervalLabel}
                                 </span>
                             </span>
                         </div>
+
+                        {discountApplied && discountAmount > 0 && (
+                            <div className="flex items-baseline justify-between border-t pt-2">
+                                <span className="text-xs text-muted-foreground">
+                                    Original price
+                                </span>
+                                <span className="text-xs text-muted-foreground line-through">
+                                    {formatCurrency(price, plan.currency)}
+                                </span>
+                            </div>
+                        )}
+
+                        {discountApplied && discountCampaignName && (
+                            <div className="flex items-center justify-between gap-2 pt-1">
+                                <span className="text-xs font-medium text-green-foreground">
+                                    {discountCampaignName} applied
+                                </span>
+                                <span className="text-xs text-green-foreground">
+                                    -{formatCurrency(discountAmount, plan.currency)}
+                                </span>
+                            </div>
+                        )}
+
                         <p className="text-xs text-muted-foreground">
                             This purchase grants one billing period. Renewal
                             reminders are still handled by Truvora; automatic
@@ -158,6 +235,10 @@ export default async function CheckoutPage({
                             <RazorpayCheckoutButton
                                 planId={plan.id}
                                 planName={plan.name}
+                                discountApplied={discountApplied}
+                                discountAmount={discountAmount}
+                                originalAmount={price}
+                                skipDiscount={skipDiscount}
                             />
                         ) : (
                             <Button disabled className="w-full" size="lg">
