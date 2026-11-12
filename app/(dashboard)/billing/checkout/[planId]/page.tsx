@@ -42,8 +42,10 @@ const planIdSchema = z.string().uuid();
  */
 export default async function CheckoutPage({
     params,
+    searchParams,
 }: {
     params: Promise<{ planId: string }>;
+    searchParams: Promise<{ skipDiscount?: string }>;
 }) {
     const { planId } = await params;
     if (!planIdSchema.safeParse(planId).success) notFound();
@@ -86,50 +88,54 @@ export default async function CheckoutPage({
     const paymentsEnabled = isRazorpayConfigured();
     const price = Number(plan.price);
     const intervalLabel = plan.interval === "year" ? "year" : "month";
+    const skipDiscount = (await searchParams)?.skipDiscount === "true";
 
     // Resolve any pending platform (referral) discount reserved for this user
     // at sign-up. One redemption per user total; status stays `pending` until
-    // checkout applies it.
+    // checkout applies it. When the user has opted out (skipDiscount), show
+    // the full plan price instead.
     let discountApplied = false;
     let discountAmount = 0;
     let discountedAmount = price;
     let discountCampaignName: string | null = null;
 
-    const [redemption] = await db
-        .select({
-            platformDiscountId: platformDiscountRedemptions.platformDiscountId,
-            status: platformDiscountRedemptions.status,
-        })
-        .from(platformDiscountRedemptions)
-        .where(eq(platformDiscountRedemptions.userId, userId))
-        .limit(1);
-
-    if (
-        redemption &&
-        redemption.status === "pending" &&
-        redemption.platformDiscountId
-    ) {
-        const [campaign] = await db
-            .select()
-            .from(platformDiscounts)
-            .where(eq(platformDiscounts.id, redemption.platformDiscountId))
+    if (!skipDiscount) {
+        const [redemption] = await db
+            .select({
+                platformDiscountId: platformDiscountRedemptions.platformDiscountId,
+                status: platformDiscountRedemptions.status,
+            })
+            .from(platformDiscountRedemptions)
+            .where(eq(platformDiscountRedemptions.userId, userId))
             .limit(1);
 
-        const now = new Date();
-        const campaignValid = Boolean(campaign)
-            && campaign.isActive
-            && (!campaign.startsAt || campaign.startsAt <= now)
-            && (!campaign.endsAt || campaign.endsAt >= now);
+        if (
+            redemption &&
+            redemption.status === "pending" &&
+            redemption.platformDiscountId
+        ) {
+            const [campaign] = await db
+                .select()
+                .from(platformDiscounts)
+                .where(eq(platformDiscounts.id, redemption.platformDiscountId))
+                .limit(1);
 
-        if (campaignValid && campaign) {
-            const rawDiscount =
-                campaign.discountType === "percent"
-                    ? price * (Number(campaign.discountValue) / 100)
-                    : Number(campaign.discountValue);
-            discountAmount = Math.min(Math.max(rawDiscount, 0), price);
-            discountedAmount = price - discountAmount;
-            discountApplied = true;
-            discountCampaignName = campaign.name;
+            const now = new Date();
+            const campaignValid = Boolean(campaign)
+                && campaign.isActive
+                && (!campaign.startsAt || campaign.startsAt <= now)
+                && (!campaign.endsAt || campaign.endsAt >= now);
+
+            if (campaignValid && campaign) {
+                const rawDiscount =
+                    campaign.discountType === "percent"
+                        ? price * (Number(campaign.discountValue) / 100)
+                        : Number(campaign.discountValue);
+                discountAmount = Math.min(Math.max(rawDiscount, 0), price);
+                discountedAmount = price - discountAmount;
+                discountApplied = true;
+                discountCampaignName = campaign.name;
+            }
         }
     }
 
@@ -232,6 +238,7 @@ export default async function CheckoutPage({
                                 discountApplied={discountApplied}
                                 discountAmount={discountAmount}
                                 originalAmount={price}
+                                skipDiscount={skipDiscount}
                             />
                         ) : (
                             <Button disabled className="w-full" size="lg">

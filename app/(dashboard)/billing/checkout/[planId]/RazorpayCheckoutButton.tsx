@@ -1,9 +1,10 @@
 "use client";
 
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Loader2, LockKeyhole } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toPaise } from "@/lib/money";
 
 type RazorpayCheckoutResponse = {
     razorpay_payment_id: string;
@@ -105,24 +106,136 @@ export function RazorpayCheckoutButton({
     discountApplied = false,
     discountAmount = 0,
     originalAmount = 0,
+    skipDiscount = false,
 }: {
     planId: string;
     planName: string;
     discountApplied?: boolean;
     discountAmount?: number;
     originalAmount?: number;
+    skipDiscount?: boolean;
 }) {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const pathname = usePathname();
     const [processing, setProcessing] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [skipDiscount, setSkipDiscount] = useState(false);
+    const [priceMismatch, setPriceMismatch] = useState<{
+      previewed: number;
+      server: number;
+    } | null>(null);
+    const [pendingOrder, setPendingOrder] = useState<OrderResponse | null>(null);
 
     const discountedAmount = discountApplied && !skipDiscount ? discountAmount : 0;
     const amountToCharge = originalAmount - discountedAmount;
 
+    function clearDiscount() {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("skipDiscount", "true");
+        router.replace(`${pathname}?${params.toString()}`);
+    }
+
+    async function openRazorpayCheckout(order: OrderResponse) {
+        await loadRazorpayScript();
+
+        if (!window.Razorpay) {
+            throw new Error("Could not load the secure payment window.");
+        }
+
+        const checkout = new window.Razorpay({
+            key: order.keyId,
+            amount: order.amount,
+            currency: order.currency,
+            name: "Truvora",
+            description: order.planName,
+            order_id: order.orderId,
+            prefill: order.prefill,
+            handler: (paymentResponse) => {
+                void (async () => {
+                    try {
+                        const verifyResponse = await fetch(
+                            "/api/payments/razorpay/verify",
+                            {
+                                method: "POST",
+                                headers: {
+                                    "Content-Type": "application/json",
+                                },
+                                body: JSON.stringify({
+                                    orderId: order.orderId,
+                                    paymentId:
+                                        paymentResponse.razorpay_payment_id,
+                                    signature:
+                                        paymentResponse.razorpay_signature,
+                                }),
+                            },
+                        );
+
+                        if (!verifyResponse.ok) {
+                            router.replace(
+                                `/billing/failure?order_id=${encodeURIComponent(
+                                    order.orderId,
+                                )}`,
+                            );
+                            return;
+                        }
+
+                        router.replace(
+                            `/billing/success?order_id=${encodeURIComponent(
+                                order.orderId,
+                            )}`,
+                        );
+                    } catch {
+                        // The webhook will still grant the plan. Send the
+                        // user to a status page instead of claiming success
+                        // or failure based on a network error.
+                        router.replace(
+                            `/billing/failure?order_id=${encodeURIComponent(
+                                order.orderId,
+                            )}`,
+                        );
+                    } finally {
+                        setProcessing(false);
+                    }
+                })();
+            },
+            modal: {
+                ondismiss: () => setProcessing(false),
+            },
+            theme: { color: "#4f46e5" },
+        });
+
+        checkout.on("payment.failed", (failure) => {
+            setError(
+                failure.error?.description ??
+                    failure.error?.reason ??
+                    "The payment did not go through. Please try again.",
+            );
+            setProcessing(false);
+        });
+
+        checkout.open();
+    }
+
+    async function confirmPriceChange() {
+        if (!pendingOrder) return;
+        setProcessing(true);
+        setPriceMismatch(null);
+        try {
+            await openRazorpayCheckout(pendingOrder);
+        } catch (cause) {
+            setError(
+                cause instanceof Error
+                    ? cause.message
+                    : "Could not open checkout. Please try again.",
+            );
+            setProcessing(false);
+        }
+    }
+
     async function startCheckout() {
         setError(null);
         setProcessing(true);
+        setPriceMismatch(null);
 
         try {
             const orderResponse = await fetch("/api/payments/razorpay/order", {
@@ -154,84 +267,22 @@ export function RazorpayCheckoutButton({
                 return;
             }
 
-            await loadRazorpayScript();
-
-            if (!window.Razorpay) {
-                throw new Error("Could not load the secure payment window.");
+            // If the server charged a different amount than the preview
+            // (discount became stale between page load and order creation),
+            // require the user to confirm the new amount before opening
+            // Razorpay. Preserve existing behavior when amounts match.
+            const expectedPaise = toPaise(amountToCharge.toFixed(2));
+            if (BigInt(order.amount) !== expectedPaise) {
+                setPendingOrder(order);
+                setPriceMismatch({
+                    previewed: amountToCharge,
+                    server: Number(order.amount) / 100,
+                });
+                setProcessing(false);
+                return;
             }
 
-            const checkout = new window.Razorpay({
-                key: order.keyId,
-                amount: order.amount,
-                currency: order.currency,
-                name: "Truvora",
-                description: order.planName,
-                order_id: order.orderId,
-                prefill: order.prefill,
-                handler: (paymentResponse) => {
-                    void (async () => {
-                        try {
-                            const verifyResponse = await fetch(
-                                "/api/payments/razorpay/verify",
-                                {
-                                    method: "POST",
-                                    headers: {
-                                        "Content-Type": "application/json",
-                                    },
-                                    body: JSON.stringify({
-                                        orderId: order.orderId,
-                                        paymentId:
-                                            paymentResponse.razorpay_payment_id,
-                                        signature:
-                                            paymentResponse.razorpay_signature,
-                                    }),
-                                },
-                            );
-
-                            if (!verifyResponse.ok) {
-                                router.replace(
-                                    `/billing/failure?order_id=${encodeURIComponent(
-                                        order.orderId,
-                                    )}`,
-                                );
-                                return;
-                            }
-
-                            router.replace(
-                                `/billing/success?order_id=${encodeURIComponent(
-                                    order.orderId,
-                                )}`,
-                            );
-                        } catch {
-                            // The webhook will still grant the plan. Send the
-                            // user to a status page instead of claiming success
-                            // or failure based on a network error.
-                            router.replace(
-                                `/billing/failure?order_id=${encodeURIComponent(
-                                    order.orderId,
-                                )}`,
-                            );
-                        } finally {
-                            setProcessing(false);
-                        }
-                    })();
-                },
-                modal: {
-                    ondismiss: () => setProcessing(false),
-                },
-                theme: { color: "#4f46e5" },
-            });
-
-            checkout.on("payment.failed", (failure) => {
-                setError(
-                    failure.error?.description ??
-                        failure.error?.reason ??
-                        "The payment did not go through. Please try again.",
-                );
-                setProcessing(false);
-            });
-
-            checkout.open();
+            await openRazorpayCheckout(order);
         } catch (cause) {
             setError(
                 cause instanceof Error
@@ -258,11 +309,48 @@ export function RazorpayCheckoutButton({
                     <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setSkipDiscount(true)}
+                        onClick={clearDiscount}
                         className="text-xs px-2 py-0.5"
                     >
                         {"Don't apply discount"}
                     </Button>
+                </div>
+            ) : null}
+            {priceMismatch ? (
+                <div className="flex flex-col gap-2 px-2 py-2 rounded bg-warning border border-warning/50">
+                    <p className="text-xs text-warning-foreground font-medium">
+                        Price changed
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                        The amount changed from{" "}
+                        <span className="font-medium line-through">
+                            ₹{priceMismatch.previewed.toFixed(2)}
+                        </span>{" "}
+                        to{" "}
+                        <span className="font-medium">
+                            ₹{priceMismatch.server.toFixed(2)}
+                        </span>
+                        . Confirm to continue.
+                    </p>
+                    <div className="flex justify-end gap-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                                setPriceMismatch(null);
+                                setPendingOrder(null);
+                            }}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            size="sm"
+                            onClick={confirmPriceChange}
+                            disabled={processing}
+                        >
+                            Confirm ₹{priceMismatch.server.toFixed(2)}
+                        </Button>
+                    </div>
                 </div>
             ) : null}
             <Button
