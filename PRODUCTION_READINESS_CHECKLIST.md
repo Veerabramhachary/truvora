@@ -16,7 +16,7 @@ them in a staging environment configured like production.
       changes stay consistent in the transaction history.
 - [x] Try invalid input, missing records, and another user's record IDs; confirm
       requests fail safely without exposing database or provider details.
-- [ ] When user add expired subscription it should automatically mark as a deactivate.
+- [x] When user add expired subscription it should automatically mark as a deactivate.
 - [x] Test CSV exports in spreadsheet software with values beginning with
       `=`, `+`, `-`, and `@`; confirm they are treated as text and normal values
       still export correctly.
