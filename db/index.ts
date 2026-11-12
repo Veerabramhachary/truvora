@@ -11,6 +11,7 @@ import { paymentTransactions } from "./schema/appTransactions";
 import { paymentOrders } from "./schema/payment-orders";
 import { accountDeletions } from "./schema/account-deletions";
 import { ledgers } from "./schema/ledgers";
+import { platformDiscountRedemptions } from "./schema/platform-discount-redemptions";
 
 nextEnv.loadEnvConfig(process.cwd());
 
@@ -24,6 +25,7 @@ export const schema = {
     paymentOrders,
     accountDeletions,
     ledgers,
+    platformDiscountRedemptions,
 };
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL!,

@@ -4,6 +4,7 @@ import { app_subscriptions, plans } from "@/db/schema/plans";
 import { paymentInvoices } from "@/db/schema/appInvoices";
 import { paymentTransactions } from "@/db/schema/appTransactions";
 import { paymentOrders } from "@/db/schema/payment-orders";
+import { platformDiscountRedemptions } from "@/db/schema/platform-discount-redemptions";
 import { addBillingInterval } from "@/lib/billing-period";
 import { toPaise } from "@/lib/money";
 
@@ -175,6 +176,24 @@ export async function fulfillPaymentOrder(params: {
                 updatedAt: now,
             })
             .where(eq(paymentOrders.id, order.id));
+
+        // Mark the platform discount redemption as consumed now that the
+        // order is paid (one redemption per user total).
+        if (order.discountId) {
+            await tx
+                .update(platformDiscountRedemptions)
+                .set({ status: "completed", redeemedAt: now })
+                .where(
+                    and(
+                        eq(
+                            platformDiscountRedemptions.platformDiscountId,
+                            order.discountId,
+                        ),
+                        eq(platformDiscountRedemptions.userId, order.userId),
+                        eq(platformDiscountRedemptions.status, "pending"),
+                    ),
+                );
+        }
 
         const invoiceNumber = `TV-${now
             .toISOString()

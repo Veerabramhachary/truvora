@@ -324,6 +324,7 @@ const Page = () => {
                             />
                             <label htmlFor="terms" className="text-sm">
                                 I accept the{" "}
+                                {/* TODO: Point to external landing page Terms of Service once attached */}
                                 <Link
                                     href="/terms"
                                     className="text-primary underline underline-offset-2 hover:no-underline"
@@ -331,6 +332,7 @@ const Page = () => {
                                     Terms of Service
                                 </Link>{" "}
                                 and{" "}
+                                {/* TODO: Point to external landing page Privacy Policy once attached */}
                                 <Link
                                     href="/privacy-policy"
                                     className="text-primary underline underline-offset-2 hover:no-underline"

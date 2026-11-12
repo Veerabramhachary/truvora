@@ -15,23 +15,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
             changeFrequency: "monthly",
             priority: 1,
         },
-        {
-            url: `${SITE_URL}/pricing`,
-            lastModified: now,
-            changeFrequency: "monthly",
-            priority: 0.9,
-        },
-        {
-            url: `${SITE_URL}/terms`,
-            lastModified: now,
-            changeFrequency: "yearly",
-            priority: 0.3,
-        },
-        {
-            url: `${SITE_URL}/privacy-policy`,
-            lastModified: now,
-            changeFrequency: "yearly",
-            priority: 0.3,
-        },
+        // /pricing, /terms and /privacy-policy moved to the external landing page.
+        // Re-add here once the external site URL is known.
     ];
 }

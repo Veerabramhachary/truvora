@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { app_subscriptions, plans } from "@/db/schema/plans";
 import { and, asc, eq, gte, or } from "drizzle-orm";
 import Link from "next/link";
-import { BadgeCheck, Sparkles } from "lucide-react";
+import { BadgeCheck, Crown, Sparkles } from "lucide-react";
 import {
     Card,
     CardContent,
@@ -15,26 +15,87 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { isRazorpayConfigured } from "@/lib/razorpay";
+import { BillingIntervalToggle } from "./BillingIntervalToggle";
 
 export const metadata = { title: "Billing" };
 
 /*
-  Billing lives inside the app, not on the public /pricing page — a signed-in
-  user clicking "Upgrade to Pro" shouldn't be thrown back to a marketing
-  surface with a sign-up button in it.
-
-  Server component on purpose: this is one query against the caller's own
-  subscription, and pulling it through Refine would mean a second provider and
-  a loading state for data we already have in hand.
+  Fixed three-tier pricing structure mirroring the marketing pricing page.
+  The plan *content* (price, features, checkout link) is still resolved from
+  the `plans` table so the page stays in sync with seeded data — only the
+  card layout and ordering are fixed.
 */
-export default async function BillingPage() {
+interface TierConfig {
+    key: "free" | "starter" | "pro";
+    label: string;
+    planName: string;
+    priceSuffix: string;
+    description: string;
+    buttonLabel: string;
+    featured?: boolean;
+}
+
+const TIER_CONFIG: TierConfig[] = [
+    {
+        key: "free",
+        label: "ESSENTIAL",
+        planName: "Free",
+        priceSuffix: "/ forever",
+        description:
+            "For individuals organizing everyday personal apps and essential subscriptions.",
+        buttonLabel: "Start Free",
+    },
+    {
+        key: "starter",
+        label: "GROWTH",
+        planName: "Starter",
+        priceSuffix: "/ month",
+        description:
+            "For growing collections, invoice archives, and detailed category breakdowns.",
+        buttonLabel: "Choose Starter",
+    },
+    {
+        key: "pro",
+        label: "BUSINESS & SCALE",
+        planName: "Stroka Pro",
+        priceSuffix: "/ month",
+        description:
+            "For businesses, freelancers, and agencies managing GST & CA tax filing.",
+        buttonLabel: "Upgrade to Stroka Pro",
+        featured: true,
+    },
+];
+
+type Interval = "month" | "year";
+
+export default async function BillingPage({
+    searchParams,
+}: {
+    searchParams: Promise<{ interval?: string }>;
+}) {
     const { userId } = await auth();
+    const { interval = "month" } = (await searchParams) ?? {};
+    const billingInterval: Interval =
+        interval === "year" ? "year" : "month";
 
     const [availablePlans, current] = await Promise.all([
-        db.select().from(plans).where(eq(plans.isActive, true)).orderBy(asc(plans.price)),
+        db
+            .select()
+            .from(plans)
+            .where(
+                and(
+                    eq(plans.isActive, true),
+                    eq(plans.currency, "INR"),
+                    eq(plans.interval, billingInterval),
+                ),
+            )
+            .orderBy(asc(plans.price)),
         userId
             ? db
-                  .select({ subscription: app_subscriptions, plan: plans })
+                  .select({
+                      subscription: app_subscriptions,
+                      plan: plans,
+                  })
                   .from(app_subscriptions)
                   .innerJoin(plans, eq(app_subscriptions.planId, plans.id))
                   .where(
@@ -55,13 +116,31 @@ export default async function BillingPage() {
     const subscription = current[0]?.subscription ?? null;
     const paymentsEnabled = isRazorpayConfigured();
 
+    // Resolve the three fixed tiers to actual plan rows for prices + checkout.
+    const planByName = (name: string) =>
+        availablePlans.find((p) => p.name === name) ?? null;
+
+    const freePlan = planByName("Free");
+    const starterPlan = planByName(
+        billingInterval === "year" ? "Starter Yearly" : "Starter",
+    );
+    const proPlan = planByName(
+        billingInterval === "year" ? "Stroka Pro Yearly" : "Stroka Pro",
+    );
+
+    const tiers = [
+        { ...TIER_CONFIG[0], plan: freePlan },
+        { ...TIER_CONFIG[1], plan: starterPlan },
+        { ...TIER_CONFIG[2], plan: proPlan },
+    ];
+
     return (
         <div className="flex flex-1 flex-col">
             <div className="@container/main flex flex-1 flex-col gap-2">
                 <div className="flex flex-col gap-6 py-6">
                     <header className="px-4 lg:px-6">
                         <h1 className="text-2xl font-bold tracking-tight">
-                            Billing &amp; plan
+                            Billing & plan
                         </h1>
                         <p className="mt-1 text-sm text-muted-foreground">
                             You&apos;re currently on{" "}
@@ -111,91 +190,24 @@ export default async function BillingPage() {
                         </Card>
                     )}
 
-                    <div className="grid gap-4 px-4 lg:grid-cols-3 lg:px-6">
-                        {availablePlans.map((plan) => {
-                            const isCurrent = plan.id === currentPlan?.id;
+                    <div className="px-4 lg:px-6">
+                        <BillingIntervalToggle
+                            currentInterval={billingInterval}
+                        />
+                    </div>
+
+                    <div className="grid gap-6 px-4 lg:grid-cols-3 lg:px-6">
+                        {tiers.map((tier) => {
+                            const isCurrent =
+                                tier.plan?.id === currentPlan?.id;
                             return (
-                                <Card
-                                    key={plan.id}
-                                    className={
-                                        isCurrent
-                                            ? "border-primary"
-                                            : undefined
-                                    }
-                                >
-                                    <CardHeader>
-                                        <CardTitle className="flex items-center justify-between">
-                                            {plan.name}
-                                            {isCurrent && (
-                                                <Badge>Current plan</Badge>
-                                            )}
-                                        </CardTitle>
-                                        <CardDescription>
-                                            {plan.description}
-                                        </CardDescription>
-                                    </CardHeader>
-                                    <CardContent className="flex flex-col gap-4">
-                                        <p className="text-3xl font-bold">
-                                            {plan.price}
-                                            <span className="text-sm font-normal text-muted-foreground">
-                                                /{plan.interval}
-                                            </span>
-                                        </p>
-                                        {plan.features?.length ? (
-                                            <ul className="flex flex-col gap-2 text-sm">
-                                                {plan.features.map((f) => (
-                                                    <li
-                                                        key={f}
-                                                        className="flex items-start gap-2"
-                                                    >
-                                                        <span
-                                                            aria-hidden="true"
-                                                            className="mt-0.5 text-primary"
-                                                        >
-                                                            ✓
-                                                        </span>
-                                                        {f}
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        ) : null}
-                                    </CardContent>
-                                    <CardFooter>
-                                        {isCurrent ? (
-                                            <p className="w-full text-center text-sm text-muted-foreground">
-                                                This is your plan.
-                                            </p>
-                                        ) : Number(plan.price) <= 0 ? (
-                                            <p className="w-full text-center text-sm text-muted-foreground">
-                                                Included on the free tier.
-                                            </p>
-                                        ) : paymentsEnabled ? (
-                                            <Button className="w-full" asChild>
-                                                <Link
-                                                    href={`/billing/checkout/${plan.id}`}
-                                                >
-                                                    <Sparkles
-                                                        aria-hidden="true"
-                                                        className="me-2 h-4 w-4"
-                                                    />
-                                                    Upgrade
-                                                </Link>
-                                            </Button>
-                                        ) : (
-                                            <Button
-                                                className="w-full"
-                                                disabled
-                                                title="Payments are not configured yet"
-                                            >
-                                                <Sparkles
-                                                    aria-hidden="true"
-                                                    className="me-2 h-4 w-4"
-                                                />
-                                                Payments unavailable
-                                            </Button>
-                                        )}
-                                    </CardFooter>
-                                </Card>
+                                <PricingCard
+                                    key={tier.key}
+                                    tier={tier}
+                                    plan={tier.plan ?? null}
+                                    isCurrent={isCurrent}
+                                    paymentsEnabled={paymentsEnabled}
+                                />
                             );
                         })}
                     </div>
@@ -223,7 +235,152 @@ function Detail({ label, value }: { label: string; value?: string | null }) {
             <dt className="text-xs uppercase tracking-wide text-muted-foreground">
                 {label}
             </dt>
-            <dd className="mt-1 font-medium capitalize">{value ?? "—"}</dd>
+            <dd className="mt-1 font-medium capitalize">
+                {value ?? "—"}
+            </dd>
         </div>
+    );
+}
+
+function PricingCard({
+    tier,
+    plan,
+    isCurrent,
+    paymentsEnabled,
+}: {
+    tier: TierConfig;
+    plan: {
+        id: string;
+        name: string;
+        price: string;
+        interval: string;
+        features: string[] | null;
+        description: string | null;
+    } | null;
+    isCurrent: boolean;
+    paymentsEnabled: boolean;
+}) {
+    const monthlyPrice = plan
+        ? Number(plan.price)
+        : null;
+    const isFree = monthlyPrice !== null && monthlyPrice <= 0;
+
+    return (
+        <Card
+            className={[
+                "relative",
+                isCurrent ? "border-primary" : undefined,
+                tier.featured ? "ring-1 ring-primary/50" : undefined,
+            ]
+                .filter(Boolean)
+                .join(" ")}
+        >
+            {tier.featured && (
+                <Badge
+                    className="absolute -top-3 left-1/2 -translate-x-1/2 z-10 bg-primary text-primary-foreground px-2 py-0.5 rounded-md text-xs font-medium shadow-sm"
+                    aria-hidden="true"
+                >
+                    Featured
+                </Badge>
+            )}
+            <CardHeader>
+                <div className="flex items-center justify-between">
+                    <div>
+                        <p className="text-xs uppercase tracking-wider text-muted-foreground">
+                            {tier.label}
+                        </p>
+                        <CardTitle className="flex items-center gap-1">
+                            {tier.planName}
+                            {tier.featured && (
+                                <Crown
+                                    className="h-4 w-4 text-primary"
+                                    aria-hidden="true"
+                                />
+                            )}
+                        </CardTitle>
+                    </div>
+                    {isCurrent && (
+                        <Badge variant="secondary">Current plan</Badge>
+                    )}
+                </div>
+                <CardDescription>{tier.description}</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+                <div className="flex items-baseline gap-1">
+                    <p className="text-3xl font-bold tracking-tight">
+                        {plan ? plan.price : "—"}
+                    </p>
+                    <span className="text-sm font-normal text-muted-foreground">
+                        {tier.priceSuffix}
+                    </span>
+                </div>
+                {plan?.features?.length ? (
+                    <ul className="flex flex-col gap-2 text-sm">
+                        {plan.features.map((f) => (
+                            <li key={f} className="flex items-start gap-2">
+                                <span
+                                    aria-hidden="true"
+                                    className="mt-0.5 text-primary"
+                                >
+                                    ✓
+                                </span>
+                                {f}
+                            </li>
+                        ))}
+                    </ul>
+                ) : null}
+            </CardContent>
+            <CardFooter>
+                {isCurrent ? (
+                    <p className="w-full text-center text-sm text-muted-foreground">
+                        This is your plan.
+                    </p>
+                ) : isFree ? (
+                    <Button
+                        className="w-full"
+                        variant="outline"
+                        asChild
+                    >
+                        <Link href="/billing">{tier.buttonLabel}</Link>
+                    </Button>
+                ) : paymentsEnabled && plan ? (
+                    <Button className="w-full" asChild>
+                        <Link
+                            href={`/billing/checkout/${plan.id}`}
+                        >
+                            {tier.featured ? (
+                                <>
+                                    <Sparkles
+                                        aria-hidden="true"
+                                        className="me-2 h-4 w-4"
+                                    />
+                                    {tier.buttonLabel} →
+                                </>
+                            ) : (
+                                <>
+                                    <Sparkles
+                                        aria-hidden="true"
+                                        className="me-2 h-4 w-4"
+                                    />
+                                    {tier.buttonLabel}
+                                </>
+                            )}
+                        </Link>
+                    </Button>
+                ) : (
+                    <Button
+                        className="w-full"
+                        disabled
+                        title="Payments are not configured yet"
+                    >
+                        <Sparkles
+                            aria-hidden="true"
+                            className="me-2 h-4 w-4"
+                        />
+                        Payments unavailable
+                    </Button>
+                )}
+            </CardFooter>
+        </Card>
     );
 }

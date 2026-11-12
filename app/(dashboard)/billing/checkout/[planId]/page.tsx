@@ -202,6 +202,7 @@ export default async function CheckoutPage({
                         </p>
                         <p className="text-xs">
                             By continuing you agree to the{" "}
+                            {/* TODO: Point to external landing page Terms once attached */}
                             <Link
                                 href="/terms"
                                 className="text-primary underline underline-offset-2"
@@ -209,6 +210,7 @@ export default async function CheckoutPage({
                                 Terms
                             </Link>{" "}
                             and{" "}
+                            {/* TODO: Point to external landing page Privacy Policy once attached */}
                             <Link
                                 href="/privacy-policy"
                                 className="text-primary underline underline-offset-2"
