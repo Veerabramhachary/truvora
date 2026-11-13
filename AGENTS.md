@@ -1,12 +1,12 @@
 # AGENTS.md — Truvora
 
-Privacy-first personal finance app: Next.js 16 (App Router, Turbopack) + React 19, Clerk, Drizzle + Neon Postgres, Refine (`simple-rest`) + TanStack Query, shadcn/ui + Tailwind v4.
+Privacy-first personal and small-business finance app (personal + business ledgers): Next.js 16 (App Router, Turbopack) + React 19, Clerk, Drizzle + Neon Postgres, Refine (`simple-rest`) + TanStack Query, shadcn/ui + Tailwind v4.
 
 ## Commands
 
 ```bash
 npm install
-cp .env.example .env   # README says .env.local; code loads dotenv from .env
+cp .env.example .env.local   # Next, drizzle-kit and scripts load .env.local (wins over .env); plain .env is only for Docker
 npm run dev            # http://localhost:3000
 npm run build          # full typecheck + production build
 npx tsc --noEmit       # typecheck only (no `typecheck` script)
@@ -21,8 +21,8 @@ Package manager is **npm** (`package-lock.json`, lockfileVersion 3). Do not swit
 
 ```bash
 npm run db:generate    # drizzle-kit generate → commit drizzle/*.sql + drizzle/meta/
-npm run db:migrate     # apply migrations (fresh envs)
-npm run db:push        # reconcile existing DB with schema (use -- --force non-interactive)
+npm run db:migrate     # apply migrations (fresh and existing DBs)
+npm run db:migrate:verbose  # same, prints the Postgres error on failure
 npm run db:studio
 npm run insert-plans   # seed plans (run before anything that needs feature gates)
 npm run insert-seed    # categories
@@ -38,7 +38,7 @@ Seed scripts attach rows to Clerk user id in `DEV_ID`. Plans must exist or Clerk
 - `app/api/**/route.ts` — REST handlers. Each re-checks `auth()` even though middleware exists.
 - `app/(dashboard)/components/Providers.tsx` — Refine root. `dataProvider("/api")` means resource names map to `/api/<resource>`.
 - `db/schema/*.ts` — sole Drizzle schema source (`drizzle.config.ts` glob). Do not add compiled `.js` schema copies under `drizzle/`.
-- `db/index.ts` — Neon serverless Pool + `drizzle`; loads `dotenv/config`.
+- `db/index.ts` — Neon serverless Pool + `drizzle`; loads env via `@next/env` (`.env.local`, then `.env`).
 - `lib/` — feature access, upgrade flow, site URL.
 - `scripts/` — one-off tsx seeds; not part of the app runtime.
 
@@ -55,11 +55,11 @@ Path alias: `@/*` → repo root (`tsconfig.json`).
 
 ## Env & ops
 
-- Required for most local work: `DATABASE_URL`, `ENCRYPTION_PASSPHRASE`, `ENCRYPTION_SALT`. Webhooks: `CLERK_WEBHOOK_SECRET`. Reminders cron: `RESEND_API_KEY`, `CRON_SECRET` (fail-closed if unset).
+- Required for most local work: `DATABASE_URL`, `ENCRYPTION_PASSPHRASE`, `ENCRYPTION_SALT`. Webhooks: `CLERK_WEBHOOK_SECRET`. Crons (`subscription-renewals`, `subscriptionsTC` reminders, `account-deletions`): `CRON_SECRET` (fail-closed if unset); reminders also need `RESEND_API_KEY` and `RENEWAL_EMAIL_FROM`.
 - Cron path `/api/crons/*` is public in middleware and authenticates with `Authorization: Bearer $CRON_SECRET`.
 - Webhooks must verify signatures on **raw body** (`req.text()`), not re-serialized JSON.
 - `NEXT_PUBLIC_APP_URL` feeds sitemap/metadata via `lib/site.ts` (falls back to localhost).
-- Migrations history was rebuilt: see `drizzle/README.md`. Existing DBs: `db:push`. New changes: `db:generate` and **commit SQL + `drizzle/meta/`**.
+- Migrations history was rebuilt: see `drizzle/README.md`. Never run `drizzle-kit push` against a real DB (it can apply destructive changes). Existing DBs: `db:migrate` (if the journal is empty, `db:journal-backfill` first, see `drizzle/README.md`). New changes: `db:generate` and **commit SQL + `drizzle/meta/`**.
 
 ## When changing code
 

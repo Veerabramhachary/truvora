@@ -7,11 +7,11 @@ import { reminderDeliveries } from "@/db/schema/reminder-deliveries";
 import { EmailTemplate } from "@/components/email-template";
 import { SubscriptionsDue } from "./subscriptions";
 import type { SubscriptionItem } from "@/components/email-template";
+import { authorizeCron } from "@/lib/cron-auth";
 
 export async function GET(request: NextRequest) {
-    const secret = process.env.CRON_SECRET;
-    if (!secret) return new NextResponse("Cron is not configured", { status: 503 });
-    if (request.headers.get("authorization") !== `Bearer ${secret}`) return new NextResponse("Unauthorized", { status: 401 });
+    const denied = authorizeCron(request);
+    if (denied) return denied;
     const apiKey = process.env.RESEND_API_KEY;
     const sender = process.env.RENEWAL_EMAIL_FROM;
     if (!apiKey || !sender) return new NextResponse("Email is not configured", { status: 503 });

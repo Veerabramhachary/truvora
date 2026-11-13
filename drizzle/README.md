@@ -12,20 +12,32 @@ unusable:
   against it and aborted on an interactive prompt.
 
 `drizzle/0000_baseline.sql` is a fresh baseline generated from the current
-TypeScript schema. It is the source of truth for new environments.
+TypeScript schema. It is the source of truth for new environments, and every
+later change is a numbered migration after it.
 
-## Applying to an existing database
-
-The baseline is a **create-from-scratch** script, so it will not apply cleanly
-to a database that already has these tables. Existing environments must be
-reconciled with `push`, which diffs the live database against the schema and
-applies only the delta:
+## Everyday workflow
 
 ```bash
-npm run db:push -- --force   # --force skips the confirmation prompt
+npm run db:generate -- --name <change_description>   # after editing db/schema/*.ts
+npm run db:migrate                                   # apply pending migrations
 ```
 
-`push` reconciles the following, which the previous schema definition got wrong:
+Commit the generated `.sql` file **and** the `drizzle/meta/` snapshots, and never hand-write a migration file: one that is not in `meta/_journal.json` is invisible to `db:migrate` and makes the next `db:generate` re-propose the same change. This is
+the same for a fresh database and an existing one: `db:migrate` applies only
+what the database's journal (`drizzle.__drizzle_migrations`) has not seen.
+
+**Do not use `drizzle-kit push` (or `db:push -- --force`) against a real
+database.** `push` diffs the live database against the TypeScript schema and
+applies the difference, and `--force` auto-approves the destructive parts
+(dropped columns and tables, data loss). It also writes nothing to the
+migration journal, which is what broke `db:migrate` on older databases (see
+below). Take a Neon branch or backup before migrating production.
+
+## History: what the one-time reconciliation fixed
+
+Databases created before the rebuild were reconciled once with `push` so they
+matched the new baseline. That already happened; it is not a step to repeat.
+It fixed:
 
 | Change | Why |
 | --- | --- |
@@ -35,34 +47,24 @@ npm run db:push -- --force   # --force skips the confirmation prompt
 | `CREATE TABLE feature_usage` | Added after the last surviving snapshot. |
 | `ALTER TYPE payment_provider ADD VALUE 'none'` | The Clerk webhook provisions new users with `provider: "none"`, which the previous enum rejected. |
 
-## After reconciling
-
-Once `push` has run, the baseline in this folder is what a fresh environment
-gets. Keep both in step: from now on, use `drizzle-kit generate` and commit the
-resulting `.sql` file **and** the `drizzle/meta/` snapshots.
-
-```bash
-npm run db:generate -- --name <change_description>
-```
-
 ## If `db:migrate` exits with code 1 and prints nothing
 
 `drizzle-kit migrate` with the Neon driver can fail without showing the
 database error. Run the same migrations with `npm run db:migrate:verbose`: it
 applies pending migrations in one transaction and prints the Postgres message,
 code, detail and hint on failure. Migrations should be idempotent
-(`IF NOT EXISTS`) so a database that was synced with `db:push` can still run
-them. Note `db:journal-backfill` only works on an EMPTY journal; it refuses to
-touch a journal that already has rows.
+(`IF NOT EXISTS`) so a database that was once synced with `db:push` can still
+run them. Note `db:journal-backfill` only works on an EMPTY journal; it refuses
+to touch a journal that already has rows.
 
-## If `db:migrate` fails on an existing database
+## If `db:migrate` fails on an existing database with an empty journal
 
-`push` writes nothing to `drizzle.__drizzle_migrations`, so a database that was
-reconciled with `push` has an **empty journal**. `npm run db:migrate` then
-treats `0000_baseline` as unapplied, replays it on top of live tables, and dies
-on the first `CREATE TABLE` (`relation "users" already exists`). The run is one
-transaction, so nothing is damaged — but nothing is applied either, and the
-only output you see is drizzle-kit's driver warning.
+A database that was reconciled with `push` has an **empty journal**, because
+`push` writes nothing to `drizzle.__drizzle_migrations`. `npm run db:migrate`
+then treats `0000_baseline` as unapplied, replays it on top of live tables, and
+dies on the first `CREATE TABLE` (`relation "users" already exists`). The run
+is one transaction, so nothing is damaged — but nothing is applied either, and
+the only output you see is drizzle-kit's driver warning.
 
 Mark the migrations the database already reflects, then migrate again; only
 the pending ones run:

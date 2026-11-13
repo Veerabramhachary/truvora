@@ -7,12 +7,6 @@
       "skillPath": "skills/clerk/SKILL.md",
       "computedHash": "61e33bfbc058da6c5924bfca7b2fedc57adf83d79a08014b15625c4b62b344e1"
     },
-    "clerk-astro-patterns": {
-      "source": "clerk/skills",
-      "sourceType": "github",
-      "skillPath": "skills/clerk-astro-patterns/SKILL.md",
-      "computedHash": "9f6a0d95dc9c8783166da05ae6be1bea054f4be0aa7a02c470e21e63a4b4baf9"
-    },
     "clerk-backend-api": {
       "source": "clerk/skills",
       "sourceType": "github",
@@ -36,18 +30,6 @@
       "sourceType": "github",
       "skillPath": "skills/clerk-nextjs-patterns/SKILL.md",
       "computedHash": "dbd12076e3f36815bdb967312184723e78d829278dcf0df366a77cabde1f5fbf"
-    },
-    "clerk-react-patterns": {
-      "source": "clerk/skills",
-      "sourceType": "github",
-      "skillPath": "skills/clerk-react-patterns/SKILL.md",
-      "computedHash": "9bbc28d1825bda0f31a33660b3e339719bc0ad2a30696dfde14ef6b9493371b0"
-    },
-    "clerk-react-router-patterns": {
-      "source": "clerk/skills",
-      "sourceType": "github",
-      "skillPath": "skills/clerk-react-router-patterns/SKILL.md",
-      "computedHash": "929d5912f42a2769f81aa027294a1caec65e0ce83f1f1db47c6df6758c5952bb"
     },
     "clerk-setup": {
       "source": "clerk/skills",

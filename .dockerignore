@@ -24,5 +24,7 @@ npm-debug.log*
 
 # Not needed inside the image
 deploy
+.agents
+skills-lock.json
 AGENTS.md
 README.md
