@@ -3,13 +3,11 @@ import {
     findDueAccountDeletions,
     processAccountDeletion,
 } from "@/lib/account-deletion";
+import { authorizeCron } from "@/lib/cron-auth";
 
 export async function GET(request: NextRequest) {
-    const secret = process.env.CRON_SECRET;
-    if (!secret) return new NextResponse("Cron is not configured", { status: 503 });
-    if (request.headers.get("authorization") !== `Bearer ${secret}`) {
-        return new NextResponse("Unauthorized", { status: 401 });
-    }
+    const denied = authorizeCron(request);
+    if (denied) return denied;
 
     try {
         const dueDeletions = await findDueAccountDeletions();

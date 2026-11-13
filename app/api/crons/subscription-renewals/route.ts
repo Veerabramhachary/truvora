@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { processSubscriptionRenewals } from "@/lib/subscription-renewals";
+import { authorizeCron } from "@/lib/cron-auth";
 
 /**
  * Daily renewal job (F-02/F-03). For every subscription whose `nextDate` has
@@ -10,11 +11,8 @@ import { processSubscriptionRenewals } from "@/lib/subscription-renewals";
  * `?dryRun=1` reports what would happen and writes nothing.
  */
 export async function GET(request: NextRequest) {
-    const secret = process.env.CRON_SECRET;
-    if (!secret) return new NextResponse("Cron is not configured", { status: 503 });
-    if (request.headers.get("authorization") !== `Bearer ${secret}`) {
-        return new NextResponse("Unauthorized", { status: 401 });
-    }
+    const denied = authorizeCron(request);
+    if (denied) return denied;
 
     const dryRun = request.nextUrl.searchParams.get("dryRun") === "1";
     try {

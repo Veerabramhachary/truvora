@@ -1,23 +1,10 @@
 import { db } from "@/db";
 import { auth } from "@clerk/nextjs/server";
-import { app_subscriptions, plans } from "@/db/schema/plans";
+import { app_subscriptions, plans, type FeatureLimits } from "@/db/schema/plans";
 import { and, asc, eq } from "drizzle-orm";
 
-export type FeatureLimits = {
-    exports?: { limit: number; interval: "month" | "year" | "none" }; // monthly export cap
-    subscriptions?: { limit: number }; // max active subscriptions
-    charts?: "basic" | "comparative" | "advanced"; // chart type tier
-    earlyAccess?: boolean;
-    autoRenewal?: boolean;
-    reminders?: "email" | "priority" | "customizable" | "personalized";
-    exportFormats?: { csv: boolean; pdf: boolean; pdfLevel: "none" | "basic" | "advanced"; xlsx: boolean };
-    customCategories?: boolean;
-    viewsAndFilters?: boolean;
-    notifications?: "email" | "push" | "webhook" | "all";
-    webhooks?: boolean;
-    // Tax summary
-    taxSummaryRows?: { limit: number }; // max tagged rows per tax summary
-};
+// Single definition lives next to the `plans.featureLimits` column.
+export type { FeatureLimits };
 
 type PlanRow = typeof plans.$inferSelect;
 type SubscriptionRow = typeof app_subscriptions.$inferSelect;

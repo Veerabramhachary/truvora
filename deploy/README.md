@@ -15,7 +15,7 @@ Everything else — Neon, Clerk, Upstash Redis, Resend — is host-agnostic.
 ```bash
 # on the server, from a checkout of this repo
 cp .env.example .env       # fill in every required value (see §2)
-npm run db:migrate         # fresh DBs; for an existing DB use: npm run db:push -- --force
+npm run db:migrate         # applies pending migrations (fresh or existing DB; empty journal: see drizzle/README.md)
 npm run insert-plans       # once, if the plans table is empty
 cd deploy && set -a && . ../.env && set +a && docker compose up -d --build
 # then: §5 proxy, §6 cron, §7 webhook, §8 smoke test
@@ -50,8 +50,8 @@ Copy `.env.example` → `.env` and fill every value. The load-bearing ones:
 Migrations run **from a dev machine against production**, not inside the container (the runtime image has no `drizzle-kit`):
 
 ```bash
-DATABASE_URL="<production url>" npm run db:migrate   # fresh DB
-DATABASE_URL="<production url>" npm run db:push -- --force   # existing DB (see drizzle/README.md)
+DATABASE_URL="<production url>" npm run db:migrate   # applies pending migrations (fresh or existing DB)
+# Existing DB whose migration journal is empty: run db:journal-backfill first (see drizzle/README.md). Never use db:push on production.
 npm run insert-plans    # plans must exist or every feature gate denies access
 ```
 
@@ -150,7 +150,7 @@ The webhook verifies the signature on the **raw request body** — do not put an
 
 ## 8. Smoke test
 
-- [ ] `GET /` and `/pricing` return 200 over HTTPS
+- [ ] `GET /` and `/privacy-policy` return 200 over HTTPS
 - [ ] Sign in, dashboard loads, an expense and a subscription create successfully
 - [ ] Clerk test event → `/api/webhooks/clerk` returns 200; a new user gets an `app_subscriptions` row
 - [ ] `./deploy/trigger-cron.sh` exits 0; check `/var/log/truvora-cron.log`
@@ -159,4 +159,4 @@ The webhook verifies the signature on the **raw request body** — do not put an
 
 ## 9. Rollback
 
-Keep the previous image tag (`docker tag truvora:previous truvora && docker run ...`). DB migrations are forward-only — take a Neon backup/branch before `db:migrate`/`db:push` on production. Do not change `ENCRYPTION_PASSPHRASE`/`ENCRYPTION_SALT` during any of this.
+Keep the previous image tag (`docker tag truvora:previous truvora && docker run ...`). DB migrations are forward-only — take a Neon backup/branch before `db:migrate` on production. Do not change `ENCRYPTION_PASSPHRASE`/`ENCRYPTION_SALT` during any of this.

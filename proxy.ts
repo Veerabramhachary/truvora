@@ -6,7 +6,6 @@ import { checkRateLimits, getClientIp, rateLimitHeaders } from "@/lib/rate-limit
 // Public routes
 const isPublicRoute = createRouteMatcher([
     "/",
-    "/pricing",
     "/privacy-policy(.*)",
     "/terms(.*)",
     "/auth/sign-in(.*)",
@@ -111,20 +110,6 @@ export async function proxy(req: NextRequest, evt: NextFetchEvent) {
             !hasAllowedOrigin(request)
         ) {
             return new NextResponse("Cross-origin request rejected", { status: 403 });
-        }
-
-        if (isApiRoute(request) && request.method === "OPTIONS") {
-            return new NextResponse(null, {
-                status: 204,
-                headers: {
-                    "Access-Control-Allow-Origin":
-                        request.headers.get("origin") ?? request.nextUrl.origin,
-                    "Access-Control-Allow-Credentials": "true",
-                    "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-                    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-                    Vary: "Origin",
-                },
-            });
         }
 
         // 1️⃣ Allow public routes immediately

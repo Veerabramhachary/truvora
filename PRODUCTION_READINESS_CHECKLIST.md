@@ -81,6 +81,6 @@ them in a staging environment configured like production.
 ## Current automated coverage
 
 CI runs lint, Vitest, `npx tsc --noEmit`, and `next build`. The current Vitest
-suite has ownership-filter tests; it does not replace
+suite covers ownership filters, exports, ledgers, renewals, tax and billing logic; it does not replace
 the staging checks above, especially for real webhook delivery, database
 cleanup, cron execution, or provider configuration.
