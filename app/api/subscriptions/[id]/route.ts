@@ -102,7 +102,7 @@ export async function PATCH(req: Request, { params }: Params) {
             );
         }
 
-        const result = await db.transaction(async (tx) => {
+        const initial = await db.transaction(async (tx) => {
             const [existingSubscription] = await tx
                 .select({
                     currency: subscriptions.currency,
@@ -129,16 +129,6 @@ export async function PATCH(req: Request, { params }: Params) {
                     body: { error: "Currency cannot be changed for an existing record" },
                 };
             }
-            if (
-                category.isCustom &&
-                category.id !== existingSubscription.categoryId &&
-                !(await canUseFeature(userId, "customCategories"))
-            ) {
-                return {
-                    status: 403 as const,
-                    body: { error: "Upgrade your plan to use custom categories" },
-                };
-            }
 
             const now = new Date();
             const endDate = subscriptionEndDate(data.endDate);
@@ -151,62 +141,207 @@ export async function PATCH(req: Request, { params }: Params) {
                 };
             }
 
-            const rows = await tx
-                .update(subscriptions)
-                .set({
-                    name: data.name,
-                    price: data.price,
-                    currency: data.currency,
-                    interval: data.interval,
-                    intervalCount: data.intervalCount ?? 1,
-                    startDate: data.startDate,
-                    endDate,
-                    nextDate:
-                        data.nextDate ??
-                        nextRenewalDate(
-                            data.startDate,
-                            data.interval,
-                            data.intervalCount,
-                        ),
-                    categoryId: category.id,
-                    note: data.note || null,
-                    active: expired ? false : shouldBeActive,
-                    deactivatedAt: expired
-                        ? endDate
-                        : shouldBeActive
-                          ? null
-                          : existingSubscription.deactivatedAt ?? now,
-                    ...taxPatch,
-                    updatedAt: new Date(),
-                })
-                .where(
-                    and(
-                        eq(subscriptions.id, id),
-                        eq(subscriptions.ledgerId, ledger.id),
-                    ),
-                )
-                .returning({ id: subscriptions.id });
-            // The subscription decides the tax treatment of every charge it has
-            // recorded, so the tax summary never disagrees with the subscription.
-            if (rows.length > 0 && data.taxKind !== undefined) {
-                await tx
-                    .update(transactions)
-                    .set({ taxKind: data.taxKind, updatedAt: new Date() })
+            const requiresCustomCategoryFeature =
+                category.isCustom &&
+                category.id !== existingSubscription.categoryId;
+
+            if (!requiresCustomCategoryFeature) {
+                const rows = await tx
+                    .update(subscriptions)
+                    .set({
+                        name: data.name,
+                        price: data.price,
+                        currency: data.currency,
+                        interval: data.interval,
+                        intervalCount: data.intervalCount ?? 1,
+                        startDate: data.startDate,
+                        endDate,
+                        nextDate:
+                            data.nextDate ??
+                            nextRenewalDate(
+                                data.startDate,
+                                data.interval,
+                                data.intervalCount,
+                            ),
+                        categoryId: category.id,
+                        note: data.note || null,
+                        active: expired ? false : shouldBeActive,
+                        deactivatedAt: expired
+                            ? endDate
+                            : shouldBeActive
+                              ? null
+                              : existingSubscription.deactivatedAt ?? now,
+                        ...taxPatch,
+                        updatedAt: new Date(),
+                    })
                     .where(
                         and(
-                            eq(transactions.subscriptionId, id),
-                            eq(transactions.ledgerId, ledger.id),
+                            eq(subscriptions.id, id),
+                            eq(subscriptions.ledgerId, ledger.id),
                         ),
-                    );
+                    )
+                    .returning({ id: subscriptions.id });
+                // The subscription decides the tax treatment of every charge it has
+                // recorded, so the tax summary never disagrees with the subscription.
+                if (rows.length > 0 && data.taxKind !== undefined) {
+                    await tx
+                        .update(transactions)
+                        .set({ taxKind: data.taxKind, updatedAt: new Date() })
+                        .where(
+                            and(
+                                eq(transactions.subscriptionId, id),
+                                eq(transactions.ledgerId, ledger.id),
+                            ),
+                        );
+                }
+                return { status: 200 as const, rows };
             }
-            return { status: 200 as const, rows };
+
+            return {
+                status: 202 as const,
+                existingCategoryId: existingSubscription.categoryId,
+            };
         });
 
-        if (result.status !== 200) {
-            return NextResponse.json(result.body, { status: result.status });
+        if (initial.status !== 200 && initial.status !== 202) {
+            return NextResponse.json(initial.body, { status: initial.status });
         }
 
-        const updated = result.rows;
+        let updated: { id: string }[];
+        if (initial.status === 200) {
+            updated = initial.rows;
+        } else {
+            // Run feature access outside the locked tx to avoid holding a pooled
+            // connection while canUseFeature acquires its own connection(s).
+            updated = [];
+            for (let attempt = 0; attempt < 2; attempt++) {
+                if (!(await canUseFeature(userId, "customCategories"))) {
+                    return NextResponse.json(
+                        { error: "Upgrade your plan to use custom categories" },
+                        { status: 403 },
+                    );
+                }
+
+                const final = await db.transaction(async (tx) => {
+                    const [existingSubscription] = await tx
+                        .select({
+                            currency: subscriptions.currency,
+                            active: subscriptions.active,
+                            deactivatedAt: subscriptions.deactivatedAt,
+                            categoryId: subscriptions.categoryId,
+                        })
+                        .from(subscriptions)
+                        .where(
+                            and(
+                                eq(subscriptions.id, id),
+                                eq(subscriptions.ledgerId, ledger.id),
+                            ),
+                        )
+                        .limit(1)
+                        .for("update");
+
+                    if (!existingSubscription) {
+                        return { status: 404 as const, body: { error: "Subscription not found" } };
+                    }
+                    if (data.currency !== existingSubscription.currency) {
+                        return {
+                            status: 400 as const,
+                            body: { error: "Currency cannot be changed for an existing record" },
+                        };
+                    }
+
+                    const now = new Date();
+                    const endDate = subscriptionEndDate(data.endDate);
+                    const expired = endDate < now;
+                    const shouldBeActive = data.active ?? existingSubscription.active;
+                    if (shouldBeActive && expired) {
+                        return {
+                            status: 400 as const,
+                            body: { error: "An expired subscription cannot be active" },
+                        };
+                    }
+
+                    const requiresCustomCategoryFeature =
+                        category.isCustom &&
+                        category.id !== existingSubscription.categoryId;
+                    if (requiresCustomCategoryFeature) {
+                        // Recheck outside the tx on the next attempt; never call
+                        // canUseFeature while holding this transaction/lock.
+                        return { status: 409 as const, body: { error: "retry" } };
+                    }
+
+                    const rows = await tx
+                        .update(subscriptions)
+                        .set({
+                            name: data.name,
+                            price: data.price,
+                            currency: data.currency,
+                            interval: data.interval,
+                            intervalCount: data.intervalCount ?? 1,
+                            startDate: data.startDate,
+                            endDate,
+                            nextDate:
+                                data.nextDate ??
+                                nextRenewalDate(
+                                    data.startDate,
+                                    data.interval,
+                                    data.intervalCount,
+                                ),
+                            categoryId: category.id,
+                            note: data.note || null,
+                            active: expired ? false : shouldBeActive,
+                            deactivatedAt: expired
+                                ? endDate
+                                : shouldBeActive
+                                  ? null
+                                  : existingSubscription.deactivatedAt ?? now,
+                            ...taxPatch,
+                            updatedAt: new Date(),
+                        })
+                        .where(
+                            and(
+                                eq(subscriptions.id, id),
+                                eq(subscriptions.ledgerId, ledger.id),
+                            ),
+                        )
+                        .returning({ id: subscriptions.id });
+                    if (rows.length > 0 && data.taxKind !== undefined) {
+                        await tx
+                            .update(transactions)
+                            .set({ taxKind: data.taxKind, updatedAt: new Date() })
+                            .where(
+                                and(
+                                    eq(transactions.subscriptionId, id),
+                                    eq(transactions.ledgerId, ledger.id),
+                                ),
+                            );
+                    }
+                    return { status: 200 as const, rows };
+                });
+
+                if (final.status === 409) {
+                    continue;
+                }
+                if (final.status !== 200) {
+                    return NextResponse.json(final.body, { status: final.status });
+                }
+                updated = final.rows;
+                break;
+            }
+            if (updated.length === 0) {
+                // Extremely rare contention: state kept changing. Fail safely.
+                if (!(await canUseFeature(userId, "customCategories"))) {
+                    return NextResponse.json(
+                        { error: "Upgrade your plan to use custom categories" },
+                        { status: 403 },
+                    );
+                }
+                return NextResponse.json(
+                    { error: "Could not save the subscription" },
+                    { status: 409 },
+                );
+            }
+        }
 
         if (updated.length === 0) {
             return NextResponse.json(
