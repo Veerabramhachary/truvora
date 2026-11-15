@@ -128,6 +128,26 @@ export async function fulfillPaymentOrder(params: {
             existing?.planId === plan.id &&
             (existing.status === "active" || existing.status === "trialing") &&
             existing.currentPeriodEnd > now;
+
+        if (
+            existing?.planId &&
+            existing.planId !== plan.id &&
+            (existing.status === "active" || existing.status === "trialing") &&
+            existing.currentPeriodEnd > now
+        ) {
+            const [existingPlan] = await tx
+                .select({ price: plans.price })
+                .from(plans)
+                .where(eq(plans.id, existing.planId))
+                .limit(1);
+
+            if (existingPlan && Number(existingPlan.price) > 0) {
+                throw new PaymentFulfillmentError(
+                    "An active paid plan already covers this period. The payment cannot replace it.",
+                    409,
+                );
+            }
+        }
         // The subscription row keeps one period; a same-plan renewal extends
         // it from the current end. The order row records only the slice this
         // payment bought, which is what a refund is prorated over.

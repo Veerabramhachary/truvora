@@ -223,9 +223,16 @@ const webhookSchema = z
         return NextResponse.json({ received: true, ignored: true });
     } catch (error) {
         if (error instanceof PaymentFulfillmentError) {
-            // Invalid amounts / inactive plans are not recoverable by a retry.
-            // Log and acknowledge so a real payment is investigated manually
-            // instead of disappearing into an endless retry loop.
+            // Invalid amounts / inactive plans / plan conflicts are not recoverable
+            // by a retry. Log and record so a captured-but-unfulfillable payment is
+            // durably visible for manual recovery/refund, then acknowledge.
+            const providerOrderId = payment?.order_id ?? order?.id;
+            if (providerOrderId) {
+                await recordPaymentFailure({
+                    providerOrderId,
+                    reason: error.message,
+                });
+            }
             console.error("[razorpay] Webhook could not fulfil order:", {
                 event: event.event,
                 orderId: order?.id ?? payment?.order_id,

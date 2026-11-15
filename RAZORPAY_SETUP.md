@@ -159,7 +159,8 @@ Use Razorpay test keys and test cards/UPI.
 - Recurring card/UPI mandates (Razorpay Subscriptions). The current flow sells
   **one billing period**; `currentPeriodEnd` is set, and the existing renewal
   cron only tracks the user's own subscriptions, not app billing.
-- Proration, dunning, GST invoices and plan switching mid-period.
+- Proration, dunning, GST invoices and plan switching mid-period (switching is
+  blocked while a paid period is active; the user cancels first).
 - Tax/GST fields on the generated invoice.
 - A second payment provider.
 

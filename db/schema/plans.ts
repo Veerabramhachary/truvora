@@ -8,6 +8,7 @@ import {
     boolean,
     timestamp,
     uuid,
+    uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { users } from "./users";
 import { relations } from "drizzle-orm";
@@ -105,7 +106,12 @@ export const app_subscriptions = pgTable("app_subscriptions", {
 
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+    // One billing row per user (B-06). Cancel/refund resolve "the" row, so a
+    // duplicate would let them act on the wrong one. The Step 1 dry run
+    // reported no duplicates before this was added.
+    uniqueIndex("app_subscriptions_user_id_unique").on(table.userId),
+]);
 
 export const subscriptionsRelations = relations(
     app_subscriptions,

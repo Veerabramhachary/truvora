@@ -16,7 +16,9 @@ import {
 import {
     fulfillPaymentOrder,
     PaymentFulfillmentError,
+    recordPaymentFailure,
 } from "@/lib/payment-fulfillment";
+import { getBillingState } from "@/lib/billing-state";
 
 export const runtime = "nodejs";
 
@@ -148,7 +150,30 @@ export async function POST(request: NextRequest) {
         }
 
         // Razorpay accounts that do not auto-capture return `authorized`.
+        // Reject conflicting plan changes before capture so we never take money
+        // for an order that cannot be fulfilled without replacing an active paid
+        // period. If already captured, fulfillment is the durable check.
         if (payment.status === "authorized") {
+            const billing = await getBillingState(order.userId);
+            if (
+                billing.status === "paid" &&
+                billing.plan?.id &&
+                billing.plan.id !== order.planId
+            ) {
+                await recordPaymentFailure({
+                    providerOrderId: order.providerOrderId,
+                    reason:
+                        "Payment not captured: active paid plan conflicts with this order.",
+                });
+                return NextResponse.json(
+                    {
+                        error:
+                            "This payment cannot be completed because another paid plan is active. The payment was not captured.",
+                    },
+                    { status: 409 },
+                );
+            }
+
             payment = await captureRazorpayPayment(
                 paymentId,
                 payment.amount,
@@ -163,12 +188,25 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        await fulfillPaymentOrder({
-            providerOrderId: order.providerOrderId,
-            providerPaymentId: payment.id,
-            amountPaise: payment.amount,
-            currency: payment.currency,
-        });
+        try {
+            await fulfillPaymentOrder({
+                providerOrderId: order.providerOrderId,
+                providerPaymentId: payment.id,
+                amountPaise: payment.amount,
+                currency: payment.currency,
+            });
+        } catch (error) {
+            if (
+                error instanceof PaymentFulfillmentError &&
+                error.status === 409
+            ) {
+                await recordPaymentFailure({
+                    providerOrderId: order.providerOrderId,
+                    reason: error.message,
+                });
+            }
+            throw error;
+        }
 
         return NextResponse.json({ success: true });
     } catch (error) {

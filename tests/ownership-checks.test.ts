@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { PATCH as patchExpense } from "@/app/api/expenses/[id]/route";
 import { PATCH as patchSubscription } from "@/app/api/subscriptions/[id]/route";
 import { requireLedger } from "@/lib/ledger";
+import { resolveCategory } from "@/lib/category-access";
 
 vi.mock("@clerk/nextjs/server", () => ({
     auth: vi.fn(),
@@ -18,11 +19,16 @@ vi.mock("@/lib/ledger", async (importOriginal) => ({
     requireLedger: vi.fn(),
 }));
 
+vi.mock("@/lib/category-access", () => ({
+    resolveCategory: vi.fn(),
+}));
+
 const LEDGER_ID = "11111111-1111-4111-8111-111111111111";
 
 vi.mock("@/db", () => ({
     db: {
         select: vi.fn(),
+        transaction: vi.fn(),
     },
 }));
 
@@ -31,7 +37,10 @@ afterEach(() => {
     vi.clearAllMocks();
 });
 
-async function captureOwnerFilter(handler: typeof patchExpense | typeof patchSubscription, body: object) {
+async function captureOwnerFilter(
+    handler: typeof patchExpense | typeof patchSubscription,
+    body: object,
+) {
     const conditions: SQL[] = [];
     vi.mocked(auth).mockResolvedValue({ userId: "viewer-user" } as never);
     vi.mocked(requireLedger).mockResolvedValue({
@@ -39,19 +48,36 @@ async function captureOwnerFilter(handler: typeof patchExpense | typeof patchSub
         ownerUserId: "viewer-user",
         type: "personal",
     } as never);
-    vi.mocked(db.select).mockImplementation(
-        () =>
-            ({
-                from: () => ({
-                    where: (condition: SQL) => ({
-                        limit: async () => {
+    vi.mocked(resolveCategory).mockResolvedValue({
+        id: "cat-1",
+        isCustom: false,
+    } as never);
+
+    const chain = () =>
+        ({
+            from: () => ({
+                where: (condition: SQL) => ({
+                    limit: () => ({
+                        for: async () => {
                             conditions.push(condition);
                             return [];
                         },
+                        then: (
+                            resolve: (value: unknown) => unknown,
+                            reject: (reason: unknown) => unknown,
+                        ) => {
+                            conditions.push(condition);
+                            return Promise.resolve([]).then(resolve, reject);
+                        },
                     }),
                 }),
-            }) as never,
-    );
+            }),
+        }) as never;
+
+    vi.mocked(db.select).mockImplementation(chain);
+    vi.mocked(db.transaction).mockImplementation((async (
+        callback: (tx: unknown) => unknown,
+    ) => callback({ select: chain })) as typeof db.transaction);
 
     const response = await handler(
         new Request("http://localhost/api/resource/00000000-0000-4000-8000-000000000001", {

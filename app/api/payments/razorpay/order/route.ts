@@ -161,6 +161,25 @@ export async function POST(request: NextRequest) {
         }
 
         const amountPaise = toPaise(discountedAmount.toFixed(2));
+
+        // D12: buying any plan while a paid period is active would replace it
+        // and forfeit the unused time. The user cancels (and can be refunded)
+        // first, then buys. This also blocks a ₹0 plan from replacing a paid
+        // one through the comped-checkout branch below.
+        const billing = await getBillingState(userId);
+        if (billing.status === "paid") {
+            return NextResponse.json(
+                {
+                    error:
+                        billing.plan?.id === plan.id
+                            ? "You are already on this plan."
+                            : "You already have an active paid plan. Cancel it from Billing before choosing another plan.",
+                    code: "PLAN_CHANGE_REQUIRES_CANCEL",
+                },
+                { status: 409 },
+            );
+        }
+
         if (amountPaise < BigInt(100)) {
             // Fully comped or free: skip Razorpay entirely and fulfill
             // server-side. The order row is created locally with a synthetic
@@ -211,15 +230,6 @@ export async function POST(request: NextRequest) {
             return NextResponse.json(
                 { error: "Plan price is invalid" },
                 { status: 400 },
-            );
-        }
-
-        const billing = await getBillingState(userId);
-
-        if (billing.status === "paid" && billing.plan?.id === plan.id) {
-            return NextResponse.json(
-                { error: "You are already on this plan." },
-                { status: 409 },
             );
         }
 

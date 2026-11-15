@@ -141,6 +141,13 @@
       "when": 1794722480318,
       "tag": "0019_refunds_and_cancellation",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1794736892507,
+      "tag": "0020_furry_stature",
+      "breakpoints": true
     }
   ]
 }
