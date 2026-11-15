@@ -13,6 +13,10 @@ import { users } from "./users";
 import { relations } from "drizzle-orm";
 import { paymentInvoices } from "./appInvoices";
 import { paymentTransactions } from "./appTransactions";
+import { paymentOrders } from "./payment-orders";
+import { paymentProviderEnum } from "./payment-provider";
+
+export { paymentProviderEnum };
 
 export const intervalEnum = pgEnum("plan_interval", ["month", "year"]);
 
@@ -24,12 +28,6 @@ export const app_subscriptionsStatusEnum = pgEnum("app_subscriptions_status", [
     "past_due",
     "trialing",
     "unpaid",
-]);
-export const paymentProviderEnum = pgEnum("payment_provider", [
-    "paypal",
-    "braintree",
-    "razorpay",
-    "none",
 ]);
 
 export type FeatureLimits = {
@@ -85,9 +83,16 @@ export const app_subscriptions = pgTable("app_subscriptions", {
     // Billing Period
     currentPeriodStart: timestamp("current_period_start").notNull(),
     currentPeriodEnd: timestamp("current_period_end").notNull(),
+    /** The order that funds the current period. Refunds and cancels act on it. */
+    currentPaymentOrderId: uuid("current_payment_order_id").references(
+        () => paymentOrders.id,
+        { onDelete: "set null" },
+    ),
     // Cancelation
     cancelAtPeriodEnd: boolean("cancel_at_period_end").default(false),
     canceledAt: timestamp("canceled_at"),
+    /** Short reason code from the cancel dialog, never free text. */
+    cancelReason: text("cancel_reason"),
     // trial
     trialStart: timestamp("trial_start"),
     trialEnd: timestamp("trial_end"),

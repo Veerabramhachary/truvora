@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { app_subscriptions, plans } from "@/db/schema/plans";
 import { paymentInvoices } from "@/db/schema/appInvoices";
@@ -21,9 +21,11 @@ export class PaymentFulfillmentError extends Error {
 /**
  * Grants the purchased plan exactly once.
  *
- * Every write is inside one transaction and the order row is locked first, so
+ * Every write is inside one transaction, taking the user advisory lock and
+ * then the order row, in the same order every billing mutation uses (§5.4), so
  * the browser `verify` call and the Razorpay webhook can arrive at the same
- * time without granting the plan twice. A previously-paid order is a no-op.
+ * time without granting the plan twice. A previously-paid order is a no-op,
+ * including after a refund (the order stays `paid`).
  */
 export async function fulfillPaymentOrder(params: {
     providerOrderId: string;
@@ -32,6 +34,25 @@ export async function fulfillPaymentOrder(params: {
     currency?: string | null;
 }): Promise<{ alreadyProcessed: boolean; planName: string }> {
     return db.transaction(async (tx) => {
+        /*
+          Lock order (§5.4): user advisory lock → order row → subscription row.
+          The owner id is read before the advisory lock because the lock key is
+          derived from it; it never changes.
+        */
+        const [owner] = await tx
+            .select({ userId: paymentOrders.userId })
+            .from(paymentOrders)
+            .where(eq(paymentOrders.providerOrderId, params.providerOrderId))
+            .limit(1);
+
+        if (!owner) {
+            throw new PaymentFulfillmentError("Payment order not found", 404);
+        }
+
+        await tx.execute(
+            sql`select pg_advisory_xact_lock(hashtext(${owner.userId}))`,
+        );
+
         const [order] = await tx
             .select()
             .from(paymentOrders)
@@ -107,11 +128,15 @@ export async function fulfillPaymentOrder(params: {
             existing?.planId === plan.id &&
             (existing.status === "active" || existing.status === "trialing") &&
             existing.currentPeriodEnd > now;
+        // The subscription row keeps one period; a same-plan renewal extends
+        // it from the current end. The order row records only the slice this
+        // payment bought, which is what a refund is prorated over.
         const periodStart = samePlanRenewal
             ? existing.currentPeriodStart
             : now;
+        const grantStart = samePlanRenewal ? existing.currentPeriodEnd : now;
         const periodEnd = addBillingInterval(
-            samePlanRenewal ? existing.currentPeriodEnd : now,
+            grantStart,
             plan.interval,
             plan.intervalCount,
         );
@@ -136,8 +161,10 @@ export async function fulfillPaymentOrder(params: {
                     provider: "razorpay",
                     currentPeriodStart: periodStart,
                     currentPeriodEnd: periodEnd,
+                    currentPaymentOrderId: order.id,
                     cancelAtPeriodEnd: false,
                     canceledAt: null,
+                    cancelReason: null,
                     updatedAt: now,
                 })
                 .where(
@@ -157,6 +184,7 @@ export async function fulfillPaymentOrder(params: {
                     provider: "razorpay",
                     currentPeriodStart: periodStart,
                     currentPeriodEnd: periodEnd,
+                    currentPaymentOrderId: order.id,
                     cancelAtPeriodEnd: false,
                     createdAt: now,
                     updatedAt: now,
@@ -171,6 +199,8 @@ export async function fulfillPaymentOrder(params: {
                 status: "paid",
                 providerPaymentId: params.providerPaymentId ?? null,
                 amountPaid: order.amount,
+                periodStart: grantStart,
+                periodEnd,
                 paidAt: now,
                 failureReason: null,
                 updatedAt: now,
@@ -178,11 +208,18 @@ export async function fulfillPaymentOrder(params: {
             .where(eq(paymentOrders.id, order.id));
 
         // Mark the platform discount redemption as consumed now that the
-        // order is paid (one redemption per user total).
+        // order is paid (one redemption per user total). The link and the
+        // amount are stored so a refund can be traced back to this order.
         if (order.discountId) {
             await tx
                 .update(platformDiscountRedemptions)
-                .set({ status: "completed", redeemedAt: now })
+                .set({
+                    status: "completed",
+                    redeemedAt: now,
+                    paymentOrderId: order.id,
+                    amountOff: order.discountAmount ?? null,
+                    currency: order.discountCurrency ?? order.currency,
+                })
                 .where(
                     and(
                         eq(

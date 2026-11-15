@@ -1,9 +1,9 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import { app_subscriptions, plans } from "@/db/schema/plans";
+import { plans } from "@/db/schema/plans";
 import { paymentOrders } from "@/db/schema/payment-orders";
 import { users } from "@/db/schema/users";
 import { checkRateLimits, rateLimitResponse } from "@/lib/rate-limit";
@@ -17,6 +17,7 @@ import {
 import { platformDiscounts } from "@/db/schema/platform-discounts";
 import { platformDiscountRedemptions } from "@/db/schema/platform-discount-redemptions";
 import { fulfillPaymentOrder } from "@/lib/payment-fulfillment";
+import { getBillingState } from "@/lib/billing-state";
 
 export const runtime = "nodejs";
 
@@ -191,23 +192,6 @@ export async function POST(request: NextRequest) {
                 // No amountPaise: ₹0 checkout has no Razorpay payment to match.
             });
 
-            // Mark the redemption consumed.
-            if (discountCampaign) {
-                await db
-                    .update(platformDiscountRedemptions)
-                    .set({ status: "completed", redeemedAt: new Date() })
-                    .where(
-                        and(
-                            eq(
-                                platformDiscountRedemptions.platformDiscountId,
-                                discountCampaign.id,
-                            ),
-                            eq(platformDiscountRedemptions.userId, userId),
-                            eq(platformDiscountRedemptions.status, "pending"),
-                        ),
-                    );
-            }
-
             return NextResponse.json({
                 success: true,
                 skipRazorpay: true,
@@ -230,25 +214,9 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const [current] = await db
-            .select({
-                planId: app_subscriptions.planId,
-                status: app_subscriptions.status,
-                currentPeriodEnd: app_subscriptions.currentPeriodEnd,
-            })
-            .from(app_subscriptions)
-            .where(
-                and(
-                    eq(app_subscriptions.userId, userId),
-                    inArray(app_subscriptions.status, ["active", "trialing"]),
-                ),
-            )
-            .limit(1);
+        const billing = await getBillingState(userId);
 
-        if (
-            current?.planId === plan.id &&
-            current.currentPeriodEnd.getTime() > Date.now()
-        ) {
+        if (billing.status === "paid" && billing.plan?.id === plan.id) {
             return NextResponse.json(
                 { error: "You are already on this plan." },
                 { status: 409 },

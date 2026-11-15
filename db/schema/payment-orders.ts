@@ -1,4 +1,6 @@
+import { sql } from "drizzle-orm";
 import {
+    check,
     decimal,
     jsonb,
     pgEnum,
@@ -7,7 +9,8 @@ import {
     timestamp,
     uuid,
 } from "drizzle-orm/pg-core";
-import { paymentProviderEnum, plans } from "./plans";
+import { plans } from "./plans";
+import { paymentProviderEnum } from "./payment-provider";
 import { users } from "./users";
 import { platformDiscounts } from "./platform-discounts";
 
@@ -57,13 +60,26 @@ export const paymentOrders = pgTable("payment_orders", {
     }),
     discountAmount: decimal("discount_amount", { precision: 10, scale: 2 }),
     discountCurrency: text("discount_currency"),
+    /** Running total of refunds for this payment. Never exceeds `amountPaid`. */
+    amountRefunded: decimal("amount_refunded", { precision: 10, scale: 2 })
+        .notNull()
+        .default("0.00"),
+    /** The slice of time this payment bought (set by fulfillment). */
+    periodStart: timestamp("period_start"),
+    periodEnd: timestamp("period_end"),
     status: paymentOrderStatusEnum("status").notNull().default("created"),
     notes: jsonb("notes").$type<Record<string, string>>(),
     failureReason: text("failure_reason"),
     paidAt: timestamp("paid_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => [
+    // Database-level over-refund guard. The refund service also checks in code.
+    check(
+        "payment_orders_amount_refunded_range",
+        sql`${table.amountRefunded} >= 0 AND ${table.amountRefunded} <= ${table.amountPaid}`,
+    ),
+]);
 
 export type PaymentOrder = typeof paymentOrders.$inferSelect;
 export type NewPaymentOrder = typeof paymentOrders.$inferInsert;
