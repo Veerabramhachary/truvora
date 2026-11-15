@@ -90,22 +90,6 @@ export async function PATCH(req: Request, { params }: Params) {
         // undefined = leave as is, null = clear, a kind = set.
         const taxPatch = data.taxKind === undefined ? {} : { taxKind: data.taxKind };
 
-        const [existingSubscription] = await db.select({
-            currency: subscriptions.currency,
-            active: subscriptions.active,
-            deactivatedAt: subscriptions.deactivatedAt,
-            categoryId: subscriptions.categoryId,
-        })
-            .from(subscriptions)
-            .where(and(eq(subscriptions.id, id), eq(subscriptions.ledgerId, ledger.id)))
-            .limit(1);
-        if (!existingSubscription) {
-            return NextResponse.json({ error: "Subscription not found" }, { status: 404 });
-        }
-        if (data.currency !== existingSubscription.currency) {
-            return NextResponse.json({ error: "Currency cannot be changed for an existing record" }, { status: 400 });
-        }
-
         const category = await resolveCategory(
             ledger.id,
             data.category,
@@ -117,78 +101,112 @@ export async function PATCH(req: Request, { params }: Params) {
                 { status: 404 },
             );
         }
-        if (
-            category.isCustom &&
-            category.id !== existingSubscription.categoryId &&
-            !(await canUseFeature(userId, "customCategories"))
-        ) {
-            return NextResponse.json(
-                { error: "Upgrade your plan to use custom categories" },
-                { status: 403 },
-            );
-        }
 
-        const now = new Date();
-        const endDate = subscriptionEndDate(data.endDate);
-        const expired = endDate < now;
-        const shouldBeActive = data.active ?? existingSubscription.active;
-        if (shouldBeActive && expired) {
-            return NextResponse.json(
-                { error: "An expired subscription cannot be active" },
-                { status: 400 },
-            );
-        }
-        const updated = await db.transaction(async (tx) => {
-        const rows = await tx
-            .update(subscriptions)
-            .set({
-                name: data.name,
-                price: data.price,
-                currency: data.currency,
-                interval: data.interval,
-                intervalCount: data.intervalCount ?? 1,
-                startDate: data.startDate,
-                endDate,
-                nextDate:
-                    data.nextDate ??
-                    nextRenewalDate(
-                        data.startDate,
-                        data.interval,
-                        data.intervalCount,
-                    ),
-                categoryId: category.id,
-                note: data.note || null,
-                active: expired ? false : shouldBeActive,
-                deactivatedAt: expired
-                    ? endDate
-                    : shouldBeActive
-                      ? null
-                      : existingSubscription.deactivatedAt ?? now,
-                ...taxPatch,
-                updatedAt: new Date(),
-            })
-            .where(
-                and(
-                    eq(subscriptions.id, id),
-                    eq(subscriptions.ledgerId, ledger.id),
-                ),
-            )
-            .returning({ id: subscriptions.id });
-        // The subscription decides the tax treatment of every charge it has
-        // recorded, so the tax summary never disagrees with the subscription.
-        if (rows.length > 0 && data.taxKind !== undefined) {
-            await tx
-                .update(transactions)
-                .set({ taxKind: data.taxKind, updatedAt: new Date() })
+        const result = await db.transaction(async (tx) => {
+            const [existingSubscription] = await tx
+                .select({
+                    currency: subscriptions.currency,
+                    active: subscriptions.active,
+                    deactivatedAt: subscriptions.deactivatedAt,
+                    categoryId: subscriptions.categoryId,
+                })
+                .from(subscriptions)
                 .where(
                     and(
-                        eq(transactions.subscriptionId, id),
-                        eq(transactions.ledgerId, ledger.id),
+                        eq(subscriptions.id, id),
+                        eq(subscriptions.ledgerId, ledger.id),
                     ),
-                );
-        }
-        return rows;
+                )
+                .limit(1)
+                .for("update");
+
+            if (!existingSubscription) {
+                return { status: 404 as const, body: { error: "Subscription not found" } };
+            }
+            if (data.currency !== existingSubscription.currency) {
+                return {
+                    status: 400 as const,
+                    body: { error: "Currency cannot be changed for an existing record" },
+                };
+            }
+            if (
+                category.isCustom &&
+                category.id !== existingSubscription.categoryId &&
+                !(await canUseFeature(userId, "customCategories"))
+            ) {
+                return {
+                    status: 403 as const,
+                    body: { error: "Upgrade your plan to use custom categories" },
+                };
+            }
+
+            const now = new Date();
+            const endDate = subscriptionEndDate(data.endDate);
+            const expired = endDate < now;
+            const shouldBeActive = data.active ?? existingSubscription.active;
+            if (shouldBeActive && expired) {
+                return {
+                    status: 400 as const,
+                    body: { error: "An expired subscription cannot be active" },
+                };
+            }
+
+            const rows = await tx
+                .update(subscriptions)
+                .set({
+                    name: data.name,
+                    price: data.price,
+                    currency: data.currency,
+                    interval: data.interval,
+                    intervalCount: data.intervalCount ?? 1,
+                    startDate: data.startDate,
+                    endDate,
+                    nextDate:
+                        data.nextDate ??
+                        nextRenewalDate(
+                            data.startDate,
+                            data.interval,
+                            data.intervalCount,
+                        ),
+                    categoryId: category.id,
+                    note: data.note || null,
+                    active: expired ? false : shouldBeActive,
+                    deactivatedAt: expired
+                        ? endDate
+                        : shouldBeActive
+                          ? null
+                          : existingSubscription.deactivatedAt ?? now,
+                    ...taxPatch,
+                    updatedAt: new Date(),
+                })
+                .where(
+                    and(
+                        eq(subscriptions.id, id),
+                        eq(subscriptions.ledgerId, ledger.id),
+                    ),
+                )
+                .returning({ id: subscriptions.id });
+            // The subscription decides the tax treatment of every charge it has
+            // recorded, so the tax summary never disagrees with the subscription.
+            if (rows.length > 0 && data.taxKind !== undefined) {
+                await tx
+                    .update(transactions)
+                    .set({ taxKind: data.taxKind, updatedAt: new Date() })
+                    .where(
+                        and(
+                            eq(transactions.subscriptionId, id),
+                            eq(transactions.ledgerId, ledger.id),
+                        ),
+                    );
+            }
+            return { status: 200 as const, rows };
         });
+
+        if (result.status !== 200) {
+            return NextResponse.json(result.body, { status: result.status });
+        }
+
+        const updated = result.rows;
 
         if (updated.length === 0) {
             return NextResponse.json(

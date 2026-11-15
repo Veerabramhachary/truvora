@@ -131,6 +131,10 @@ export default async function BillingPage({
     const paymentsEnabled = isRazorpayConfigured();
     const refundsEnabled = isBillingRefundsEnabled();
     const planChangeBlocked = billing?.status === "paid";
+    const cancellationAvailable =
+        billing?.status === "paid" &&
+        refundsEnabled &&
+        Boolean(billing.fundingOrderId);
 
     // Resolve the three fixed tiers to actual plan rows for prices + checkout.
     const planByName = (name: string) =>
@@ -278,6 +282,7 @@ export default async function BillingPage({
                                     isCurrent={isCurrent}
                                     paymentsEnabled={paymentsEnabled}
                                     planChangeBlocked={planChangeBlocked}
+                                    cancellationAvailable={cancellationAvailable}
                                 />
                             );
                         })}
@@ -398,6 +403,7 @@ function PricingCard({
     isCurrent,
     paymentsEnabled,
     planChangeBlocked,
+    cancellationAvailable,
 }: {
     tier: TierConfig;
     plan: {
@@ -411,6 +417,7 @@ function PricingCard({
     isCurrent: boolean;
     paymentsEnabled: boolean;
     planChangeBlocked: boolean;
+    cancellationAvailable: boolean;
 }) {
     const monthlyPrice = plan
         ? Number(plan.price)
@@ -489,7 +496,9 @@ function PricingCard({
                     </p>
                 ) : planChangeBlocked ? (
                     <p className="w-full text-center text-sm text-muted-foreground">
-                        Cancel your current plan to switch.
+                        {cancellationAvailable
+                            ? "Cancel your current plan to switch."
+                            : "Wait until the paid period ends or contact support to change plans."}
                     </p>
                 ) : isFree ? (
                     <Button
