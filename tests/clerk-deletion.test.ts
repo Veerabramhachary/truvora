@@ -4,11 +4,16 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import { POST } from "@/app/api/webhooks/clerk/route";
 import { app_subscriptions } from "@/db/schema/plans";
+import { paymentRefunds } from "@/db/schema/payment-refunds";
 import { subscriptions } from "@/db/schema/schema";
 import { reminderDeliveries } from "@/db/schema/reminder-deliveries";
 import { users } from "@/db/schema/users";
 
-const mocks = vi.hoisted(() => ({ event: null as unknown, verificationFails: false }));
+const mocks = vi.hoisted(() => ({
+    event: null as unknown,
+    verificationFails: false,
+    verificationTables: [] as unknown[],
+}));
 
 vi.mock("svix", () => ({
     Webhook: vi.fn().mockImplementation(() => ({
@@ -34,11 +39,14 @@ vi.mock("@/db", () => ({
             set: () => ({ where: async () => [] }),
         })),
         select: vi.fn(() => ({
-            from: () => ({
-                where: () => ({
-                    limit: async () => mocks.verificationFails ? [{ id: USER_ID }] : [],
-                }),
-            }),
+            from: (table: unknown) => {
+                mocks.verificationTables.push(table);
+                return {
+                    where: () => ({
+                        limit: async () => mocks.verificationFails ? [{ id: USER_ID }] : [],
+                    }),
+                };
+            },
         })),
     },
 }));
@@ -108,6 +116,7 @@ afterEach(() => {
         vi.mocked(console.error).mockRestore();
     }
     mocks.verificationFails = false;
+    mocks.verificationTables.length = 0;
     vi.clearAllMocks();
 });
 
@@ -148,6 +157,17 @@ describe("Clerk account deletion cleanup", () => {
         expect(firstResponse.status).toBe(200);
         expect(secondResponse.status).toBe(200);
         expect(deleteCalls.filter(({ table }) => table === reminderDeliveries)).toHaveLength(1);
+    });
+
+    it("verifies that refund workflow rows were removed with the account", async () => {
+        process.env.CLERK_WEBHOOK_SECRET = "whsec_test";
+        mocks.event = deletionEvent();
+        createTransactionMock();
+
+        const response = await sendDeletionWebhook();
+
+        expect(response.status).toBe(200);
+        expect(mocks.verificationTables).toContain(paymentRefunds);
     });
 
     it("returns 500 when reminder cleanup fails so Clerk can retry", async () => {

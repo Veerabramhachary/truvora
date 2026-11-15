@@ -36,6 +36,14 @@ disabled and the checkout API returns `503`.
    - `payment.captured`
    - `payment.failed`
    - `order.paid`
+   - `refund.created`
+   - `refund.processed`
+   - `refund.failed`
+
+   Refunds created in the Razorpay dashboard use the same three refund events,
+   so they reach the app even when the user never clicked anything. Leave
+   `refund.speed_changed` unsubscribed; if it is subscribed it is acknowledged
+   and ignored.
 
    Use a strong webhook secret and put it in `RAZORPAY_WEBHOOK_SECRET`.
 4. Confirm auto-capture is on, or leave it off — the verify route explicitly
@@ -151,9 +159,11 @@ Use Razorpay test keys and test cards/UPI.
 - Recurring card/UPI mandates (Razorpay Subscriptions). The current flow sells
   **one billing period**; `currentPeriodEnd` is set, and the existing renewal
   cron only tracks the user's own subscriptions, not app billing.
-- Refund UI, cancellation/self-serve plan changes, proration, dunning and
-  GST invoices.
+- Proration, dunning, GST invoices and plan switching mid-period.
 - Tax/GST fields on the generated invoice.
 - A second payment provider.
+
+Self-serve cancellation/refunds are built but gated by `BILLING_REFUNDS_ENABLED`
+(off by default; see Terms §5).
 
 Treat those as follow-up work before marketing “auto-renewing subscriptions”.

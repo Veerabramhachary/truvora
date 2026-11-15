@@ -214,9 +214,9 @@ export default async function CheckoutPage({
                         )}
 
                         <p className="text-xs text-muted-foreground">
-                            This purchase grants one billing period. Renewal
-                            reminders are still handled by Truvora; automatic
-                            card mandates are not enabled.
+                            This purchase grants one billing period and does not
+                            renew automatically. You can cancel from Billing;
+                            the refund policy is in the Terms.
                         </p>
                     </CardContent>
                     <CardFooter className="flex flex-col items-stretch gap-3">

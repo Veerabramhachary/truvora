@@ -3,7 +3,7 @@
 #
 # Usage:
 #   TRUVORA_BASE_URL=https://app.example.com CRON_SECRET=... \
-#     ./deploy/trigger-cron.sh [all|subscription-renewals|subscriptionsTC|account-deletions]
+#     ./deploy/trigger-cron.sh [all|subscription-renewals|subscriptionsTC|account-deletions|refund-reconcile]
 #
 # When run from crontab there is no interactive shell env, so put both
 # variables in a root-only file instead (chmod 600):
@@ -22,9 +22,9 @@ fi
 target="${1:-all}"
 case "$target" in
     # Order matters: renewals advance nextDate before reminders read it.
-    all)                 endpoints=(/api/crons/subscription-renewals /api/crons/subscriptionsTC /api/crons/account-deletions) ;;
-    subscription-renewals|subscriptionsTC|account-deletions) endpoints=("/api/crons/$target") ;;
-    *) echo "unknown target: $target (want all|subscription-renewals|subscriptionsTC|account-deletions)" >&2; exit 2 ;;
+    all)                 endpoints=(/api/crons/subscription-renewals /api/crons/subscriptionsTC /api/crons/refund-reconcile /api/crons/account-deletions) ;;
+    subscription-renewals|subscriptionsTC|account-deletions|refund-reconcile) endpoints=("/api/crons/$target") ;;
+    *) echo "unknown target: $target (want all|subscription-renewals|subscriptionsTC|account-deletions|refund-reconcile)" >&2; exit 2 ;;
 esac
 
 body_file="$(mktemp)"

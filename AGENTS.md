@@ -55,7 +55,7 @@ Path alias: `@/*` → repo root (`tsconfig.json`).
 
 ## Env & ops
 
-- Required for most local work: `DATABASE_URL`, `ENCRYPTION_PASSPHRASE`, `ENCRYPTION_SALT`. Webhooks: `CLERK_WEBHOOK_SECRET`. Crons (`subscription-renewals`, `subscriptionsTC` reminders, `account-deletions`): `CRON_SECRET` (fail-closed if unset); reminders also need `RESEND_API_KEY` and `RENEWAL_EMAIL_FROM`.
+- Required for most local work: `DATABASE_URL`, `ENCRYPTION_PASSPHRASE`, `ENCRYPTION_SALT`. Webhooks: `CLERK_WEBHOOK_SECRET`. Crons (`subscription-renewals`, `subscriptionsTC` reminders, `account-deletions`, `refund-reconcile`): `CRON_SECRET` (fail-closed if unset); reminders also need `RESEND_API_KEY` and `RENEWAL_EMAIL_FROM`. Self-serve refunds: `BILLING_REFUNDS_ENABLED` (off unless `true`).
 - Cron path `/api/crons/*` is public in middleware and authenticates with `Authorization: Bearer $CRON_SECRET`.
 - Webhooks must verify signatures on **raw body** (`req.text()`), not re-serialized JSON.
 - `NEXT_PUBLIC_APP_URL` feeds sitemap/metadata via `lib/site.ts` (falls back to localhost).

@@ -108,7 +108,7 @@ Caddy equivalent: it sets these by default (`reverse_proxy 127.0.0.1:3000`).
 
 ## 6. Cron (replaces vercel.json)
 
-Three daily jobs, now triggered by any scheduler: `subscription-renewals` at 00:00 UTC (records renewal charges and advances `nextDate`), `subscriptionsTC` reminders at 00:30 UTC (after renewals, so it sees the new dates), and `account-deletions` at 00:00 UTC:
+Four daily jobs, now triggered by any scheduler: `subscription-renewals` at 00:00 UTC (records renewal charges and advances `nextDate`), `account-deletions` at 00:00 UTC, `refund-reconcile` at 00:15 UTC (retries refunds Razorpay accepted but we could not record, and settles long-pending refunds), and `subscriptionsTC` reminders at 00:30 UTC (after renewals, so it sees the new dates):
 
 ```bash
 mkdir -p /etc/truvora
