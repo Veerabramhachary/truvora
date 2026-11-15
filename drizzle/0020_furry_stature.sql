@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "app_subscriptions_user_id_unique" ON "app_subscriptions" USING btree ("user_id");

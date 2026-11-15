@@ -70,7 +70,9 @@ export default async function CheckoutPage({
 
     const billing = await getBillingState(userId);
 
-    if (billing.status === "paid" && billing.plan?.id === plan.id) {
+    // D12: no mid-period switching. The order route enforces this too; the
+    // redirect keeps a stale link from showing a checkout that cannot work.
+    if (billing.status === "paid") {
         redirect("/billing");
     }
 

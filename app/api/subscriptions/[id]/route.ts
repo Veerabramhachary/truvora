@@ -94,6 +94,7 @@ export async function PATCH(req: Request, { params }: Params) {
             currency: subscriptions.currency,
             active: subscriptions.active,
             deactivatedAt: subscriptions.deactivatedAt,
+            categoryId: subscriptions.categoryId,
         })
             .from(subscriptions)
             .where(and(eq(subscriptions.id, id), eq(subscriptions.ledgerId, ledger.id)))
@@ -116,7 +117,11 @@ export async function PATCH(req: Request, { params }: Params) {
                 { status: 404 },
             );
         }
-        if (category.isCustom && !(await canUseFeature(userId, "customCategories"))) {
+        if (
+            category.isCustom &&
+            category.id !== existingSubscription.categoryId &&
+            !(await canUseFeature(userId, "customCategories"))
+        ) {
             return NextResponse.json(
                 { error: "Upgrade your plan to use custom categories" },
                 { status: 403 },

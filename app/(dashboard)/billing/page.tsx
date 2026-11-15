@@ -17,8 +17,20 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { isRazorpayConfigured } from "@/lib/razorpay";
 import { getBillingState } from "@/lib/billing-state";
+import {
+    getPaymentHistory,
+    type PaymentHistoryOrder,
+} from "@/lib/payment-history";
 import { isBillingRefundsEnabled } from "@/lib/refund-service";
 import { formatCurrency } from "@/lib/currencies";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
 import { BillingIntervalToggle } from "./BillingIntervalToggle";
 import { CancelPlanDialog } from "./CancelPlanDialog";
 
@@ -83,28 +95,34 @@ export default async function BillingPage({
     const billingInterval: Interval =
         interval === "year" ? "year" : "month";
 
-    const [availablePlans, billing, latestRefundRows] = await Promise.all([
-        db
-            .select()
-            .from(plans)
-            .where(
-                and(
-                    eq(plans.isActive, true),
-                    eq(plans.currency, "INR"),
-                    eq(plans.interval, billingInterval),
-                ),
-            )
-            .orderBy(asc(plans.price)),
-        userId ? getBillingState(userId) : Promise.resolve(null),
-        userId
-            ? db
-                  .select()
-                  .from(paymentRefunds)
-                  .where(eq(paymentRefunds.userId, userId))
-                  .orderBy(desc(paymentRefunds.createdAt))
-                  .limit(1)
-            : Promise.resolve([] as Array<typeof paymentRefunds.$inferSelect>),
-    ]);
+    const [availablePlans, billing, latestRefundRows, paymentHistory] =
+        await Promise.all([
+            db
+                .select()
+                .from(plans)
+                .where(
+                    and(
+                        eq(plans.isActive, true),
+                        eq(plans.currency, "INR"),
+                        eq(plans.interval, billingInterval),
+                    ),
+                )
+                .orderBy(asc(plans.price)),
+            userId ? getBillingState(userId) : Promise.resolve(null),
+            userId
+                ? db
+                      .select()
+                      .from(paymentRefunds)
+                      .where(eq(paymentRefunds.userId, userId))
+                      .orderBy(desc(paymentRefunds.createdAt))
+                      .limit(1)
+                : Promise.resolve(
+                      [] as Array<typeof paymentRefunds.$inferSelect>,
+                  ),
+            userId
+                ? getPaymentHistory(userId, 20)
+                : Promise.resolve([] as PaymentHistoryOrder[]),
+        ]);
 
     const currentPlan = billing?.plan ?? null;
     const subscription = billing?.subscription ?? null;
@@ -112,6 +130,7 @@ export default async function BillingPage({
     const latestRefund = latestRefundRows[0] ?? null;
     const paymentsEnabled = isRazorpayConfigured();
     const refundsEnabled = isBillingRefundsEnabled();
+    const planChangeBlocked = billing?.status === "paid";
 
     // Resolve the three fixed tiers to actual plan rows for prices + checkout.
     const planByName = (name: string) =>
@@ -258,10 +277,90 @@ export default async function BillingPage({
                                     plan={tier.plan ?? null}
                                     isCurrent={isCurrent}
                                     paymentsEnabled={paymentsEnabled}
+                                    planChangeBlocked={planChangeBlocked}
                                 />
                             );
                         })}
                     </div>
+
+                    {paymentHistory.length > 0 && (
+                        <Card className="mx-4 lg:mx-6">
+                            <CardHeader>
+                                <CardTitle>Payment history</CardTitle>
+                                <CardDescription>
+                                    Paid orders and any refunds. Refunds
+                                    normally arrive in 5–7 working days.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="overflow-x-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Date</TableHead>
+                                            <TableHead>Plan</TableHead>
+                                            <TableHead>Paid</TableHead>
+                                            <TableHead>Status</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {paymentHistory.map((order) => {
+                                            const latest =
+                                                order.refunds[0] ?? null;
+                                            return (
+                                                <TableRow key={order.id}>
+                                                    <TableCell>
+                                                        {new Date(
+                                                            order.paidAt ??
+                                                                order.createdAt,
+                                                        ).toLocaleDateString()}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {order.planName ??
+                                                            "Plan"}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {formatCurrency(
+                                                            Number(
+                                                                order.amountPaid,
+                                                            ),
+                                                            order.currency,
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Badge
+                                                            variant={
+                                                                latest?.status ===
+                                                                "failed"
+                                                                    ? "destructive"
+                                                                    : latest
+                                                                      ? "secondary"
+                                                                      : "outline"
+                                                            }
+                                                        >
+                                                            {latest
+                                                                ? latest.status ===
+                                                                  "processed"
+                                                                    ? `Refunded ${formatCurrency(
+                                                                          Number(
+                                                                              order.amountRefunded,
+                                                                          ),
+                                                                          order.currency,
+                                                                      )}`
+                                                                    : latest.status ===
+                                                                        "failed"
+                                                                      ? "Refund failed"
+                                                                      : "Refund pending"
+                                                                : "Paid"}
+                                                        </Badge>
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })}
+                                    </TableBody>
+                                </Table>
+                            </CardContent>
+                        </Card>
+                    )}
 
                     <p className="px-4 text-sm text-muted-foreground lg:px-6">
                         {paymentsEnabled
@@ -298,6 +397,7 @@ function PricingCard({
     plan,
     isCurrent,
     paymentsEnabled,
+    planChangeBlocked,
 }: {
     tier: TierConfig;
     plan: {
@@ -310,6 +410,7 @@ function PricingCard({
     } | null;
     isCurrent: boolean;
     paymentsEnabled: boolean;
+    planChangeBlocked: boolean;
 }) {
     const monthlyPrice = plan
         ? Number(plan.price)
@@ -385,6 +486,10 @@ function PricingCard({
                 {isCurrent ? (
                     <p className="w-full text-center text-sm text-muted-foreground">
                         This is your plan.
+                    </p>
+                ) : planChangeBlocked ? (
+                    <p className="w-full text-center text-sm text-muted-foreground">
+                        Cancel your current plan to switch.
                     </p>
                 ) : isFree ? (
                     <Button
