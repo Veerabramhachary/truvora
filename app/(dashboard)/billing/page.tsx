@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db";
-import { app_subscriptions, plans } from "@/db/schema/plans";
-import { and, asc, eq, gte, or } from "drizzle-orm";
+import { plans } from "@/db/schema/plans";
+import { and, asc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { BadgeCheck, Crown, Sparkles } from "lucide-react";
 import {
@@ -15,6 +15,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { isRazorpayConfigured } from "@/lib/razorpay";
+import { getBillingState } from "@/lib/billing-state";
 import { BillingIntervalToggle } from "./BillingIntervalToggle";
 
 export const metadata = { title: "Billing" };
@@ -78,7 +79,7 @@ export default async function BillingPage({
     const billingInterval: Interval =
         interval === "year" ? "year" : "month";
 
-    const [availablePlans, current] = await Promise.all([
+    const [availablePlans, billing] = await Promise.all([
         db
             .select()
             .from(plans)
@@ -90,30 +91,12 @@ export default async function BillingPage({
                 ),
             )
             .orderBy(asc(plans.price)),
-        userId
-            ? db
-                  .select({
-                      subscription: app_subscriptions,
-                      plan: plans,
-                  })
-                  .from(app_subscriptions)
-                  .innerJoin(plans, eq(app_subscriptions.planId, plans.id))
-                  .where(
-                      and(
-                          eq(app_subscriptions.userId, userId),
-                          or(
-                              eq(app_subscriptions.status, "active"),
-                              eq(app_subscriptions.status, "trialing"),
-                          ),
-                          gte(app_subscriptions.currentPeriodEnd, new Date()),
-                      ),
-                  )
-                  .limit(1)
-            : Promise.resolve([]),
+        userId ? getBillingState(userId) : Promise.resolve(null),
     ]);
 
-    const currentPlan = current[0]?.plan ?? null;
-    const subscription = current[0]?.subscription ?? null;
+    const currentPlan = billing?.plan ?? null;
+    const subscription = billing?.subscription ?? null;
+    const subscriptionPlan = billing?.subscriptionPlan ?? null;
     const paymentsEnabled = isRazorpayConfigured();
 
     // Resolve the three fixed tiers to actual plan rows for prices + checkout.
@@ -151,7 +134,7 @@ export default async function BillingPage({
                         </p>
                     </header>
 
-                    {subscription && (
+                    {subscription && billing?.status !== "free" && (
                         <Card className="mx-4 lg:mx-6">
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
@@ -159,31 +142,49 @@ export default async function BillingPage({
                                         className="h-5 w-5 text-primary"
                                         aria-hidden="true"
                                     />
-                                    Current subscription
+                                    {billing?.status === "paid"
+                                        ? "Current subscription"
+                                        : "Previous subscription"}
                                 </CardTitle>
                                 <CardDescription>
-                                    Current period ends{" "}
-                                    {new Date(
-                                        subscription.currentPeriodEnd,
-                                    ).toLocaleDateString()}
+                                    {billing?.status === "paid"
+                                        ? `Current period ends ${new Date(
+                                              subscription.currentPeriodEnd,
+                                          ).toLocaleDateString()}`
+                                        : billing?.status === "canceled"
+                                          ? `Canceled on ${new Date(
+                                                subscription.canceledAt ??
+                                                    subscription.currentPeriodEnd,
+                                            ).toLocaleDateString()}`
+                                          : `Your ${
+                                                subscriptionPlan?.name ??
+                                                "paid"
+                                            } plan ended on ${new Date(
+                                                subscription.currentPeriodEnd,
+                                            ).toLocaleDateString()}`}
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="grid gap-4 sm:grid-cols-3">
-                                <Detail label="Plan" value={currentPlan?.name} />
+                                <Detail
+                                    label="Plan"
+                                    value={subscriptionPlan?.name}
+                                />
                                 <Detail
                                     label="Price"
                                     value={
-                                        currentPlan
-                                            ? `${currentPlan.price} ${currentPlan.currency}/${currentPlan.interval}`
+                                        subscriptionPlan
+                                            ? `${subscriptionPlan.price} ${subscriptionPlan.currency}/${subscriptionPlan.interval}`
                                             : undefined
                                     }
                                 />
                                 <Detail
                                     label="Status"
                                     value={
-                                        subscription.status === "active"
+                                        billing?.status === "paid"
                                             ? "Active"
-                                            : subscription.status
+                                            : billing?.status === "canceled"
+                                              ? "Canceled"
+                                              : "Expired"
                                     }
                                 />
                             </CardContent>

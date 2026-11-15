@@ -12,6 +12,7 @@ import { paymentOrders } from "./schema/payment-orders";
 import { accountDeletions } from "./schema/account-deletions";
 import { ledgers } from "./schema/ledgers";
 import { platformDiscountRedemptions } from "./schema/platform-discount-redemptions";
+import { paymentRefunds } from "./schema/payment-refunds";
 
 nextEnv.loadEnvConfig(process.cwd());
 
@@ -23,6 +24,7 @@ export const schema = {
     categories,
     paymentTransactions,
     paymentOrders,
+    paymentRefunds,
     accountDeletions,
     ledgers,
     platformDiscountRedemptions,

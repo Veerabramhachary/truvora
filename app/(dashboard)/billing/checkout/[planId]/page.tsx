@@ -1,14 +1,15 @@
 import { auth } from "@clerk/nextjs/server";
-import { and, eq, gte, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, LockKeyhole, ShieldCheck } from "lucide-react";
 import { z } from "zod";
 import { db } from "@/db";
-import { app_subscriptions, plans } from "@/db/schema/plans";
+import { plans } from "@/db/schema/plans";
 import { toPaise } from "@/lib/money";
 import { formatCurrency } from "@/lib/currencies";
 import { isRazorpayConfigured } from "@/lib/razorpay";
+import { getBillingState } from "@/lib/billing-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -67,21 +68,9 @@ export default async function CheckoutPage({
     const amountPaise = toPaise(plan.price);
     if (amountPaise < BigInt(100)) redirect("/billing");
 
-    const [current] = await db
-        .select({
-            planId: app_subscriptions.planId,
-        })
-        .from(app_subscriptions)
-        .where(
-            and(
-                eq(app_subscriptions.userId, userId),
-                inArray(app_subscriptions.status, ["active", "trialing"]),
-                gte(app_subscriptions.currentPeriodEnd, new Date()),
-            ),
-        )
-        .limit(1);
+    const billing = await getBillingState(userId);
 
-    if (current?.planId === plan.id) {
+    if (billing.status === "paid" && billing.plan?.id === plan.id) {
         redirect("/billing");
     }
 

@@ -21,7 +21,9 @@
         "insert-plans": "tsx scripts/plans.ts",
         "insert-discounts": "tsx scripts/insert-discounts.ts",
         "update-user-plan": "tsx scripts/update-user-plan.ts",
-        "backfill-sub-links": "tsx scripts/backfill-subscription-links.ts"
+        "backfill-sub-links": "tsx scripts/backfill-subscription-links.ts",
+        "billing-dry-run": "tsx scripts/billing-dry-run.ts",
+        "backfill-payment-periods": "tsx scripts/backfill-payment-periods.ts"
     },
     "dependencies": {
         "@clerk/nextjs": "^6.39.0",
