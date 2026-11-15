@@ -1,7 +1,8 @@
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db";
 import { plans } from "@/db/schema/plans";
-import { and, asc, eq } from "drizzle-orm";
+import { paymentRefunds } from "@/db/schema/payment-refunds";
+import { and, asc, desc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { BadgeCheck, Crown, Sparkles } from "lucide-react";
 import {
@@ -16,7 +17,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { isRazorpayConfigured } from "@/lib/razorpay";
 import { getBillingState } from "@/lib/billing-state";
+import { isBillingRefundsEnabled } from "@/lib/refund-service";
+import { formatCurrency } from "@/lib/currencies";
 import { BillingIntervalToggle } from "./BillingIntervalToggle";
+import { CancelPlanDialog } from "./CancelPlanDialog";
 
 export const metadata = { title: "Billing" };
 
@@ -79,7 +83,7 @@ export default async function BillingPage({
     const billingInterval: Interval =
         interval === "year" ? "year" : "month";
 
-    const [availablePlans, billing] = await Promise.all([
+    const [availablePlans, billing, latestRefundRows] = await Promise.all([
         db
             .select()
             .from(plans)
@@ -92,12 +96,22 @@ export default async function BillingPage({
             )
             .orderBy(asc(plans.price)),
         userId ? getBillingState(userId) : Promise.resolve(null),
+        userId
+            ? db
+                  .select()
+                  .from(paymentRefunds)
+                  .where(eq(paymentRefunds.userId, userId))
+                  .orderBy(desc(paymentRefunds.createdAt))
+                  .limit(1)
+            : Promise.resolve([] as Array<typeof paymentRefunds.$inferSelect>),
     ]);
 
     const currentPlan = billing?.plan ?? null;
     const subscription = billing?.subscription ?? null;
     const subscriptionPlan = billing?.subscriptionPlan ?? null;
+    const latestRefund = latestRefundRows[0] ?? null;
     const paymentsEnabled = isRazorpayConfigured();
+    const refundsEnabled = isBillingRefundsEnabled();
 
     // Resolve the three fixed tiers to actual plan rows for prices + checkout.
     const planByName = (name: string) =>
@@ -188,6 +202,42 @@ export default async function BillingPage({
                                     }
                                 />
                             </CardContent>
+                            <CardFooter className="flex flex-wrap items-center justify-between gap-3">
+                                <p className="text-sm text-muted-foreground">
+                                    {billing?.status === "paid" ? (
+                                        "Your plan does not renew automatically."
+                                    ) : billing?.status === "canceled" &&
+                                      latestRefund ? (
+                                        latestRefund.status === "failed" ? (
+                                            <>
+                                                Refund{" "}
+                                                {formatCurrency(
+                                                    Number(latestRefund.amount),
+                                                    latestRefund.currency,
+                                                )}{" "}
+                                                did not complete. Contact
+                                                support and we will retry it.
+                                            </>
+                                        ) : (
+                                            <>
+                                                Refund{" "}
+                                                {formatCurrency(
+                                                    Number(latestRefund.amount),
+                                                    latestRefund.currency,
+                                                )}{" "}
+                                                ({latestRefund.status}). Refunds
+                                                normally arrive in 5–7 working
+                                                days.
+                                            </>
+                                        )
+                                    ) : null}
+                                </p>
+                                {billing?.status === "paid" &&
+                                    refundsEnabled &&
+                                    billing.fundingOrderId && (
+                                        <CancelPlanDialog />
+                                    )}
+                            </CardFooter>
                         </Card>
                     )}
 

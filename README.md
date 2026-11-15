@@ -101,6 +101,7 @@ Defined in `vercel.json` (replacements for other hosts are in
 | `/api/crons/subscription-renewals` | 00:00 | Records due subscription charges in the subscription's ledger and advances `nextDate` |
 | `/api/crons/subscriptionsTC` | 00:30 | Sends renewal reminder emails (runs after renewals) |
 | `/api/crons/account-deletions` | 00:00 | Retries pending account deletions |
+| `/api/crons/refund-reconcile` | 00:15 | Retries refunds Razorpay accepted but the database did not record; settles refunds pending for 8+ days |
 
 ## Testing
 

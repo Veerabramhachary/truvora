@@ -88,11 +88,23 @@ export default function TermsPage() {
                         limits. Where paid checkout is available, the price,
                         billing period and included features are shown before
                         you purchase. Payments are processed by Razorpay, our
-                        payment processor. A purchase currently grants the
-                        selected plan for one billing period and does not create
-                        an automatic recurring charge. Contact support for
-                        cancellation or refund requests; applicable consumer law
-                        also applies.
+                        payment processor. A purchase grants the selected plan
+                        for one billing period and does not create an automatic
+                        recurring charge.
+                    </p>
+                    <p className="mt-3">
+                        You can cancel a paid plan from the Billing page.
+                        Cancelling ends the plan immediately. If you cancel
+                        within 7 days of payment, you receive a full refund of
+                        the amount paid. After that, the refund is for the
+                        unused whole days of the current period, rounded down.
+                        No refund is available if the amount is below ₹10, the
+                        period has ended, the payment is older than about 170
+                        days (Razorpay&apos;s refund window), or you received a
+                        refund in the previous 90 days. A referral discount is
+                        not re-issued after a refund. Refunds are processed by
+                        Razorpay and normally arrive in 5&ndash;7 working days.
+                        Applicable consumer law also applies.
                     </p>
                 </section>
 

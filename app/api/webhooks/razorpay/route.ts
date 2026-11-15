@@ -6,6 +6,11 @@ import {
     PaymentFulfillmentError,
     recordPaymentFailure,
 } from "@/lib/payment-fulfillment";
+import { sendRefundFailureAlert } from "@/lib/refund-emails";
+import {
+    applyProviderRefund,
+    refundStatusFromProvider,
+} from "@/lib/refund-fulfillment";
 
 export const runtime = "nodejs";
 
@@ -19,6 +24,8 @@ const paymentEntitySchema = z
         currency: z.string().min(1).max(10),
         status: z.string().optional(),
         error_description: z.string().max(500).optional().nullable(),
+        /** Auto-refunds of uncaptured payments also arrive as refund events. */
+        captured: z.boolean().optional(),
     })
     .passthrough();
 
@@ -31,6 +38,19 @@ const orderEntitySchema = z
     })
     .passthrough();
 
+const refundEntitySchema = z
+    .object({
+        id: z.string().min(1).max(100),
+        payment_id: z.string().min(1).max(100),
+        amount: z.number().int().positive(),
+        currency: z.string().min(1).max(10).optional().nullable(),
+        status: z.string().min(1).max(30),
+        /** Our own refund id or `[]` for dashboard-issued refunds. */
+        notes: z.unknown().optional(),
+        speed_requested: z.string().max(20).optional().nullable(),
+    })
+    .passthrough();
+
 const webhookSchema = z
     .object({
         event: z.string().min(1).max(100),
@@ -40,7 +60,9 @@ const webhookSchema = z
                     .object({ entity: paymentEntitySchema })
                     .optional(),
                 order: z.object({ entity: orderEntitySchema }).optional(),
+                refund: z.object({ entity: refundEntitySchema }).optional(),
             })
+            .passthrough()
             .optional(),
     })
     .passthrough();
@@ -52,8 +74,7 @@ const webhookSchema = z
  * verified with the webhook secret; the JSON is parsed only after that check.
  * This route is the durable source of truth if the browser closes before the
  * verify call completes.
- */
-export async function POST(request: NextRequest) {
+ */export async function POST(request: NextRequest) {
     const secret = process.env.RAZORPAY_WEBHOOK_SECRET?.trim();
     if (!secret) {
         return NextResponse.json(
@@ -144,7 +165,61 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ received: true });
         }
 
-        // Acknowledge unsubscribed events so Razorpay does not retry them.
+        if (
+            event.event === "refund.created" ||
+            event.event === "refund.processed" ||
+            event.event === "refund.failed"
+        ) {
+            const refund = event.payload?.refund?.entity;
+            if (!refund) {
+                return NextResponse.json({ received: true, ignored: true });
+            }
+
+            // Auto-refunds of uncaptured payments also arrive as refund events.
+            // They are not ours to record (§5.8 gap).
+            if (payment?.captured === false) {
+                console.error(
+                    "[razorpay] Ignoring refund webhook for an uncaptured payment:",
+                    { event: event.event, refundId: refund.id },
+                );
+                return NextResponse.json({ received: true, ignored: true });
+            }
+
+            const result = await applyProviderRefund({
+                providerPaymentId: refund.payment_id,
+                providerRefundId: refund.id,
+                amountPaise: refund.amount,
+                currency: refund.currency ?? payment?.currency ?? null,
+                status: refundStatusFromProvider(refund.status),
+                notes: refund.notes,
+            });
+
+            if (
+                !result.applied &&
+                result.reason &&
+                result.reason !== "already_processed" &&
+                result.reason !== "pending" &&
+                result.reason !== "failed"
+            ) {
+                console.error("[razorpay] Refund webhook could not be applied:", {
+                    event: event.event,
+                    refundId: refund.id,
+                    reason: result.reason,
+                });
+            }
+            if (result.reason === "failed" && result.changed) {
+                await sendRefundFailureAlert(refund.id);
+            }
+
+            return NextResponse.json({
+                received: true,
+                applied: result.applied,
+                endedPlan: result.endedPlan,
+            });
+        }
+
+        // Acknowledge unsubscribed events (`refund.speed_changed` included) so
+        // Razorpay does not retry them.
         return NextResponse.json({ received: true, ignored: true });
     } catch (error) {
         if (error instanceof PaymentFulfillmentError) {

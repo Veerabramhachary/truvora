@@ -34,9 +34,10 @@ account has an active subscription row.
   `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` configured. Without those keys the
   **Upgrade** buttons stay disabled and paid plans are assigned by seeding the
   plans and updating the user's subscription (admin/ops task).
-- A checkout buys **one billing period**. There is no automatic renewal,
-  cancellation, refund, or proration flow yet, so a paid plan expires at the end
-  of its period and the account falls back to the cheapest free plan.
+- A checkout buys **one billing period**. There is no automatic renewal. You
+  can cancel a paid plan from **Billing**; cancelling ends it immediately and
+  refunds the unused time under the policy in the Terms (a full refund within 7
+  days, otherwise unused whole days).
 - If the `plans` table is empty, a user is created without a subscription row.
   Every plan-gated feature then denies access until a plan is assigned.
 
@@ -416,9 +417,10 @@ These appear in plan descriptions or navigation but are not built yet:
 - **Customizable reminder lead times** — reminders are fixed at 1, 3, and 7
   days ahead.
 - **Bank or card connections** and automatic transaction import.
-- **Automatic renewals, cancellation, refunds, proration** — each checkout buys
-  a single billing period; there is no subscription mandate or self-serve
-  cancel/refund flow.
+- **Automatic renewals and proration** — each checkout buys a single billing
+  period; there is no subscription mandate. Cancelling and refunding the unused
+  time is available from Billing; changing plan mid-period still means
+  cancelling and buying again.
 - **GST calculations** — Pro's description mentions an "18% GST expense
   breakdown", but no GST calculation exists in the current app. Tax tagging and
   the tax summary are the implemented tax features.

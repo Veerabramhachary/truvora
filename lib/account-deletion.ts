@@ -7,6 +7,7 @@ import { paymentTransactions } from "@/db/schema/appTransactions";
 import { expenses } from "@/db/schema/expenses";
 import { featureUsage } from "@/db/schema/feature-usage";
 import { app_subscriptions } from "@/db/schema/plans";
+import { paymentRefunds } from "@/db/schema/payment-refunds";
 import { reminderDeliveries } from "@/db/schema/reminder-deliveries";
 import { categories, subscriptions, transactions } from "@/db/schema/schema";
 import { users } from "@/db/schema/users";
@@ -127,6 +128,7 @@ async function cleanupUserData(clerkUserId: string) {
         db.select({ id: featureUsage.id }).from(featureUsage).where(eq(featureUsage.userId, clerkUserId)).limit(1),
         db.select({ id: categories.id }).from(categories).where(eq(categories.userId, clerkUserId)).limit(1),
         db.select({ id: app_subscriptions.id }).from(app_subscriptions).where(eq(app_subscriptions.userId, clerkUserId)).limit(1),
+        db.select({ id: paymentRefunds.id }).from(paymentRefunds).where(eq(paymentRefunds.userId, clerkUserId)).limit(1),
         db.select({ id: transactions.id }).from(transactions).where(
             or(
                 eq(transactions.userId, clerkUserId),
