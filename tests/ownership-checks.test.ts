@@ -75,10 +75,9 @@ async function captureOwnerFilter(
         }) as never;
 
     vi.mocked(db.select).mockImplementation(chain);
-    vi.mocked(db.transaction).mockImplementation(
-        async (callback: (tx: { select: typeof chain }) => unknown) =>
-            callback({ select: chain }),
-    );
+    vi.mocked(db.transaction).mockImplementation((async (
+        callback: (tx: unknown) => unknown,
+    ) => callback({ select: chain })) as typeof db.transaction);
 
     const response = await handler(
         new Request("http://localhost/api/resource/00000000-0000-4000-8000-000000000001", {
