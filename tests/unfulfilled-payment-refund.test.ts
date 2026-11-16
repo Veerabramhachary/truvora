@@ -67,12 +67,18 @@ vi.mock("@/lib/razorpay", () => ({
     getRazorpayConfig: mocks.config,
     createRazorpayRefund: mocks.createRefund,
     RazorpayError: class RazorpayError extends Error {
-        code: string;
+        status: number | null;
+        code: string | null;
         retryable: boolean;
-        constructor(message: string, code: string, retryable: boolean) {
+        constructor(
+            message: string,
+            status: number | null = null,
+            options: { code?: string | null; retryable?: boolean } = {},
+        ) {
             super(message);
-            this.code = code;
-            this.retryable = retryable;
+            this.status = status;
+            this.code = options.code ?? null;
+            this.retryable = options.retryable ?? false;
         }
     },
 }));
