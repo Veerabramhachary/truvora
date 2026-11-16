@@ -161,7 +161,10 @@ describe("checkout plan-switch guard", () => {
 
         const response = await post(OTHER_PLAN_ID);
 
-        expect(response.status).toBe(409);
+        expect(response.status).toBe(400);
+        expect(await response.json()).toMatchObject({
+            code: "PLAN_NOT_PURCHASABLE",
+        });
         expect(mocks.fulfill).not.toHaveBeenCalled();
     });
 

@@ -111,11 +111,26 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // The Free plan, and any plan that costs nothing before discounts, has
+        // no checkout: it is the fallback tier, never something to buy (R-05).
+        // Letting it through created ₹0 "paid" orders and rewrote the Free row.
+        // Runs before billing lookups so a plain Free-plan checkout attempt is
+        // rejected without extra reads (and cannot crash on a missing billing row).
+        if (toPaise(plan.price) < BigInt(100)) {
+            return NextResponse.json(
+                {
+                    error: "This plan does not need checkout.",
+                    code: "PLAN_NOT_PURCHASABLE",
+                },
+                { status: 400 },
+            );
+        }
+
         // D12: buying any plan while a paid period is active would replace it
         // and forfeit the unused time. The user cancels (and can be refunded)
         // first, then buys. Same-plan is rejected whatever the current status.
         const billing = await getBillingState(userId);
-        if (billing.plan?.id === plan.id) {
+        if (billing?.plan?.id === plan.id) {
             return NextResponse.json(
                 {
                     error: "You are already on this plan.",
@@ -124,7 +139,7 @@ export async function POST(request: NextRequest) {
                 { status: 409 },
             );
         }
-        if (billing.status === "paid") {
+        if (billing?.status === "paid") {
             return NextResponse.json(
                 {
                     error:
@@ -132,19 +147,6 @@ export async function POST(request: NextRequest) {
                     code: "PLAN_CHANGE_REQUIRES_CANCEL",
                 },
                 { status: 409 },
-            );
-        }
-
-        // The Free plan, and any plan that costs nothing before discounts, has
-        // no checkout: it is the fallback tier, never something to buy (R-05).
-        // Letting it through created ₹0 "paid" orders and rewrote the Free row.
-        if (toPaise(plan.price) < BigInt(100)) {
-            return NextResponse.json(
-                {
-                    error: "This plan does not need checkout.",
-                    code: "PLAN_NOT_PURCHASABLE",
-                },
-                { status: 400 },
             );
         }
 
