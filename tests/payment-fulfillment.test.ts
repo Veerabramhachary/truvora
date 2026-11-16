@@ -1,25 +1,28 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * B-09: an order stays `status = 'paid'` after a refund (the refund is tracked
- * on `amount_refunded` and `payment_refunds`). A replayed `payment.captured`
- * webhook must therefore be a no-op, or a refunded customer would get the plan
- * back. The guard is the paid-status check, so a fully refunded order is enough
- * to exercise it.
+ * Guards inside `fulfillPaymentOrder` that protect money (audit B-09, R-03):
+ *  - a replayed payment.captured for an already paid (or refunded) order is a
+ *    no-op and never grants the plan again
+ *  - a payment already being refunded cannot activate a plan later
+ *  - a payment cannot replace an active paid plan
  */
 const dbMock = vi.hoisted(() => {
     let queue: unknown[][] = [];
-    const updates: unknown[] = [];
-    const inserts: unknown[] = [];
+    const updates: Array<Record<string, unknown>> = [];
+    const inserts: Array<Record<string, unknown>> = [];
 
     const chain = () => {
         const result: Record<string, unknown> = {
             from: () => result,
             where: () => result,
+            orderBy: () => result,
             limit: () => result,
             for: () => result,
-            then: (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) =>
-                Promise.resolve(queue.shift() ?? []).then(resolve, reject),
+            then: (
+                resolve: (value: unknown) => unknown,
+                reject: (reason: unknown) => unknown,
+            ) => Promise.resolve(queue.shift() ?? []).then(resolve, reject),
         };
         return result;
     };
@@ -27,24 +30,19 @@ const dbMock = vi.hoisted(() => {
     const tx = {
         select: vi.fn(() => chain()),
         update: vi.fn(() => ({
-            set: (values: unknown) => {
+            set: (values: Record<string, unknown>) => {
                 updates.push(values);
                 return { where: async () => undefined };
             },
         })),
         insert: vi.fn(() => ({
-            values: (values: unknown) => {
+            values: (values: Record<string, unknown>) => {
                 inserts.push(values);
-                const conflict = {
-                    returning: async () => [{ id: "invoice-1" }],
-                    then: (
-                        resolve: (value: unknown) => unknown,
-                        reject: (reason: unknown) => unknown,
-                    ) => Promise.resolve(undefined).then(resolve, reject),
-                };
                 return {
-                    returning: async () => [{ id: "subscription-1" }],
-                    onConflictDoNothing: () => conflict,
+                    returning: async () => [{ id: "new-row" }],
+                    onConflictDoNothing: () => ({
+                        returning: async () => [{ id: "new-row" }],
+                    }),
                 };
             },
         })),
@@ -70,55 +68,123 @@ vi.mock("@/db", () => ({
     db: { transaction: (fn: (tx: unknown) => unknown) => fn(dbMock.tx) },
 }));
 
-import { fulfillPaymentOrder } from "@/lib/payment-fulfillment";
+import {
+    fulfillPaymentOrder,
+    PaymentFulfillmentError,
+} from "@/lib/payment-fulfillment";
 
-const order = {
-    id: "00000000-0000-4000-8000-000000000001",
-    userId: "user-refunded",
-    planId: "00000000-0000-4000-8000-000000000002",
-    provider: "razorpay",
-    providerOrderId: "order_refunded",
-    providerPaymentId: "pay_refunded",
-    receipt: "trv_test",
-    amount: "129.00",
-    amountPaid: "129.00",
-    amountRefunded: "129.00",
-    periodStart: new Date("2026-11-01T00:00:00.000Z"),
-    periodEnd: new Date("2026-12-01T00:00:00.000Z"),
+const USER_ID = "user_pay";
+const PLAN_ID = "plan-starter";
+
+function orderRow(overrides: Record<string, unknown> = {}) {
+    return {
+        id: "order-1",
+        userId: USER_ID,
+        planId: PLAN_ID,
+        providerOrderId: "order_1",
+        amount: "129.00",
+        currency: "INR",
+        status: "created",
+        discountId: null,
+        ...overrides,
+    };
+}
+
+function planRow(overrides: Record<string, unknown> = {}) {
+    return {
+        id: PLAN_ID,
+        name: "Starter",
+        price: "129.00",
+        currency: "INR",
+        interval: "month",
+        intervalCount: 1,
+        isActive: true,
+        ...overrides,
+    };
+}
+
+const params = {
+    providerOrderId: "order_1",
+    providerPaymentId: "pay_1",
+    amountPaise: 12900,
     currency: "INR",
-    discountId: null,
-    discountAmount: null,
-    discountCurrency: null,
-    status: "paid",
-    notes: null,
-    failureReason: null,
-    paidAt: new Date("2026-11-01T00:00:00.000Z"),
-    createdAt: new Date("2026-11-01T00:00:00.000Z"),
-    updatedAt: new Date("2026-11-01T00:00:00.000Z"),
-};
+} as const;
 
-describe("fulfillPaymentOrder", () => {
-    it("does not re-grant a plan when a paid order is replayed after a refund", async () => {
-        dbMock.reset();
+beforeEach(() => {
+    dbMock.reset();
+});
+
+describe("fulfillPaymentOrder guards", () => {
+    it("is a no-op for an order that is already paid, even after a refund", async () => {
         dbMock.setQueue([
-            [{ userId: order.userId }],
-            [order],
-            [{ name: "Starter" }],
+            [{ userId: USER_ID }],
+            [orderRow({ status: "paid" })],
+            [planRow()],
         ]);
 
-        const result = await fulfillPaymentOrder({
-            providerOrderId: order.providerOrderId,
-            providerPaymentId: order.providerPaymentId,
-            amountPaise: 12900,
-            currency: "INR",
-        });
+        const result = await fulfillPaymentOrder(params);
 
-        expect(result).toEqual({
-            alreadyProcessed: true,
-            planName: "Starter",
-        });
-        // No subscription write, no invoice, no payment row: nothing to undo.
+        expect(result).toEqual({ alreadyProcessed: true, planName: "Starter" });
         expect(dbMock.updates).toHaveLength(0);
         expect(dbMock.inserts).toHaveLength(0);
+    });
+
+    it("refuses to activate a plan for a payment that is being refunded", async () => {
+        dbMock.setQueue([
+            [{ userId: USER_ID }],
+            [orderRow({ status: "failed" })],
+            [planRow()],
+            [{ id: "refund-row" }],
+        ]);
+
+        await expect(fulfillPaymentOrder(params)).rejects.toMatchObject({
+            name: "PaymentFulfillmentError",
+            status: 409,
+            message: expect.stringContaining("refunded"),
+        });
+        expect(dbMock.updates).toHaveLength(0);
+        expect(dbMock.inserts).toHaveLength(0);
+    });
+
+    it("refuses a payment that would replace an active paid plan", async () => {
+        dbMock.setQueue([
+            [{ userId: USER_ID }],
+            [orderRow()],
+            [planRow({ price: "299.00", name: "Pro" })],
+            [],
+            [
+                {
+                    id: "sub-1",
+                    planId: "plan-other",
+                    status: "active",
+                    currentPeriodStart: new Date(Date.now() - 86_400_000),
+                    currentPeriodEnd: new Date(Date.now() + 20 * 86_400_000),
+                },
+            ],
+            [{ price: "129.00" }],
+        ]);
+
+        const attempt = fulfillPaymentOrder(params);
+
+        await expect(attempt).rejects.toBeInstanceOf(PaymentFulfillmentError);
+        await expect(attempt).rejects.toMatchObject({
+            status: 409,
+            message: expect.stringContaining("active paid plan"),
+        });
+        expect(dbMock.updates).toHaveLength(0);
+        expect(dbMock.inserts).toHaveLength(0);
+    });
+
+    it("rejects a payment whose amount differs from the order", async () => {
+        dbMock.setQueue([
+            [{ userId: USER_ID }],
+            [orderRow()],
+            [planRow()],
+            [],
+        ]);
+
+        await expect(
+            fulfillPaymentOrder({ ...params, amountPaise: 100 }),
+        ).rejects.toMatchObject({ status: 400 });
     });
 });

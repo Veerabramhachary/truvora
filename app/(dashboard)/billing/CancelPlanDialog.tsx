@@ -77,6 +77,10 @@ export function CancelPlanDialog() {
 
     function onOpenChange(next: boolean) {
         setOpen(next);
+        // Re-render the billing page only after the confirmation is dismissed.
+        // Doing it on success unmounted this dialog (the page stops rendering it
+        // once the plan is canceled) and the refund reference vanished (R-06).
+        if (!next && success) router.refresh();
         if (next) {
             setSuccess(null);
             setPreview(null);
@@ -110,7 +114,6 @@ export function CancelPlanDialog() {
                 return;
             }
             setSuccess(body);
-            router.refresh();
         } catch {
             setError("The cancellation could not be completed. Please try again.");
         } finally {

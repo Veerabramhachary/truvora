@@ -27,6 +27,13 @@ export type RefundApplyResult = {
     reason?: RefundApplyReason;
 };
 
+/**
+ * `payment_refunds.calc.source` for a refund that returns a payment Razorpay
+ * captured but we could not turn into a plan (R-03). The order is never `paid`,
+ * so these rows only track status; they never touch `amount_refunded`.
+ */
+export const UNFULFILLED_REFUND_SOURCE = "unfulfilled-payment";
+
 const UUID_PATTERN =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -44,6 +51,12 @@ export function refundIdFromNotes(notes: unknown): string | null {
     return typeof value === "string" && UUID_PATTERN.test(value) ? value : null;
 }
 
+function isUnfulfilledRefundRow(row: {
+    calc: Record<string, unknown> | null;
+}): boolean {
+    return row.calc?.source === UNFULFILLED_REFUND_SOURCE;
+}
+
 /**
  * Applies one Razorpay refund event to the order, subscription and accounting
  * rows (§5.8). Callers are webhooks, the ops script and cancel-now, so this
@@ -51,8 +64,11 @@ export function refundIdFromNotes(notes: unknown): string | null {
  * the accounting row's idempotency key is the second guard.
  *
  * A refund ends the plan when it is full **and** the refunded order funds the
- * current period, or when the caller passes `endPlan` (cancel-now; access ends
- * on acceptance, not when the money lands). Refunding an old order after a
+ * current period, or when it was requested by the user through cancel-now
+ * (access ends on acceptance, not when the money lands). A user-requested
+ * refund is recognised from its own `payment_refunds` row, so the webhook and
+ * the reconciler finish a cancel the same way cancel-now would if cancel-now
+ * never got to its second transaction (R-02). Refunding an old order after a
  * re-purchase must not cancel the new, paid period.
  *
  * `applied = true` does not mean a plan ended; check `endedPlan`.
@@ -64,14 +80,14 @@ export async function applyProviderRefund(params: {
     currency?: string | null;
     status: ProviderRefundStatus;
     notes?: unknown;
-    /** Local `payment_refunds.id`, used by our own refunds and the ops tool. */
+    /** Local `payment_refunds.id`, used by our own refunds and the ops script. */
     refundId?: string | null;
     requestedBy?: "user" | "ops" | "provider";
     kind?: "full_window" | "prorated" | "external";
     speedRequested?: string;
     /** Cancel-now: a provider `pending` still revokes access and records money. */
     applyWhenPending?: boolean;
-    /** Cancel-now always ends the plan; webhooks use the full-refund rule. */
+    /** Cancel-now always ends the plan; webhooks use the row or the full-refund rule. */
     endPlan?: boolean;
     /** Optional short reason from the cancel dialog. */
     cancelReason?: string | null;
@@ -113,9 +129,72 @@ export async function applyProviderRefund(params: {
             };
         }
 
+        const refundId =
+            (params.refundId && UUID_PATTERN.test(params.refundId)
+                ? params.refundId
+                : null) ?? refundIdFromNotes(params.notes);
+
+        const [existing] = await tx
+            .select()
+            .from(paymentRefunds)
+            .where(
+                and(
+                    eq(paymentRefunds.paymentOrderId, order.id),
+                    or(
+                        eq(paymentRefunds.providerRefundId, params.providerRefundId),
+                        refundId ? eq(paymentRefunds.id, refundId) : undefined,
+                    ),
+                ),
+            )
+            .limit(1);
+
         // Covers both a never-completed checkout and an auto-refund of a payment
-        // Razorpay never captured. Neither is money we may refund locally.
+        // Razorpay never captured. Neither is money we may refund locally, with
+        // one exception: our own refund of a captured payment that could not be
+        // fulfilled. Its order is not `paid`, so only the workflow row moves.
         if (order.status !== "paid") {
+            if (existing && isUnfulfilledRefundRow(existing)) {
+                const settleReason: RefundApplyReason =
+                    params.status === "failed"
+                        ? "failed"
+                        : params.status === "pending"
+                          ? "pending"
+                          : "already_processed";
+
+                if (
+                    existing.status === "processed" ||
+                    existing.status === params.status
+                ) {
+                    return {
+                        applied: false,
+                        endedPlan: false,
+                        changed: false,
+                        reason: settleReason,
+                    };
+                }
+
+                const settledAt = new Date();
+                await tx
+                    .update(paymentRefunds)
+                    .set({
+                        status: params.status,
+                        providerRefundId: params.providerRefundId,
+                        processedAt:
+                            params.status === "processed" ? settledAt : null,
+                        errorCode:
+                            params.status === "failed" ? "REFUND_FAILED" : null,
+                        updatedAt: settledAt,
+                    })
+                    .where(eq(paymentRefunds.id, existing.id));
+
+                return {
+                    applied: false,
+                    endedPlan: false,
+                    changed: true,
+                    reason: settleReason,
+                };
+            }
+
             return {
                 applied: false,
                 endedPlan: false,
@@ -136,33 +215,23 @@ export async function applyProviderRefund(params: {
             };
         }
 
-        const refundId =
-            (params.refundId && UUID_PATTERN.test(params.refundId)
-                ? params.refundId
-                : null) ?? refundIdFromNotes(params.notes);
-
-        const [existing] = await tx
-            .select()
-            .from(paymentRefunds)
-            .where(
-                and(
-                    eq(paymentRefunds.paymentOrderId, order.id),
-                    or(
-                        eq(paymentRefunds.providerRefundId, params.providerRefundId),
-                        refundId ? eq(paymentRefunds.id, refundId) : undefined,
-                    ),
-                ),
-            )
-            .limit(1);
-
         const [subscription] = await tx
             .select()
             .from(app_subscriptions)
             .where(eq(app_subscriptions.userId, order.userId))
             .orderBy(desc(app_subscriptions.currentPeriodEnd))
-            .limit(1);
+            .limit(1)
+            .for("update");
 
         const now = new Date();
+
+        // A refund the user asked for through cancel-now is a cancellation even
+        // when the event arrives through the webhook or the reconciler (R-02).
+        const userCancel =
+            existing?.requestedBy === "user" &&
+            (existing.kind === "full_window" || existing.kind === "prorated");
+        const applyWhenPending = params.applyWhenPending ?? userCancel;
+        const endPlan = params.endPlan ?? (userCancel ? true : undefined);
 
         /**
          * Revokes access for the current funding order. Safe to call on every
@@ -196,7 +265,7 @@ export async function applyProviderRefund(params: {
         };
 
         if (existing?.status === "processed") {
-            const endedPlan = await endPlanIfCurrent(params.endPlan === true);
+            const endedPlan = await endPlanIfCurrent(endPlan === true);
             return {
                 applied: false,
                 endedPlan,
@@ -205,9 +274,11 @@ export async function applyProviderRefund(params: {
             };
         }
 
+        const accountingKey = `razorpay:refund:${params.providerRefundId}`;
+
         const shouldApply =
             params.status === "processed" ||
-            (params.status === "pending" && params.applyWhenPending === true);
+            (params.status === "pending" && applyWhenPending === true);
 
         // Pending/failed events only move the workflow row; no money changes
         // until Razorpay reports `processed` (or cancel-now accepted a pending).
@@ -221,6 +292,71 @@ export async function applyProviderRefund(params: {
                 };
             }
 
+            // R-01: cancel-now applies the money when Razorpay *accepts* a
+            // pending refund. If that refund later fails, the money never left,
+            // so the order total, the accounting row and the discount must be
+            // put back or the order looks refunded and can never be retried.
+            // The plan stays canceled (D3/D6); support re-issues the refund.
+            if (existing && params.status === "failed") {
+                const [accounted] = await tx
+                    .select({
+                        id: paymentTransactions.id,
+                        amount: paymentTransactions.amount,
+                        status: paymentTransactions.status,
+                    })
+                    .from(paymentTransactions)
+                    .where(eq(paymentTransactions.idempotencyKey, accountingKey))
+                    .limit(1);
+
+                if (accounted && accounted.status === "succeeded") {
+                    const reversedPaise = toPaise(accounted.amount);
+                    const currentPaise = toPaise(order.amountRefunded);
+                    const restoredPaise =
+                        currentPaise > reversedPaise
+                            ? currentPaise - reversedPaise
+                            : BigInt(0);
+
+                    await tx
+                        .update(paymentOrders)
+                        .set({
+                            amountRefunded: fromPaise(restoredPaise),
+                            updatedAt: now,
+                        })
+                        .where(eq(paymentOrders.id, order.id));
+
+                    await tx
+                        .update(paymentTransactions)
+                        .set({
+                            status: "failed",
+                            errorMessage: "Refund failed at the provider",
+                            updatedAt: now,
+                        })
+                        .where(eq(paymentTransactions.id, accounted.id));
+
+                    if (order.discountId) {
+                        await tx
+                            .update(platformDiscountRedemptions)
+                            .set({ status: "completed", updatedAt: now })
+                            .where(
+                                and(
+                                    eq(
+                                        platformDiscountRedemptions.userId,
+                                        order.userId,
+                                    ),
+                                    eq(
+                                        platformDiscountRedemptions.platformDiscountId,
+                                        order.discountId,
+                                    ),
+                                    eq(
+                                        platformDiscountRedemptions.status,
+                                        "refunded",
+                                    ),
+                                ),
+                            );
+                    }
+                }
+            }
+
             if (existing) {
                 await tx
                     .update(paymentRefunds)
@@ -231,7 +367,8 @@ export async function applyProviderRefund(params: {
                         appSubscriptionId:
                             existing.appSubscriptionId ?? subscription?.id ?? null,
                         processedAt: null,
-                        errorCode: null,
+                        errorCode:
+                            params.status === "failed" ? "REFUND_FAILED" : null,
                         updatedAt: now,
                     })
                     .where(eq(paymentRefunds.id, existing.id));
@@ -281,7 +418,6 @@ export async function applyProviderRefund(params: {
             };
         }
 
-        const accountingKey = `razorpay:refund:${params.providerRefundId}`;
         const [alreadyAccounted] = await tx
             .select({ id: paymentTransactions.id })
             .from(paymentTransactions)
@@ -292,7 +428,7 @@ export async function applyProviderRefund(params: {
         // later `refund.processed` must only settle the status. This is the
         // second guard behind the row status.
         if (alreadyAccounted) {
-            const endedPlan = await endPlanIfCurrent(params.endPlan === true);
+            const endedPlan = await endPlanIfCurrent(endPlan === true);
             const statusChanged =
                 existing != null && existing.status !== params.status;
             if (statusChanged) {
@@ -372,7 +508,7 @@ export async function applyProviderRefund(params: {
             .where(eq(paymentOrders.id, order.id));
 
         const endedPlan = await endPlanIfCurrent(
-            params.endPlan ?? totalPaise === paidPaise,
+            endPlan ?? totalPaise === paidPaise,
         );
 
         const [invoice] = await tx

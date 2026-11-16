@@ -78,3 +78,44 @@ export async function sendRefundFailureAlert(refundId: string) {
         console.error("[refunds] Could not send refund failure alert:", error);
     }
 }
+
+/**
+ * Sent when Razorpay captured a payment that could not be turned into a plan
+ * (for example a second checkout opened in another tab) and we refunded it.
+ */
+export async function sendUnfulfilledPaymentNotice(params: {
+    email: string | null;
+    amount: string;
+    currency: string;
+    refundId: string;
+}) {
+    const mailer = getMailer();
+    if (!mailer || !params.email) {
+        console.error(
+            "[refunds] Unfulfilled-payment notice not sent; email is not configured:",
+            params.refundId,
+        );
+        return;
+    }
+
+    try {
+        const result = await mailer.resend.emails.send(
+            {
+                from: mailer.from,
+                to: params.email,
+                subject: "We are refunding a payment we could not apply",
+                text: [
+                    `We received a payment of ${params.amount} ${params.currency}, but it could not be applied to your account, so no plan was changed.`,
+                    "",
+                    "We have started a full refund. Refunds are processed by Razorpay and normally arrive in 5-7 working days.",
+                    "",
+                    `Reference: ${params.refundId}`,
+                ].join("\n"),
+            },
+            { idempotencyKey: `refund-unfulfilled/${params.refundId}` },
+        );
+        if (result.error) throw new Error(result.error.name);
+    } catch (error) {
+        console.error("[refunds] Could not send unfulfilled-payment notice:", error);
+    }
+}

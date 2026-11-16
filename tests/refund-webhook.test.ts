@@ -7,6 +7,11 @@ const mocks = vi.hoisted(() => ({
     fulfill: vi.fn(),
     failure: vi.fn(),
     send: vi.fn(),
+    unfulfilled: vi.fn(),
+}));
+
+vi.mock("@/lib/unfulfilled-payment-refund", () => ({
+    refundUnfulfilledPayment: mocks.unfulfilled,
 }));
 
 vi.mock("@/lib/refund-fulfillment", async (importOriginal) => ({
@@ -27,6 +32,7 @@ vi.mock("resend", () => ({
 }));
 
 import { POST } from "@/app/api/webhooks/razorpay/route";
+import { PaymentFulfillmentError } from "@/lib/payment-fulfillment";
 
 const SECRET = "whsec_test";
 
@@ -93,6 +99,9 @@ beforeEach(() => {
     });
     mocks.failure.mockReset().mockResolvedValue(undefined);
     mocks.send.mockReset().mockResolvedValue({ error: null });
+    mocks.unfulfilled
+        .mockReset()
+        .mockResolvedValue({ outcome: "refund_started" });
 });
 
 afterEach(() => {
@@ -223,6 +232,72 @@ describe("Razorpay refund webhook", () => {
         expect(response.status).toBe(200);
         expect(mocks.apply).not.toHaveBeenCalled();
         await expect(response.json()).resolves.toMatchObject({ ignored: true });
+    });
+
+    it("auto-refunds a captured payment that fulfillment refuses (R-03)", async () => {
+        vi.spyOn(console, "error").mockImplementation(() => {});
+        mocks.fulfill.mockRejectedValue(
+            new PaymentFulfillmentError(
+                "An active paid plan already covers this period.",
+                409,
+            ),
+        );
+
+        const response = await POST(
+            signedRequest({
+                event: "payment.captured",
+                payload: {
+                    payment: {
+                        entity: {
+                            id: "pay_1",
+                            order_id: "order_1",
+                            amount: 12900,
+                            currency: "INR",
+                            status: "captured",
+                        },
+                    },
+                },
+            }),
+        );
+
+        expect(response.status).toBe(200);
+        expect(mocks.failure).toHaveBeenCalled();
+        expect(mocks.unfulfilled).toHaveBeenCalledWith({
+            providerOrderId: "order_1",
+            providerPaymentId: "pay_1",
+            amountPaise: 12900,
+            reason: "unfulfillable",
+        });
+    });
+
+    it("does not auto-refund an amount mismatch; that needs a person", async () => {
+        vi.spyOn(console, "error").mockImplementation(() => {});
+        mocks.fulfill.mockRejectedValue(
+            new PaymentFulfillmentError(
+                "Payment amount does not match the order",
+                400,
+            ),
+        );
+
+        const response = await POST(
+            signedRequest({
+                event: "payment.captured",
+                payload: {
+                    payment: {
+                        entity: {
+                            id: "pay_1",
+                            order_id: "order_1",
+                            amount: 100,
+                            currency: "INR",
+                            status: "captured",
+                        },
+                    },
+                },
+            }),
+        );
+
+        expect(response.status).toBe(200);
+        expect(mocks.unfulfilled).not.toHaveBeenCalled();
     });
 
     it("still dispatches payment.captured to fulfillment", async () => {

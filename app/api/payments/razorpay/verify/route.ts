@@ -19,6 +19,7 @@ import {
     recordPaymentFailure,
 } from "@/lib/payment-fulfillment";
 import { getBillingState } from "@/lib/billing-state";
+import { refundUnfulfilledPayment } from "@/lib/unfulfilled-payment-refund";
 
 export const runtime = "nodejs";
 
@@ -204,6 +205,30 @@ export async function POST(request: NextRequest) {
                     providerOrderId: order.providerOrderId,
                     reason: error.message,
                 });
+
+                // R-03: Razorpay already captured this payment, so give the money
+                // back instead of leaving the customer charged with no plan.
+                const refund = await refundUnfulfilledPayment({
+                    providerOrderId: order.providerOrderId,
+                    providerPaymentId: payment.id,
+                    amountPaise: payment.amount,
+                    reason: "unfulfillable",
+                });
+                const refundStarted =
+                    refund.outcome === "refund_started" ||
+                    refund.outcome === "pending_retry" ||
+                    (refund.outcome === "skipped" &&
+                        refund.reason === "already_refunding");
+
+                return NextResponse.json(
+                    {
+                        error: refundStarted
+                            ? "This payment could not be applied to your account, so we started a full refund. It normally arrives in 5-7 working days."
+                            : error.message,
+                        refundStarted,
+                    },
+                    { status: 409 },
+                );
             }
             throw error;
         }

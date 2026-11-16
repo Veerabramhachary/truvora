@@ -11,6 +11,7 @@ import {
     applyProviderRefund,
     refundStatusFromProvider,
 } from "@/lib/refund-fulfillment";
+import { refundUnfulfilledPayment } from "@/lib/unfulfilled-payment-refund";
 
 export const runtime = "nodejs";
 
@@ -239,6 +240,20 @@ const webhookSchema = z
                 reason: error.message,
                 status: error.status,
             });
+
+            // R-03: a payment Razorpay captured but we cannot turn into a plan
+            // (plan conflict, withdrawn plan) must not stay charged. Amount and
+            // currency mismatches (400) are not refunded automatically: they
+            // need a human to look at them.
+            if (error.status === 409 && providerOrderId && payment?.id) {
+                await refundUnfulfilledPayment({
+                    providerOrderId,
+                    providerPaymentId: payment.id,
+                    amountPaise: payment.amount,
+                    reason: "unfulfillable",
+                });
+            }
+
             return NextResponse.json({ received: true, unfulfilled: true });
         }
 
