@@ -111,6 +111,43 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // D12: buying any plan while a paid period is active would replace it
+        // and forfeit the unused time. The user cancels (and can be refunded)
+        // first, then buys. Same-plan is rejected whatever the current status.
+        const billing = await getBillingState(userId);
+        if (billing.plan?.id === plan.id) {
+            return NextResponse.json(
+                {
+                    error: "You are already on this plan.",
+                    code: "ALREADY_ON_PLAN",
+                },
+                { status: 409 },
+            );
+        }
+        if (billing.status === "paid") {
+            return NextResponse.json(
+                {
+                    error:
+                        "You already have an active paid plan. Cancel it from Billing before choosing another plan.",
+                    code: "PLAN_CHANGE_REQUIRES_CANCEL",
+                },
+                { status: 409 },
+            );
+        }
+
+        // The Free plan, and any plan that costs nothing before discounts, has
+        // no checkout: it is the fallback tier, never something to buy (R-05).
+        // Letting it through created ₹0 "paid" orders and rewrote the Free row.
+        if (toPaise(plan.price) < BigInt(100)) {
+            return NextResponse.json(
+                {
+                    error: "This plan does not need checkout.",
+                    code: "PLAN_NOT_PURCHASABLE",
+                },
+                { status: 400 },
+            );
+        }
+
         const planPrice = Number(plan.price);
         const shouldApplyDiscount = parsed.data.applyDiscount ?? true;
 
@@ -161,24 +198,6 @@ export async function POST(request: NextRequest) {
         }
 
         const amountPaise = toPaise(discountedAmount.toFixed(2));
-
-        // D12: buying any plan while a paid period is active would replace it
-        // and forfeit the unused time. The user cancels (and can be refunded)
-        // first, then buys. This also blocks a ₹0 plan from replacing a paid
-        // one through the comped-checkout branch below.
-        const billing = await getBillingState(userId);
-        if (billing.status === "paid") {
-            return NextResponse.json(
-                {
-                    error:
-                        billing.plan?.id === plan.id
-                            ? "You are already on this plan."
-                            : "You already have an active paid plan. Cancel it from Billing before choosing another plan.",
-                    code: "PLAN_CHANGE_REQUIRES_CANCEL",
-                },
-                { status: 409 },
-            );
-        }
 
         if (amountPaise < BigInt(100)) {
             // Fully comped or free: skip Razorpay entirely and fulfill

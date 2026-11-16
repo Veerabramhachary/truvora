@@ -14,7 +14,7 @@ export default function TermsPage() {
                 Terms of Service
             </h1>
             <p className="mt-3 text-sm text-muted-foreground">
-                Last updated: October 26, 2026
+                Last updated: November 15, 2026
             </p>
 
             <div className="mt-10 space-y-8 text-base leading-relaxed text-muted-foreground">
@@ -93,18 +93,22 @@ export default function TermsPage() {
                         recurring charge.
                     </p>
                     <p className="mt-3">
-                        You can cancel a paid plan from the Billing page.
+                        You can cancel a paid plan from the Billing page when a
+                        refund is available.
                         Cancelling ends the plan immediately. If you cancel
                         within 7 days of payment, you receive a full refund of
                         the amount paid. After that, the refund is for the
                         unused whole days of the current period, rounded down.
                         No refund is available if the amount is below ₹10, the
                         period has ended, the payment is older than about 170
-                        days (Razorpay&apos;s refund window), or you received a
-                        refund in the previous 90 days. A referral discount is
+                        days (Razorpay&apos;s refund window), or you already
+                        cancelled for a refund in the previous 90 days. A
+                        referral discount is
                         not re-issued after a refund. Refunds are processed by
                         Razorpay and normally arrive in 5&ndash;7 working days.
-                        Applicable consumer law also applies.
+                        If no refund is available, the cancel option is not
+                        offered; your plan runs to its end date and does not
+                        renew. Applicable consumer law also applies.
                     </p>
                 </section>
 

@@ -4,6 +4,7 @@ import { app_subscriptions, plans } from "@/db/schema/plans";
 import { paymentInvoices } from "@/db/schema/appInvoices";
 import { paymentTransactions } from "@/db/schema/appTransactions";
 import { paymentOrders } from "@/db/schema/payment-orders";
+import { paymentRefunds } from "@/db/schema/payment-refunds";
 import { platformDiscountRedemptions } from "@/db/schema/platform-discount-redemptions";
 import { addBillingInterval } from "@/lib/billing-period";
 import { toPaise } from "@/lib/money";
@@ -76,6 +77,31 @@ export async function fulfillPaymentOrder(params: {
 
         if (order.status === "paid") {
             return { alreadyProcessed: true, planName: plan.name };
+        }
+
+        // A payment that was refunded because it could not be applied must
+        // never be fulfilled later by a replayed webhook or a second verify
+        // call (R-03); the customer already has the money back.
+        const [refunding] = await tx
+            .select({ id: paymentRefunds.id })
+            .from(paymentRefunds)
+            .where(
+                and(
+                    eq(paymentRefunds.paymentOrderId, order.id),
+                    inArray(paymentRefunds.status, [
+                        "requested",
+                        "pending",
+                        "processed",
+                    ]),
+                ),
+            )
+            .limit(1);
+
+        if (refunding) {
+            throw new PaymentFulfillmentError(
+                "This payment is being refunded and cannot activate a plan",
+                409,
+            );
         }
 
         if (params.amountPaise != null) {

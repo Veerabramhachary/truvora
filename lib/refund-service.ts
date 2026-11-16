@@ -73,8 +73,41 @@ export function isBillingRefundsEnabled(): boolean {
     return process.env.BILLING_REFUNDS_ENABLED === "true";
 }
 
+type SelectReader = Pick<typeof db, "select">;
+
+/**
+ * When this user last asked for a refund through cancel-now (R-04). Every
+ * non-failed attempt counts, including one that is still `pending`, so buying
+ * again and cancelling again before Razorpay settles the first cannot dodge the
+ * cooldown. Refunds that support or the Razorpay dashboard issued do not count:
+ * a goodwill refund must not lock the customer out of their own cancellation.
+ */
+export async function lastUserRefundAt(
+    reader: SelectReader,
+    userId: string,
+): Promise<Date | null> {
+    const [row] = await reader
+        .select({ createdAt: paymentRefunds.createdAt })
+        .from(paymentRefunds)
+        .where(
+            and(
+                eq(paymentRefunds.userId, userId),
+                eq(paymentRefunds.requestedBy, "user"),
+                inArray(paymentRefunds.status, [
+                    "requested",
+                    "pending",
+                    "processed",
+                ]),
+            ),
+        )
+        .orderBy(desc(paymentRefunds.createdAt))
+        .limit(1);
+
+    return row?.createdAt ?? null;
+}
+
 const REASON_TEXT: Record<RefundPolicyFailure, string> = {
-    not_paid: "You are on the Free plan, so there is nothing to refund.",
+    not_paid: "There is no paid amount on this plan, so there is nothing to refund.",
     nothing_left: "This payment has already been refunded.",
     missing_period:
         "We do not have the billing period for this payment. Contact support.",
@@ -178,17 +211,7 @@ export async function getCancellationPreview(
         };
     }
 
-    const [lastRefund] = await db
-        .select({ processedAt: paymentRefunds.processedAt })
-        .from(paymentRefunds)
-        .where(
-            and(
-                eq(paymentRefunds.userId, userId),
-                eq(paymentRefunds.status, "processed"),
-            ),
-        )
-        .orderBy(desc(paymentRefunds.processedAt))
-        .limit(1);
+    const lastRefundAt = await lastUserRefundAt(db, userId);
 
     const result = calculateRefund({
         amountPaid: order.amountPaid,
@@ -197,7 +220,7 @@ export async function getCancellationPreview(
         periodStart: order.periodStart,
         periodEnd: order.periodEnd,
         now,
-        lastRefundAt: lastRefund?.processedAt ?? null,
+        lastRefundAt,
     });
 
     return {
@@ -293,7 +316,8 @@ export async function cancelNow(params: {
             .from(app_subscriptions)
             .where(eq(app_subscriptions.userId, params.userId))
             .orderBy(desc(app_subscriptions.currentPeriodEnd))
-            .limit(1);
+            .limit(1)
+            .for("update");
 
         if (
             !subscription ||
@@ -332,17 +356,7 @@ export async function cancelNow(params: {
             );
         }
 
-        const [lastRefund] = await tx
-            .select({ processedAt: paymentRefunds.processedAt })
-            .from(paymentRefunds)
-            .where(
-                and(
-                    eq(paymentRefunds.userId, params.userId),
-                    eq(paymentRefunds.status, "processed"),
-                ),
-            )
-            .orderBy(desc(paymentRefunds.processedAt))
-            .limit(1);
+        const lastRefundAt = await lastUserRefundAt(tx, params.userId);
 
         const fresh = calculateRefund({
             amountPaid: order.amountPaid,
@@ -351,7 +365,7 @@ export async function cancelNow(params: {
             periodStart: order.periodStart,
             periodEnd: order.periodEnd,
             now,
-            lastRefundAt: lastRefund?.processedAt ?? null,
+            lastRefundAt,
         });
         const freshPreview = {
             ...preview,
@@ -382,7 +396,7 @@ export async function cancelNow(params: {
         }
 
         const [active] = await tx
-            .select({ id: paymentRefunds.id })
+            .select({ id: paymentRefunds.id, status: paymentRefunds.status })
             .from(paymentRefunds)
             .where(
                 and(
@@ -398,7 +412,9 @@ export async function cancelNow(params: {
             .limit(1);
         if (active) {
             throw new CancellationError(
-                "A refund for this payment is already in progress.",
+                active.status === "processed"
+                    ? "A refund was already issued for this payment."
+                    : "A refund for this payment is already in progress.",
                 409,
                 "already_in_progress",
                 freshPreview,
