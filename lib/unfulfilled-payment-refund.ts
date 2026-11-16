@@ -155,7 +155,7 @@ export async function refundUnfulfilledPayment(params: {
                 orderId: params.providerOrderId,
                 reason: prepared.skip,
             });
-            return { outcome: "skipped", reason: prepared.skip };
+            return { outcome: "skipped", reason: prepared.skip! };
         }
 
         let providerRefund;

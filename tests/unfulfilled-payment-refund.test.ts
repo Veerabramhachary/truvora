@@ -210,7 +210,10 @@ describe("refundUnfulfilledPayment", () => {
     it("marks the row failed and alerts support when Razorpay rejects it", async () => {
         mocks.setQueue(readyQueue());
         mocks.createRefund.mockRejectedValue(
-            new RazorpayError("bad request", "BAD_REQUEST_ERROR", false),
+            new RazorpayError("bad request", 400, {
+                code: "BAD_REQUEST_ERROR",
+                retryable: false,
+            }),
         );
 
         const result = await refundUnfulfilledPayment(params);
@@ -229,7 +232,10 @@ describe("refundUnfulfilledPayment", () => {
     it("leaves the row requested when Razorpay cannot be reached", async () => {
         mocks.setQueue(readyQueue());
         mocks.createRefund.mockRejectedValue(
-            new RazorpayError("timeout", "TIMEOUT", true),
+            new RazorpayError("timeout", null, {
+                code: "TIMEOUT",
+                retryable: true,
+            }),
         );
 
         const result = await refundUnfulfilledPayment(params);
