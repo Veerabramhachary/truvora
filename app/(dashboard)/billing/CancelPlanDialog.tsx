@@ -75,12 +75,36 @@ export function CancelPlanDialog() {
         }
     }
 
-    function onOpenChange(next: boolean) {
+    async function onOpenChange(next: boolean) {
         setOpen(next);
         // Re-render the billing page only after the confirmation is dismissed.
         // Doing it on success unmounted this dialog (the page stops rendering it
         // once the plan is canceled) and the refund reference vanished (R-06).
-        if (!next && success) router.refresh();
+        if (!next && success) {
+            // The cancel route returns as soon as the refund row is written,
+            // but the refund webhook may still be settling it. Poll the billing
+            // state so the page re-renders only once the server has caught up,
+            // instead of refreshing while the refund is still pending.
+            for (let attempt = 0; attempt < 5; attempt++) {
+                const response = await fetch("/api/billing/cancellation", {
+                    cache: "no-store",
+                });
+                const body = (await response.json()) as
+                    | CancellationPreview
+                    | { error?: string };
+                if (response.ok) {
+                    const state = body as CancellationPreview;
+                    if (
+                        state.planName !== undefined &&
+                        !state.eligible
+                    ) {
+                        break;
+                    }
+                }
+                await new Promise((resolve) => setTimeout(resolve, 500));
+            }
+            router.refresh();
+        }
         if (next) {
             setSuccess(null);
             setPreview(null);

@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { paymentOrders } from "@/db/schema/payment-orders";
 import { paymentRefunds } from "@/db/schema/payment-refunds";
 import { users } from "@/db/schema/users";
-import { fromPaise, toPaise } from "@/lib/money";
+import { toPaise } from "@/lib/money";
 import {
     createRazorpayRefund,
     getRazorpayConfig,
@@ -227,7 +227,7 @@ export async function refundUnfulfilledPayment(params: {
 
         await sendUnfulfilledPaymentNotice({
             email: profile?.email ?? null,
-            amount: fromPaise(toPaise(prepared.amount)),
+            amount: prepared.amount,
             currency: prepared.currency,
             refundId: providerRefund.id,
         });
