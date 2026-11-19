@@ -347,7 +347,7 @@ describe("a refund of a payment that could not be fulfilled (R-03)", () => {
             applied: false,
             endedPlan: false,
             changed: true,
-            reason: "already_processed",
+            reason: "settled",
         });
         expect(dbMock.updates).toHaveLength(1);
         expect(dbMock.updates[0]).toMatchObject({ status: "processed" });

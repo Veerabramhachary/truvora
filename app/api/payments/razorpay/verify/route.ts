@@ -201,6 +201,9 @@ export async function POST(request: NextRequest) {
                 error instanceof PaymentFulfillmentError &&
                 error.status === 409
             ) {
+                // Mark the order `failed` with the reason before starting the
+                // refund so the row is never left `created`/`attempted` while
+                // money is on its way back (R-03).
                 await recordPaymentFailure({
                     providerOrderId: order.providerOrderId,
                     reason: error.message,

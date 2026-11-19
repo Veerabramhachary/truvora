@@ -16,6 +16,7 @@ export type RefundApplyReason =
     | "currency_mismatch"
     | "over_refund"
     | "already_processed"
+    | "settled"
     | "pending"
     | "failed";
 
@@ -154,12 +155,14 @@ export async function applyProviderRefund(params: {
         // fulfilled. Its order is not `paid`, so only the workflow row moves.
         if (order.status !== "paid") {
             if (existing && isUnfulfilledRefundRow(existing)) {
+                // The order was never `paid`, so no money moved. `processed` means the
+                // refund was settled by Razorpay, not that we refunded anything.
                 const settleReason: RefundApplyReason =
-                    params.status === "failed"
-                        ? "failed"
-                        : params.status === "pending"
-                          ? "pending"
-                          : "already_processed";
+                        params.status === "failed"
+                            ? "failed"
+                            : params.status === "pending"
+                              ? "pending"
+                              : "settled";
 
                 if (
                     existing.status === "processed" ||

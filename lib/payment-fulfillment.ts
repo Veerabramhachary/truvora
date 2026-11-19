@@ -111,6 +111,14 @@ export async function fulfillPaymentOrder(params: {
                     400,
                 );
             }
+        } else if (params.currency) {
+            // A `order.paid` webhook that carries a currency but no amount is
+            // malformed: there is nothing to compare against the order, so fail
+            // closed instead of silently skipping the amount check.
+            throw new PaymentFulfillmentError(
+                "Payment amount is missing",
+                400,
+            );
         }
 
         if (params.currency && params.currency.toUpperCase() !== order.currency.toUpperCase()) {

@@ -4,3 +4,7 @@
 Dockerfile text eol=lf
 deploy/* text eol=lf
 *.sh text eol=lf
+# The checkout page was committed with CRLF. Pin it to LF so the refund-copy
+# test's literal newline assertions do not depend on the checkout's line
+# endings, and so a Windows checkout does not re-introduce CRLF.
+"app/(dashboard)/billing/checkout/[planId]/page.tsx" text eol=lf
